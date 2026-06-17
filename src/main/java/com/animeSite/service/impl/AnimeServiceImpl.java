@@ -57,6 +57,40 @@ public class AnimeServiceImpl implements AnimeService {
     }
 
     @Transactional
+    public Anime addAnimeByMalId(int malId) {
+        if (animeRepository.existsByMalId(malId)) {
+            return animeRepository.findByMalId(malId).orElseThrow();
+        }
+        var response = jikanApiClient.fetchAnimeById(malId);
+        if (response == null || response.getData() == null) {
+            throw new BusinessException(ErrorCode.ANIME_0001, "Anime not found with MAL ID: " + malId);
+        }
+        return saveAnime(response.getData());
+    }
+
+    @Transactional
+    public List<Anime> importTrendingAnime(int page) {
+        JikanListResponse response = jikanApiClient.fetchTopAnime(page);
+        return importFromResponse(response);
+    }
+
+    @Transactional
+    public List<Anime> importSeasonalAnime(int page) {
+        JikanListResponse response = jikanApiClient.fetchSeasonalAnime(page);
+        return importFromResponse(response);
+    }
+
+    private List<Anime> importFromResponse(JikanListResponse response) {
+        List<Anime> imported = new ArrayList<>();
+        if (response != null && response.getData() != null) {
+            for (JikanAnimeData data : response.getData()) {
+                imported.add(saveAnime(data));
+            }
+        }
+        return imported;
+    }
+
+    @Transactional
     public Anime updateAffiliateUrl(UUID animeId, String affiliateUrl) {
         Anime anime = animeRepository.findById(animeId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with ID: " + animeId));

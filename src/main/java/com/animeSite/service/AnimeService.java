@@ -14,5 +14,9 @@ public interface AnimeService {
     Anime updateAffiliateUrl(UUID animeId, String affiliateUrl);
     void deleteAnime(UUID animeId);
 
+    Anime addAnimeByMalId(int malId);
+    List<Anime> importTrendingAnime(int page);
+    List<Anime> importSeasonalAnime(int page);
+
     record AnimePage(List<Anime> animeList, int page, int totalPages) {}
 }

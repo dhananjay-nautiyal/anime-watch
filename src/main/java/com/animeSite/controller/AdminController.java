@@ -46,6 +46,30 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success(anime));
     }
 
+    @PostMapping("/anime/import/{malId}")
+    @Operation(summary = "Import anime by MAL ID", description = "Fetches an anime from Jikan API by MAL ID and saves it to the database (Admin only).")
+    public ResponseEntity<ApiResponse<Anime>> importAnimeByMalId(
+            @Parameter(description = "MyAnimeList ID", required = true) @PathVariable int malId) {
+        Anime anime = animeService.addAnimeByMalId(malId);
+        return ResponseEntity.ok(ApiResponse.success("Anime imported successfully", anime));
+    }
+
+    @PostMapping("/anime/import/trending")
+    @Operation(summary = "Import trending anime", description = "Fetches top anime from Jikan API and saves them to the database (Admin only).")
+    public ResponseEntity<ApiResponse<List<Anime>>> importTrending(
+            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page) {
+        List<Anime> imported = animeService.importTrendingAnime(page);
+        return ResponseEntity.ok(ApiResponse.success("Imported " + imported.size() + " trending anime", imported));
+    }
+
+    @PostMapping("/anime/import/seasonal")
+    @Operation(summary = "Import seasonal anime", description = "Fetches current seasonal anime from Jikan API and saves them to the database (Admin only).")
+    public ResponseEntity<ApiResponse<List<Anime>>> importSeasonal(
+            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page) {
+        List<Anime> imported = animeService.importSeasonalAnime(page);
+        return ResponseEntity.ok(ApiResponse.success("Imported " + imported.size() + " seasonal anime", imported));
+    }
+
     @DeleteMapping("/anime/{id}")
     @Operation(summary = "Delete anime", description = "Deletes an anime and cascades reviews, watchlist, and favorites (Admin only).")
     public ResponseEntity<ApiResponse<String>> deleteAnime(
