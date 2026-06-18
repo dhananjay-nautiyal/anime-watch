@@ -1,14 +1,18 @@
+FROM maven:3.9.6-eclipse-temurin-21-alpine AS build
+
+WORKDIR /app
+
+COPY pom.xml .
+COPY src ./src
+
+RUN mvn clean package -DskipTests -q
+
 FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
-COPY target/anime-backend-*.jar app.jar
+COPY --from=build /app/target/anime-backend-*.jar app.jar
 
 EXPOSE 8080
-
-ENV DB_URL=jdbc:mysql://localhost:3306/anime_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-ENV DB_USERNAME=root
-ENV DB_PASSWORD=root
-ENV JWT_SECRET=my-super-secret-key-for-anime-backend-jwt-token-2026
 
 ENTRYPOINT ["java", "-jar", "app.jar"]
