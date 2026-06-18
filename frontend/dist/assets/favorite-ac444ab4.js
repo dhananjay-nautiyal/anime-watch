@@ -1,0 +1,1 @@
+import{c as t}from"./index-39f055af.js";const o=a=>{var e;return((e=a.data)==null?void 0:e.data)??a.data??[]},i=()=>t.get("/api/favorites").then(o),r=a=>t.post(`/api/favorites/${a}`),n=a=>t.delete(`/api/favorites/${a}`);export{r as a,i as g,n as r};

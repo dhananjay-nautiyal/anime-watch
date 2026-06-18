@@ -1,6 +1,8 @@
 package com.animeSite.persist;
 
 import com.animeSite.core.audit.Auditable;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -17,6 +19,7 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Schema(description = "Anime entity mapped to the MySQL database")
 public class Anime extends Auditable {
 
@@ -52,12 +55,22 @@ public class Anime extends Auditable {
     @Schema(description = "Affiliate / referral link (manually set)", example = "https://www.crunchyroll.com/series/...")
     private String affiliateUrl;
 
+    @Column(columnDefinition = "TEXT")
+    @Schema(description = "YouTube trailer embed URL", example = "https://www.youtube.com/embed/...")
+    private String trailerEmbedUrl;
+
+    @Schema(description = "AnimePahe anime ID for episode streaming", example = "56")
+    private Integer animePaheId;
+
     @OneToMany(mappedBy = "anime", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonIgnore
     private List<Review> reviews = new ArrayList<>();
 
     @OneToMany(mappedBy = "anime", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonIgnore
     private List<Watchlist> watchlistEntries = new ArrayList<>();
 
     @OneToMany(mappedBy = "anime", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonIgnore
     private List<Favorites> favorites = new ArrayList<>();
 }

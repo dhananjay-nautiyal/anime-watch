@@ -13,35 +13,39 @@ export default function ForgotPassword() {
     setLoading(true)
     try {
       await forgotPassword(email)
-      setMessage('Check your email for reset instructions (if the account exists).')
+      setMessage('Check your email for reset instructions')
     } catch {
-      setMessage('Check your email for reset instructions (if the account exists).')
+      setMessage('Failed to send reset email')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center py-12">
-      <div className="bg-card p-8 rounded-2xl w-full max-w-md shadow-xl">
-        <h1 className="text-white text-2xl font-semibold text-center mb-6">Forgot Password</h1>
-        {message && <div className="bg-blue-500/10 border border-blue-500/50 text-blue-400 px-4 py-2 rounded mb-4 text-sm">{message}</div>}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <input
-            type="email"
-            placeholder="Your email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="bg-primary text-white px-4 py-3 rounded-lg border border-dimBlue focus:border-secondary outline-none transition"
-          />
-          <button type="submit" disabled={loading} className="bg-secondary text-white py-3 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50">
-            {loading ? 'Sending...' : 'Send Reset Link'}
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        <h1 className="text-white text-2xl font-bold font-display text-center mb-8">Reset Password</h1>
+        <form onSubmit={handleSubmit} className="bg-surface/50 border border-white/5 rounded-2xl p-8 space-y-5">
+          {message && (
+            <p className={`text-sm ${message.includes('Failed') ? 'text-red-400' : 'text-green-400'}`}>{message}</p>
+          )}
+          <div>
+            <label className="text-sm text-muted block mb-2">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-primary/50 transition"
+              required
+            />
+          </div>
+          <button type="submit" disabled={loading} className="w-full bg-primary hover:bg-primary/90 text-white py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-50">
+            {loading ? 'Sending...' : 'Send Reset Email'}
           </button>
+          <p className="text-center text-sm text-muted">
+            <Link to="/login" className="text-primary hover:underline">Back to Login</Link>
+          </p>
         </form>
-        <p className="text-dimWhite text-sm text-center mt-4">
-          <Link to="/login" className="text-secondary hover:underline">Back to sign in</Link>
-        </p>
       </div>
     </div>
   )

@@ -7,13 +7,20 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.List;
+
 @Configuration
 @EnableCaching
 public class AppConfig {
 
     @Bean
     public RestTemplate restTemplate() {
-        return new RestTemplate();
+        RestTemplate restTemplate = new RestTemplate();
+        restTemplate.setInterceptors(List.of((request, body, execution) -> {
+            request.getHeaders().set("User-Agent", "animewatch/1.0");
+            return execution.execute(request, body);
+        }));
+        return restTemplate;
     }
 
     @Bean

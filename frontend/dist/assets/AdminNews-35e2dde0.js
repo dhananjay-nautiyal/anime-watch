@@ -1,0 +1,1 @@
+import{a as t,j as e}from"./motion-4cba5676.js";import"./vendor-7731ed0a.js";function m(){return t("div",{className:"max-w-[1440px] mx-auto px-4 py-8",children:[e("h1",{className:"text-white text-3xl font-bold font-display mb-8",children:"Admin - News"}),e("p",{className:"text-muted",children:"News management panel"})]})}export{m as default};

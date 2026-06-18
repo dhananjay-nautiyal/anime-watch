@@ -23,6 +23,9 @@ public class JikanAnimeData {
 
         @JsonProperty("youtube_id")
         private String youtubeId;
+
+        @JsonProperty("embed_url")
+        private String embedUrl;
     }
 
     @Data
@@ -34,5 +37,8 @@ public class JikanAnimeData {
     public static class Jpg {
         @JsonProperty("image_url")
         private String imageUrl;
+
+        @JsonProperty("large_image_url")
+        private String largeImageUrl;
     }
 }

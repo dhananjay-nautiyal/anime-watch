@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
+import { proxyImage } from '../api/imageProxy'
 
 export default function MiniCard({ anime }) {
-  const imageUrl = anime.imageUrl
+  const imageUrl = proxyImage(anime.imageUrl)
 
   return (
     <div className="flex bg-card hover:bg-cardHover transition-colors" style={{ marginTop: '0.3rem' }}>

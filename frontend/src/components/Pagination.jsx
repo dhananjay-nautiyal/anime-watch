@@ -1,52 +1,59 @@
 export default function Pagination({ page, totalPages, onPageChange }) {
-  if (!totalPages || totalPages <= 1) return null
+  if (totalPages <= 1) return null
 
-  const pages = []
-  const maxVisible = 5
-  let start = Math.max(0, page - Math.floor(maxVisible / 2))
-  let end = Math.min(totalPages, start + maxVisible)
-  if (end - start < maxVisible) start = Math.max(0, end - maxVisible)
+  const getPages = () => {
+    const pages = []
+    const delta = 2
+    const start = Math.max(0, page - delta)
+    const end = Math.min(totalPages - 1, page + delta)
 
-  for (let i = start; i < end; i++) {
-    pages.push(i)
+    if (start > 0) {
+      pages.push(0)
+      if (start > 1) pages.push('...')
+    }
+
+    for (let i = start; i <= end; i++) pages.push(i)
+
+    if (end < totalPages - 1) {
+      if (end < totalPages - 2) pages.push('...')
+      pages.push(totalPages - 1)
+    }
+
+    return pages
   }
 
   return (
-    <div className="flex justify-center items-center gap-2 mt-8">
+    <div className="flex items-center justify-center gap-2 mt-8">
       <button
         onClick={() => onPageChange(page - 1)}
         disabled={page === 0}
-        className="px-3 py-1.5 rounded bg-card text-dimWhite hover:bg-cardHover disabled:opacity-30 disabled:cursor-not-allowed transition"
+        className="px-3 py-1.5 rounded-lg text-sm text-muted hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        aria-label="Previous page"
       >
         Prev
       </button>
-      {start > 0 && (
-        <>
-          <button onClick={() => onPageChange(0)} className="px-3 py-1.5 rounded bg-card text-dimWhite hover:bg-cardHover transition">1</button>
-          {start > 1 && <span className="text-dimWhite">...</span>}
-        </>
-      )}
-      {pages.map((p) => (
-        <button
-          key={p}
-          onClick={() => onPageChange(p)}
-          className={`px-3 py-1.5 rounded transition ${
-            p === page ? 'bg-secondary text-white' : 'bg-card text-dimWhite hover:bg-cardHover'
-          }`}
-        >
-          {p + 1}
-        </button>
+      {getPages().map((p, i) => (
+        p === '...' ? (
+          <span key={`dots-${i}`} className="text-muted px-1 text-sm">...</span>
+        ) : (
+          <button
+            key={p}
+            onClick={() => onPageChange(p)}
+            className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-all ${
+              p === page
+                ? 'bg-primary text-white shadow-glow'
+                : 'text-muted hover:text-white hover:bg-white/5'
+            }`}
+          >
+            {p + 1}
+          </button>
+        )
       ))}
-      {end < totalPages && (
-        <>
-          {end < totalPages - 1 && <span className="text-dimWhite">...</span>}
-          <button onClick={() => onPageChange(totalPages - 1)} className="px-3 py-1.5 rounded bg-card text-dimWhite hover:bg-cardHover transition">{totalPages}</button>
-        </>
-      )}
       <button
         onClick={() => onPageChange(page + 1)}
         disabled={page >= totalPages - 1}
-        className="px-3 py-1.5 rounded bg-card text-dimWhite hover:bg-cardHover disabled:opacity-30 disabled:cursor-not-allowed transition"
+        className="px-3 py-1.5 rounded-lg text-sm text-muted hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        aria-label="Next page"
       >
         Next
       </button>

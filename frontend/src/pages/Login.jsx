@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { useNavigate, Link, useLocation } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { login as loginApi } from '../api/auth'
+import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -11,6 +12,7 @@ export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+
   const from = location.state?.from?.pathname || '/'
 
   const handleSubmit = async (e) => {
@@ -18,52 +20,94 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      const res = await loginApi(email, password)
-      const { token, refreshToken, email: userEmail, name, role } = res.data
-      login({ email: userEmail, name, role }, token, refreshToken)
+      const { data } = await loginApi(email, password)
+      const userData = {
+        name: data.data?.name,
+        email: data.data?.email,
+        role: data.data?.role,
+      }
+      login(data.data?.token, data.data?.refreshToken, userData)
       navigate(from, { replace: true })
     } catch (err) {
-      setError(err?.message || 'Invalid email or password')
+      if (err.response) {
+        setError(err.response.data?.message || 'Invalid email or password')
+      } else if (err.request) {
+        setError('Cannot connect to server. Make sure the backend is running on port 8080.')
+      } else {
+        setError('An unexpected error occurred.')
+      }
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center py-12">
-      <div className="bg-card p-8 rounded-2xl w-full max-w-md shadow-xl">
-        <h1 className="text-white text-2xl font-semibold text-center mb-6">Sign In</h1>
-        {error && <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-2 rounded mb-4 text-sm">{error}</div>}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="bg-primary text-white px-4 py-3 rounded-lg border border-dimBlue focus:border-secondary outline-none transition"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="bg-primary text-white px-4 py-3 rounded-lg border border-dimBlue focus:border-secondary outline-none transition"
-          />
+    <div className="min-h-screen flex items-center justify-center px-4 py-12">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md"
+      >
+        <div className="text-center mb-8">
+          <Link to="/" className="text-3xl font-extrabold gradient-text font-display tracking-tight">
+            WatchAnime
+          </Link>
+          <p className="text-muted text-sm mt-2">Sign in to your account</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="bg-surface/50 backdrop-blur-sm border border-white/5 rounded-2xl p-8 space-y-5">
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+              <p className="text-red-400 text-sm">{error}</p>
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="email" className="text-sm text-muted block mb-2">Email</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-primary/50 transition"
+              placeholder="you@example.com"
+              required
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className="text-sm text-muted block mb-2">Password</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-primary/50 transition"
+              placeholder="••••••••"
+              required
+            />
+          </div>
+
+          <div className="flex items-center justify-between text-sm">
+            <Link to="/forgot-password" className="text-muted hover:text-primary transition-colors">
+              Forgot password?
+            </Link>
+          </div>
+
           <button
             type="submit"
             disabled={loading}
-            className="bg-secondary text-white py-3 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50"
+            className="w-full bg-primary hover:bg-primary/90 text-white py-3 rounded-xl text-sm font-semibold transition-all hover:shadow-glow disabled:opacity-50"
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
+
+          <p className="text-center text-sm text-muted">
+            Don't have an account?{' '}
+            <Link to="/register" className="text-primary hover:underline">Register</Link>
+          </p>
         </form>
-        <div className="flex justify-between mt-4 text-sm">
-          <Link to="/register" className="text-dimWhite hover:text-secondary transition">Create account</Link>
-          <Link to="/forgot-password" className="text-dimWhite hover:text-secondary transition">Forgot password?</Link>
-        </div>
-      </div>
+      </motion.div>
     </div>
   )
 }

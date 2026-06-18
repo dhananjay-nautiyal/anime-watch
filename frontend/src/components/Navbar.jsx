@@ -1,56 +1,30 @@
 import { useState, useRef, useEffect } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { logout as logoutApi } from '../api/auth'
-
-const GENRES = [
-  { id: 1, name: 'Action' }, { id: 2, name: 'Adventure' }, { id: 3, name: 'Cars' },
-  { id: 4, name: 'Comedy' }, { id: 5, name: 'Dementia' }, { id: 6, name: 'Demons' },
-  { id: 7, name: 'Mystery' }, { id: 8, name: 'Drama' }, { id: 9, name: 'Ecchi' },
-  { id: 10, name: 'Fantasy' }, { id: 11, name: 'Game' }, { id: 12, name: 'Harem' },
-  { id: 13, name: 'Historical' }, { id: 14, name: 'Horror' }, { id: 15, name: 'Kids' },
-  { id: 16, name: 'Magic' }, { id: 17, name: 'Martial Arts' }, { id: 18, name: 'Mecha' },
-  { id: 19, name: 'Music' }, { id: 20, name: 'Parody' }, { id: 21, name: 'Samurai' },
-  { id: 22, name: 'Romance' }, { id: 23, name: 'School' }, { id: 24, name: 'Sci-Fi' },
-  { id: 25, name: 'Shoujo' }, { id: 26, name: 'Shounen' }, { id: 27, name: 'Space' },
-  { id: 28, name: 'Sports' }, { id: 29, name: 'Super Power' }, { id: 30, name: 'Supernatural' },
-  { id: 31, name: 'Thriller' }, { id: 32, name: 'Vampire' }, { id: 33, name: 'Isekai' },
-  { id: 34, name: 'Psychological' }, { id: 35, name: 'Seinen' }, { id: 36, name: 'Josei' },
-]
-
-const TYPES = ['TV', 'MOVIE', 'OVA', 'ONA', 'SPECIAL', 'MUSIC']
-
-const NAV_ITEMS = [
-  { label: 'Updates', path: '/browse?filter=updates' },
-  { label: 'Added', path: '/browse?filter=added' },
-  { label: 'Popular', path: '/browse?filter=popular' },
-  { label: 'Upcoming', path: '/browse?filter=upcoming' },
-  { label: 'Ongoing', path: '/browse?filter=ongoing' },
-  { label: 'Completed', path: '/browse?filter=completed' },
-  { label: 'Schedule', path: '/schedule' },
-]
+import { motion, AnimatePresence } from 'framer-motion'
 
 export default function Navbar() {
-  const [toggle, setToggle] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [showGenre, setShowGenre] = useState(false)
-  const [showType, setShowType] = useState(false)
-  const { isAuthenticated, isAdmin, user, logout } = useAuth()
-  const location = useLocation()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const { isAuthenticated, user, logout } = useAuth()
   const navigate = useNavigate()
-  const searchRef = useRef(null)
-  const genreRef = useRef(null)
-  const typeRef = useRef(null)
+  const location = useLocation()
+  const inputRef = useRef(null)
+
+  const isWatchPage = location.pathname.startsWith('/watch')
 
   useEffect(() => {
-    const handleClick = (e) => {
-      if (genreRef.current && !genreRef.current.contains(e.target)) setShowGenre(false)
-      if (typeRef.current && !typeRef.current.contains(e.target)) setShowType(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    const onScroll = () => setScrolled(window.scrollY > 20)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
   }, [])
+
+  useEffect(() => {
+    if (searchOpen && inputRef.current) inputRef.current.focus()
+  }, [searchOpen])
 
   const handleSearch = (e) => {
     e.preventDefault()
@@ -68,185 +42,173 @@ export default function Navbar() {
     navigate('/')
   }
 
-  const handleRandom = async () => {
-    const { searchAnime } = await import('../api/anime')
-    try {
-      const res = await searchAnime('', 0, 1)
-      if (res.data && res.data.length > 0) {
-        navigate(`/anime/${res.data[0].malId}`)
-      }
-    } catch {}
-  }
-
   return (
-    <header className="flex items-center justify-between py-4 relative z-50" style={{ minHeight: '3rem' }}>
-      <div className="flex items-center gap-8">
-        <Link to="/" className="text-primary font-bold text-2xl font-['Pathway_Extreme'] tracking-tight" style={{ fontWeight: 800 }}>
-          WatchAnime
+    <motion.header
+      initial={{ y: -80 }}
+      animate={{ y: 0 }}
+      transition={{ duration: 0.5, ease: 'easeOut' }}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        scrolled || isWatchPage
+          ? 'bg-body/95 backdrop-blur-xl border-b border-white/5'
+          : 'bg-gradient-to-b from-body/80 to-transparent'
+      }`}
+    >
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <Link to="/" className="flex items-center gap-2 flex-shrink-0">
+          <span className="text-2xl font-extrabold gradient-text font-display tracking-tight">
+            WatchAnime
+          </span>
         </Link>
 
-        <nav className="hidden lg:flex items-center gap-8">
-          <div className="relative" ref={genreRef}>
-            <button onMouseEnter={() => setShowGenre(true)} className="text-link uppercase text-[1.07rem] hover:text-white transition-colors">
-              Genres
-            </button>
-            {showGenre && (
-              <div
-                onMouseLeave={() => setShowGenre(false)}
-                className="absolute top-full left-0 mt-2 bg-[#282828] shadow-lg rounded p-3 grid grid-cols-3 gap-x-2 min-w-[27rem]"
-                style={{ boxShadow: '0 0.5rem 1rem rgba(0,0,0,.175)' }}
-              >
-                {GENRES.map((g) => (
-                  <Link
-                    key={g.id}
-                    to={`/browse?genres=${g.id}`}
-                    onClick={() => setShowGenre(false)}
-                    className="text-link text-[0.95rem] px-2.5 py-1.5 rounded hover:bg-primary hover:text-white transition-colors"
-                  >
-                    {g.name}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="relative" ref={typeRef}>
-            <button onMouseEnter={() => setShowType(true)} className="text-link uppercase text-[1.07rem] hover:text-white transition-colors">
-              Types
-            </button>
-            {showType && (
-              <div
-                onMouseLeave={() => setShowType(false)}
-                className="absolute top-full left-0 mt-2 bg-[#282828] shadow-lg rounded p-3 min-w-[10rem]"
-                style={{ boxShadow: '0 0.5rem 1rem rgba(0,0,0,.175)' }}
-              >
-                {TYPES.map((t) => (
-                  <Link
-                    key={t}
-                    to={`/browse?type=${t.toLowerCase()}`}
-                    onClick={() => setShowType(false)}
-                    className="block text-link text-[0.95rem] px-2.5 py-1.5 rounded hover:bg-primary hover:text-white transition-colors"
-                  >
-                    {t}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {NAV_ITEMS.map((item) => (
-            <Link
-              key={item.label}
-              to={item.path}
-              className={`text-link uppercase text-[1.07rem] hover:text-white transition-colors ${
-                location.pathname === item.path.split('?')[0] &&
-                location.search.includes(item.path.split('?')[1]?.split('=')[0] || '') ? 'text-white' : ''
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-
-          <button onClick={handleRandom} className="text-link uppercase text-[1.07rem] hover:text-white transition-colors">
-            Random
-          </button>
+        <nav className="hidden md:flex items-center gap-6 ml-8">
+          <Link to="/" className={`text-sm font-medium transition-colors ${location.pathname === '/' ? 'text-white' : 'text-muted hover:text-white'}`}>
+            Home
+          </Link>
+          <Link to="/browse" className={`text-sm font-medium transition-colors ${location.pathname === '/browse' ? 'text-white' : 'text-muted hover:text-white'}`}>
+            Browse
+          </Link>
+          <Link to="/trending" className={`text-sm font-medium transition-colors ${location.pathname === '/trending' ? 'text-white' : 'text-muted hover:text-white'}`}>
+            Trending
+          </Link>
+          <Link to="/seasonal" className={`text-sm font-medium transition-colors ${location.pathname === '/seasonal' ? 'text-white' : 'text-muted hover:text-white'}`}>
+            Seasonal
+          </Link>
+          <Link to="/news" className={`text-sm font-medium transition-colors ${location.pathname === '/news' ? 'text-white' : 'text-muted hover:text-white'}`}>
+            News
+          </Link>
         </nav>
-      </div>
 
-      <div className="flex items-center gap-4">
-        <div className="hidden lg:flex items-center gap-1 text-link text-sm">
-          <Link to="/browse?lang=en" className={`hover:text-white transition-colors ${location.search.includes('lang=en') ? 'text-white' : ''}`}>EN</Link>
-          <span className="text-muted">|</span>
-          <Link to="/browse?lang=jp" className={`hover:text-white transition-colors ${location.search.includes('lang=jp') ? 'text-white' : ''}`}>JP</Link>
-        </div>
-
-        <div className="relative" ref={searchRef}>
-          <form onSubmit={handleSearch} className={`flex items-center bg-[#0e0e0e] rounded transition-all duration-300 overflow-hidden ${searchOpen ? 'w-[22rem]' : 'w-0'}`} style={{ height: '2.8rem' }}>
-            {searchOpen && (
-              <>
-                <button type="submit" className="px-2 text-link text-lg">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                  </svg>
-                </button>
-                <input
-                  type="text"
-                  placeholder="Search anime..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  autoFocus
-                  className="flex-1 bg-transparent text-white outline-none text-sm pr-3"
-                />
-              </>
-            )}
-          </form>
-          <button onClick={() => setSearchOpen(!searchOpen)} className="text-link text-lg hover:text-white transition-colors p-1">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+        <div className="flex items-center gap-3 ml-auto">
+          <button
+            onClick={() => setSearchOpen(!searchOpen)}
+            className="text-muted hover:text-white transition-colors p-2"
+            aria-label="Toggle search"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </button>
-        </div>
 
-        <div className="hidden sm:flex items-center">
           {isAuthenticated ? (
             <div className="flex items-center gap-3">
-              <Link to="/profile" className="text-link hover:text-white text-sm transition-colors">{user?.name}</Link>
-              <button onClick={handleLogout} className="text-muted hover:text-primary text-sm transition-colors">Logout</button>
-              {isAdmin && (
-                <Link to="/admin" className="text-primary text-sm hover:underline">Admin</Link>
-              )}
+              <Link
+                to="/watchlist"
+                className="text-muted hover:text-white transition-colors p-2 hidden sm:block"
+                aria-label="Watchlist"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                </svg>
+              </Link>
+              <Link
+                to="/favorites"
+                className="text-muted hover:text-white transition-colors p-2 hidden sm:block"
+                aria-label="Favorites"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+              </Link>
+              <Link
+                to="/profile"
+                className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white text-xs font-bold ring-2 ring-white/10 hover:ring-primary/50 transition-all"
+              >
+                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+              </Link>
             </div>
           ) : (
-            <Link to="/login" className="text-link hover:text-white text-sm transition-colors">Sign In</Link>
+            <Link
+              to="/login"
+              className="bg-primary hover:bg-primary/90 text-white px-5 py-2 rounded-xl text-sm font-medium transition-all hover:shadow-glow"
+            >
+              Sign In
+            </Link>
           )}
-        </div>
 
-        <button onClick={() => setToggle(!toggle)} className="block xl:hidden text-white">
-          {toggle ? (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="md:hidden text-white p-1"
+            aria-label="Toggle menu"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {menuOpen ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              )}
             </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-            </svg>
-          )}
-        </button>
+          </button>
+        </div>
       </div>
 
-      {toggle && (
-        <div className="absolute top-full left-0 right-0 mx-4 bg-[#282828] rounded-xl shadow-lg p-5 z-50 xl:hidden">
-          <div className="flex flex-col gap-3">
-            <form onSubmit={(e) => { handleSearch(e); setToggle(false) }} className="flex bg-[#0e0e0e] rounded overflow-hidden mb-2">
-              <input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="flex-1 bg-transparent text-white px-3 py-2 outline-none text-sm" />
-              <button type="submit" className="bg-primary text-white px-4 text-sm">Go</button>
-            </form>
-            <Link to="/" onClick={() => setToggle(false)} className="text-link hover:text-white">Home</Link>
-            <Link to="/trending" onClick={() => setToggle(false)} className="text-link hover:text-white">Trending</Link>
-            <Link to="/seasonal" onClick={() => setToggle(false)} className="text-link hover:text-white">Seasonal</Link>
-            <Link to="/news" onClick={() => setToggle(false)} className="text-link hover:text-white">News</Link>
-            {NAV_ITEMS.map((item) => (
-              <Link key={item.label} to={item.path} onClick={() => setToggle(false)} className="text-link hover:text-white">{item.label}</Link>
-            ))}
-            <button onClick={() => { setToggle(false); handleRandom() }} className="text-link hover:text-white text-left">Random</button>
-            {isAuthenticated && (
-              <>
-                <Link to="/favorites" onClick={() => setToggle(false)} className="text-link hover:text-white">Favorites</Link>
-                <Link to="/watchlist" onClick={() => setToggle(false)} className="text-link hover:text-white">Watchlist</Link>
-              </>
-            )}
-            <hr className="border-gray opacity-30" />
-            {isAuthenticated ? (
-              <div className="flex items-center justify-between">
-                <Link to="/profile" onClick={() => setToggle(false)} className="text-link hover:text-white">{user?.name}</Link>
-                <button onClick={() => { handleLogout(); setToggle(false) }} className="text-muted hover:text-primary">Logout</button>
-              </div>
-            ) : (
-              <Link to="/login" onClick={() => setToggle(false)} className="text-link hover:text-white">Sign In</Link>
-            )}
-          </div>
-        </div>
-      )}
-    </header>
+      <AnimatePresence>
+        {searchOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="border-t border-white/5 bg-body/95 backdrop-blur-xl"
+          >
+            <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-3">
+              <form onSubmit={handleSearch}>
+                <div className="relative group">
+                  <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted group-focus-within:text-primary transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    placeholder="Search anime, genres, years..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-sm text-white placeholder-muted/60 outline-none focus:border-primary/50 focus:bg-white/[0.07] transition-all duration-300"
+                    aria-label="Search anime"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-white"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {menuOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="md:hidden border-t border-white/5 bg-body/95 backdrop-blur-xl"
+          >
+            <div className="px-4 py-4 space-y-3">
+              <Link to="/" onClick={() => setMenuOpen(false)} className="block text-sm text-link hover:text-white">Home</Link>
+              <Link to="/browse" onClick={() => setMenuOpen(false)} className="block text-sm text-link hover:text-white">Browse</Link>
+              <Link to="/trending" onClick={() => setMenuOpen(false)} className="block text-sm text-link hover:text-white">Trending</Link>
+              <Link to="/seasonal" onClick={() => setMenuOpen(false)} className="block text-sm text-link hover:text-white">Seasonal</Link>
+              <Link to="/news" onClick={() => setMenuOpen(false)} className="block text-sm text-link hover:text-white">News</Link>
+              {isAuthenticated ? (
+                <>
+                  <Link to="/watchlist" onClick={() => setMenuOpen(false)} className="block text-sm text-link hover:text-white">Watchlist</Link>
+                  <Link to="/favorites" onClick={() => setMenuOpen(false)} className="block text-sm text-link hover:text-white">Favorites</Link>
+                  <button onClick={() => { handleLogout(); setMenuOpen(false) }} className="text-sm text-muted hover:text-primary">Sign Out</button>
+                </>
+              ) : (
+                <Link to="/login" onClick={() => setMenuOpen(false)} className="block text-sm text-primary">Sign In</Link>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.header>
   )
 }

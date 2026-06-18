@@ -1,44 +1,56 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { getProfile } from '../api/auth'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    const stored = localStorage.getItem('user')
-    return stored ? JSON.parse(stored) : null
-  })
-  const [token, setToken] = useState(() => localStorage.getItem('token'))
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (token) localStorage.setItem('token', token)
-    else localStorage.removeItem('token')
-  }, [token])
+  const isAuthenticated = !!user
 
-  useEffect(() => {
-    if (user) localStorage.setItem('user', JSON.stringify(user))
-    else localStorage.removeItem('user')
-  }, [user])
+  const fetchUser = useCallback(async () => {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      setUser(null)
+      setLoading(false)
+      return
+    }
+    try {
+      const res = await getProfile()
+      setUser(res.data?.data ?? res.data)
+    } catch {
+      localStorage.removeItem('token')
+      localStorage.removeItem('refreshToken')
+      setUser(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-  const login = useCallback((userData, accessToken, refreshTokenVal) => {
+  useEffect(() => { fetchUser() }, [fetchUser])
+
+  const login = (token, refreshToken, userData) => {
+    localStorage.setItem('token', token)
+    if (refreshToken) localStorage.setItem('refreshToken', refreshToken)
     setUser(userData)
-    setToken(accessToken)
-    localStorage.setItem('refreshToken', refreshTokenVal)
-  }, [])
+  }
 
-  const logout = useCallback(() => {
-    setUser(null)
-    setToken(null)
+  const logout = () => {
+    localStorage.removeItem('token')
     localStorage.removeItem('refreshToken')
-  }, [])
-
-  const isAdmin = user?.role === 'ROLE_ADMIN'
-  const isAuthenticated = !!token && !!user
+    setUser(null)
+  }
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isAdmin, isAuthenticated, setUser }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, loading, login, logout, fetchUser }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
-export const useAuth = () => useContext(AuthContext)
+export function useAuth() {
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider')
+  return ctx
+}

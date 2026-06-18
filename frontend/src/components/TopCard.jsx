@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
+import { proxyImage } from '../api/imageProxy'
 
 export default function TopCard({ anime, rank }) {
-  const imageUrl = anime.imageUrl
+  const imageUrl = proxyImage(anime.imageUrl)
 
   return (
     <Link

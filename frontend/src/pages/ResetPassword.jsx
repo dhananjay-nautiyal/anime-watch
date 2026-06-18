@@ -1,61 +1,53 @@
 import { useState } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { resetPassword } from '../api/auth'
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams()
-  const token = searchParams.get('token')
-  const [newPassword, setNewPassword] = useState('')
+  const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setError('')
     setMessage('')
     setLoading(true)
+    const token = searchParams.get('token')
     try {
-      await resetPassword(token, newPassword)
-      setMessage('Password reset successfully!')
-      setTimeout(() => navigate('/login'), 2000)
-    } catch (err) {
-      setError(err?.message || 'Reset failed. The token may be expired.')
+      await resetPassword(token, password)
+      setMessage('Password reset! You can now log in.')
+    } catch {
+      setMessage('Reset failed. The link may be expired.')
     } finally {
       setLoading(false)
     }
   }
 
-  if (!token) {
-    return (
-      <div className="min-h-[80vh] flex items-center justify-center">
-        <div className="bg-card p-8 rounded-2xl text-center">
-          <p className="text-red-400">Invalid reset link. No token provided.</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="min-h-[80vh] flex items-center justify-center py-12">
-      <div className="bg-card p-8 rounded-2xl w-full max-w-md shadow-xl">
-        <h1 className="text-white text-2xl font-semibold text-center mb-6">Reset Password</h1>
-        {error && <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-2 rounded mb-4 text-sm">{error}</div>}
-        {message && <div className="bg-green-500/10 border border-green-500/50 text-green-400 px-4 py-2 rounded mb-4 text-sm">{message}</div>}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <input
-            type="password"
-            placeholder="New password (min 6 characters)"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            required
-            minLength={6}
-            className="bg-primary text-white px-4 py-3 rounded-lg border border-dimBlue focus:border-secondary outline-none transition"
-          />
-          <button type="submit" disabled={loading} className="bg-secondary text-white py-3 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50">
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        <h1 className="text-white text-2xl font-bold font-display text-center mb-8">Set New Password</h1>
+        <form onSubmit={handleSubmit} className="bg-surface/50 border border-white/5 rounded-2xl p-8 space-y-5">
+          {message && (
+            <p className={`text-sm ${message.includes('Failed') ? 'text-red-400' : 'text-green-400'}`}>{message}</p>
+          )}
+          <div>
+            <label className="text-sm text-muted block mb-2">New Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-primary/50 transition"
+              required
+              minLength={8}
+            />
+          </div>
+          <button type="submit" disabled={loading} className="w-full bg-primary hover:bg-primary/90 text-white py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-50">
             {loading ? 'Resetting...' : 'Reset Password'}
           </button>
+          <p className="text-center text-sm text-muted">
+            <Link to="/login" className="text-primary hover:underline">Back to Login</Link>
+          </p>
         </form>
       </div>
     </div>

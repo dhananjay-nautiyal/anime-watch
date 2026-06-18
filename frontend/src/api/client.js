@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+const API_BASE = import.meta.env.VITE_API_URL || ''
 
 const client = axios.create({
   baseURL: API_BASE,
@@ -16,32 +16,26 @@ client.interceptors.request.use((config) => {
 })
 
 client.interceptors.response.use(
-  (response) => response.data,
-  async (error) => {
-    const originalRequest = error.config
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true
-      const refreshToken = localStorage.getItem('refreshToken')
-      if (refreshToken) {
+  (res) => res,
+  async (err) => {
+    const original = err.config
+    if (err.response?.status === 401 && !original._retry) {
+      original._retry = true
+      const rt = localStorage.getItem('refreshToken')
+      if (rt) {
         try {
-          const { data } = await axios.post(`${API_BASE}/api/auth/refresh`, { refreshToken })
-          localStorage.setItem('token', data.data.token)
-          localStorage.setItem('refreshToken', data.data.refreshToken)
-          originalRequest.headers.Authorization = `Bearer ${data.data.token}`
-          return client(originalRequest)
+          const { data } = await axios.post(`${API_BASE}/api/auth/refresh`, { refreshToken: rt })
+          localStorage.setItem('token', data.token)
+          original.headers.Authorization = `Bearer ${data.token}`
+          return client(original)
         } catch {
           localStorage.removeItem('token')
           localStorage.removeItem('refreshToken')
-          localStorage.removeItem('user')
           window.location.href = '/login'
         }
-      } else {
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
-        window.location.href = '/login'
       }
     }
-    return Promise.reject(error.response?.data || error)
+    return Promise.reject(err)
   }
 )
 
