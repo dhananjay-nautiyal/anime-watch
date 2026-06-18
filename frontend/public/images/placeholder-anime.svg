@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="750" viewBox="0 0 500 750">
+  <rect width="500" height="750" fill="#1a1a2e"/>
+  <g transform="translate(250,300)">
+    <path d="M-40-30 L40-30 L0 10 Z" fill="#8B5CF6" opacity="0.4"/>
+  </g>
+  <text x="250" y="370" font-family="system-ui, sans-serif" font-size="16" fill="#6B7280" text-anchor="middle" font-weight="500">No Image</text>
+  <text x="250" y="395" font-family="system-ui, sans-serif" font-size="12" fill="#4B5563" text-anchor="middle">Available</text>
+  <rect x="190" y="430" width="120" height="4" rx="2" fill="#374151"/>
+  <rect x="210" y="444" width="80" height="4" rx="2" fill="#374151"/>
+</svg>

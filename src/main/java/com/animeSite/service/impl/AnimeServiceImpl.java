@@ -8,12 +8,14 @@ import com.animeSite.model.JikanListResponse;
 import com.animeSite.persist.Anime;
 import com.animeSite.repo.AnimeRepository;
 import com.animeSite.service.AnimeService;
-import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -28,39 +30,55 @@ public class AnimeServiceImpl implements AnimeService {
     }
 
     public AnimePage getTrending(int page) {
-        return toAnimePage(jikanApiClient.fetchTopAnime(page), page);
+        try {
+            return toAnimePage(jikanApiClient.fetchTopAnime(page), page);
+        } catch (Exception e) {
+            Page<Anime> dbPage = animeRepository.findAllByOrderByRatingDesc(PageRequest.of(page, 25));
+            return toAnimePageFromDb(dbPage, page);
+        }
     }
 
     public AnimePage searchAnime(String query, int page) {
-        return toAnimePage(jikanApiClient.searchAnime(query, page), page);
+        try {
+            return toAnimePage(jikanApiClient.searchAnime(query, page), page);
+        } catch (Exception e) {
+            Page<Anime> dbPage = animeRepository.findByTitleContainingIgnoreCase(query, PageRequest.of(page, 25));
+            return toAnimePageFromDb(dbPage, page);
+        }
     }
 
     public AnimePage filterAnime(String genres, String type, String status, String orderBy, String sort, int page) {
-        String url = jikanApiClient.buildFilterUrl("", genres, type, status, orderBy, sort, page);
-        return toAnimePage(jikanApiClient.filterAnime(url), page);
+        try {
+            String url = jikanApiClient.buildFilterUrl("", genres, type, status, orderBy, sort, page);
+            return toAnimePage(jikanApiClient.filterAnime(url), page);
+        } catch (Exception e) {
+            Page<Anime> dbPage = animeRepository.findAllByOrderByRatingDesc(PageRequest.of(page, 25));
+            return toAnimePageFromDb(dbPage, page);
+        }
     }
 
-    @Cacheable(value = "anime", key = "#id")
     public Anime getAnimeById(int id) {
+        try {
+            var response = jikanApiClient.fetchAnimeById(id);
+            if (response != null && response.getData() != null) {
+                return saveAnime(response.getData());
+            }
+        } catch (Exception ignored) {}
         return animeRepository.findByMalId(id)
-                .orElseGet(() -> {
-                    var response = jikanApiClient.fetchAnimeById(id);
-                    if (response == null || response.getData() == null) {
-                        throw new BusinessException(ErrorCode.ANIME_0001, "Anime not found with ID: " + id);
-                    }
-                    return saveAnime(response.getData());
-                });
+                .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with ID: " + id));
     }
 
     public AnimePage getSeasonal(int page) {
-        return toAnimePage(jikanApiClient.fetchSeasonalAnime(page), page);
+        try {
+            return toAnimePage(jikanApiClient.fetchSeasonalAnime(page), page);
+        } catch (Exception e) {
+            Page<Anime> dbPage = animeRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, 25));
+            return toAnimePageFromDb(dbPage, page);
+        }
     }
 
     @Transactional
     public Anime addAnimeByMalId(int malId) {
-        if (animeRepository.existsByMalId(malId)) {
-            return animeRepository.findByMalId(malId).orElseThrow();
-        }
         var response = jikanApiClient.fetchAnimeById(malId);
         if (response == null || response.getData() == null) {
             throw new BusinessException(ErrorCode.ANIME_0001, "Anime not found with MAL ID: " + malId);
@@ -119,19 +137,27 @@ public class AnimeServiceImpl implements AnimeService {
         return new AnimePage(animeList, page, totalPages);
     }
 
+    private AnimePage toAnimePageFromDb(Page<Anime> dbPage, int page) {
+        return new AnimePage(dbPage.getContent(), page, dbPage.getTotalPages());
+    }
+
     private Anime saveAnime(JikanAnimeData data) {
-        if (animeRepository.existsByMalId(data.getMalId())) {
-            return animeRepository.findByMalId(data.getMalId()).orElseThrow();
-        }
-        Anime anime = new Anime();
+        Optional<Anime> existing = animeRepository.findByMalId(data.getMalId());
+        Anime anime = existing.orElseGet(Anime::new);
         anime.setMalId(data.getMalId());
         anime.setTitle(data.getTitle());
         anime.setSynopsis(data.getSynopsis());
         anime.setRating(data.getScore());
         anime.setEpisodes(data.getEpisodes());
-        anime.setTrailerUrl(data.getTrailer() != null ? data.getTrailer().getUrl() : null);
+        if (data.getTrailer() != null) {
+            anime.setTrailerUrl(data.getTrailer().getUrl());
+            anime.setTrailerEmbedUrl(data.getTrailer().getEmbedUrl());
+        }
         anime.setImageUrl(data.getImages() != null && data.getImages().getJpg() != null
-                ? data.getImages().getJpg().getImageUrl() : null);
+                ? data.getImages().getJpg().getLargeImageUrl() != null
+                    ? data.getImages().getJpg().getLargeImageUrl()
+                    : data.getImages().getJpg().getImageUrl()
+                : null);
         return animeRepository.save(anime);
     }
 
