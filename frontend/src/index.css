@@ -1,0 +1,106 @@
+@import url("https://fonts.googleapis.com/css2?family=Pathway+Extreme:wght@100;200;300;400;500;600;700;800;900&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: "Pathway Extreme", sans-serif;
+  font-size: 15px;
+  color: #6d6d6d;
+  background: #161616;
+}
+
+::-webkit-scrollbar { width: 15px; }
+::-webkit-scrollbar-track { background: #161616; }
+::-webkit-scrollbar-thumb { background: #464646; }
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.type-badge {
+  height: 1.3rem;
+  padding: 0 0.4rem;
+  font-size: 0.75rem;
+  line-height: 1.3rem;
+  font-weight: 500;
+  color: #ededed;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.main-card .inner:hover .play-overlay {
+  opacity: 1;
+}
+.main-card .inner:hover .play-overlay i {
+  transform: scale(1);
+}
+.main-card .inner:hover img {
+  transform: scale(1.02);
+}
+.main-card .inner:hover .anime-title {
+  color: #ededed;
+}
+
+.play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 2;
+}
+.play-overlay i {
+  font-size: 4rem;
+  color: #7c3aed;
+  transform: scale(4);
+  transition: all 0.3s;
+}
+.main-card .inner:hover .play-overlay i {
+  color: #ededed;
+}
+
+.anime-poster-wrap {
+  position: relative;
+  overflow: hidden;
+}
+.anime-poster-wrap .poster-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s;
+}
+
+.top-card-item:nth-child(odd) {
+  background: rgba(255,255,255,0.01);
+}
+.top-card-item:hover {
+  background: #2d2d2d;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: white;
+  -webkit-box-shadow: 0 0 0px 1000px #0e0e0e inset;
+  transition: background-color 5000s ease-in-out 0s;
+}
