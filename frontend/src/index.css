@@ -11,16 +11,16 @@
 body {
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 15px;
-  color: #D1D5DB;
-  background: #070B14;
+  color: #94a3b8;
+  background: #050816;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 ::-webkit-scrollbar { width: 8px; }
-::-webkit-scrollbar-track { background: #070B14; }
-::-webkit-scrollbar-thumb { background: #1F2937; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #374151; }
+::-webkit-scrollbar-track { background: #050816; }
+::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #334155; }
 
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
@@ -45,21 +45,21 @@ body {
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #1a1a2e 25%, #2a2a3e 50%, #1a1a2e 75%);
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: inherit;
 }
 
 .glass {
-  background: rgba(17, 24, 39, 0.6);
+  background: rgba(15, 23, 42, 0.6);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .glass-strong {
-  background: rgba(17, 24, 39, 0.8);
+  background: rgba(15, 23, 42, 0.8);
   backdrop-filter: blur(30px);
   -webkit-backdrop-filter: blur(30px);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -169,12 +169,12 @@ input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus {
   -webkit-text-fill-color: white;
-  -webkit-box-shadow: 0 0 0px 1000px #0e0e0e inset;
+  -webkit-box-shadow: 0 0 0px 1000px #0f172a inset;
   transition: background-color 5000s ease-in-out 0s;
 }
 
 select option {
-  background: #111827;
+  background: #0f172a;
   color: white;
 }
 

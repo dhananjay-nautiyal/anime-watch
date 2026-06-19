@@ -5,15 +5,15 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        body: '#09090B',
-        surface: '#111827',
+        body: '#050816',
+        surface: '#0f172a',
         primary: '#8B5CF6',
         secondary: '#06B6D4',
         accent: '#EC4899',
-        muted: '#6B7280',
+        muted: '#94a3b8',
         link: '#D1D5DB',
-        card: 'rgba(17, 24, 39, 0.6)',
-        cardHover: '#202020',
+        card: 'rgba(15, 23, 42, 0.6)',
+        cardHover: '#1e293b',
         textMajor: '#ededed',
         dimWhite: '#cecece',
         dimBlue: "rgba(124, 58, 237, 0.1)",

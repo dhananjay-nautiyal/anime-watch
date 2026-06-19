@@ -133,7 +133,7 @@ export default function AdminAnime() {
 
       <div className="flex flex-wrap" style={{ margin: '0 -0.43rem' }}>
         {results.map((anime) => (
-          <div key={anime.malId || anime.id} className="relative group">
+          <div key={`${anime.malId || anime.id}-${i}`} className="relative group">
             <MainCard anime={anime} />
             <div className="absolute top-2 left-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition">
               <button

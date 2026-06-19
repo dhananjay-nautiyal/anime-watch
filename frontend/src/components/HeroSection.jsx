@@ -61,9 +61,9 @@ export default function HeroSection({ items }) {
           </motion.div>
         </AnimatePresence>
 
-        <div className="absolute inset-0 bg-gradient-to-t from-[#070B14] via-[#070B14]/70 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#070B14]/90 via-transparent to-[#070B14]/50" />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#070B14]/10 to-[#070B14]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#050816] via-[#050816]/70 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#050816]/90 via-transparent to-[#050816]/50" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#050816]/10 to-[#050816]" />
       </div>
 
       <div className="absolute inset-0 flex items-end">

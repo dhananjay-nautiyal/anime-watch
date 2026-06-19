@@ -15,9 +15,12 @@ public class AppConfig {
 
     @Bean
     public RestTemplate restTemplate() {
-        RestTemplate restTemplate = new RestTemplate();
+        var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(3000);
+        factory.setReadTimeout(5000);
+        RestTemplate restTemplate = new RestTemplate(factory);
         restTemplate.setInterceptors(List.of((request, body, execution) -> {
-            request.getHeaders().set("User-Agent", "animewatch/1.0");
+            request.getHeaders().set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
             return execution.execute(request, body);
         }));
         return restTemplate;
