@@ -142,11 +142,11 @@ export default function AnimeDetail() {
     <div>
       <div className="relative h-[45vh] min-h-[300px] overflow-hidden">
         <BannerImage src={anime.imageUrl} alt="" className="scale-105" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#070B14] via-[#070B14]/80 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#070B14]/60 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#050816] via-[#050816]/80 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#050816]/60 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 px-4 sm:px-6 lg:px-8 pb-6">
           <Link to="/" className="text-muted hover:text-white text-sm transition-colors inline-flex items-center gap-1 mb-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             Back
@@ -205,14 +205,14 @@ export default function AnimeDetail() {
                 to={`/watch/${anime.malId || anime.id}/1`}
                 className="bg-primary hover:bg-primary/90 text-white px-7 py-2.5 rounded-xl text-sm font-semibold transition-all hover:shadow-glow hover:-translate-y-0.5 flex items-center gap-2"
               >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
                 </svg>
                 Watch Now
               </Link>
               {anime.trailerUrl && (
                 <a href={anime.trailerUrl} target="_blank" rel="noopener noreferrer" className="glass text-link hover:text-white px-6 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-white/10 flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -229,7 +229,7 @@ export default function AnimeDetail() {
                         : 'glass text-link hover:text-white hover:bg-white/10 border border-transparent'
                     }`}
                   >
-                    <svg className="w-4 h-4" fill={isFavorited ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5" fill={isFavorited ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                     </svg>
                     {isFavorited ? 'Favorited' : 'Favorite'}

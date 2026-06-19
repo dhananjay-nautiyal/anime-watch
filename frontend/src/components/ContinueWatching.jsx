@@ -62,7 +62,7 @@ export default function ContinueWatching({ items = [], isLoading }) {
       <div className="overflow-x-auto scrollbar-hide -mx-4 px-4 pb-2">
         <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
           {items.slice(0, 8).map((anime, i) => (
-            <ContinueCard key={anime.malId || anime.id} anime={anime} progress={Math.random() * 0.6 + 0.2} />
+            <ContinueCard key={`${anime.malId || anime.id}-${i}`} anime={anime} progress={Math.random() * 0.6 + 0.2} />
           ))}
         </div>
       </div>

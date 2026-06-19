@@ -72,7 +72,7 @@ export default function SectionRow({ title, viewAllLink, items = [], isLoading }
       <div className="overflow-x-auto scrollbar-hide -mx-4 px-4 pb-2">
         <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
           {items.map((anime, i) => (
-            <SectionCard key={anime.malId || anime.id} anime={anime} index={i} />
+            <SectionCard key={`${anime.malId || anime.id}-${i}`} anime={anime} index={i} />
           ))}
         </div>
       </div>

@@ -61,7 +61,7 @@ export default function Home() {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
               {popular.map((anime, i) => (
-                <AnimeCard key={anime.malId || anime.id} anime={anime} index={i} />
+                <AnimeCard key={`${anime.malId || anime.id}-${i}`} anime={anime} index={i} />
               ))}
             </div>
           )}
@@ -85,7 +85,7 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {topRated.slice(0, 10).map((anime, i) => (
                 <motion.div
-                  key={anime.malId || anime.id}
+                  key={`${anime.malId || anime.id}-${i}`}
                   initial={{ opacity: 0, x: -20 }}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}

@@ -37,4 +37,4 @@ export const getEpisodes = (malId) =>
   client.get(`/api/anime/${malId}/episodes`).then(unwrapData)
 
 export const syncEpisodes = (malId) =>
-  client.post(`/api/anime/${malId}/episodes/sync`).then(unwrapData)
+  client.post(`/api/anime/${malId}/episodes/sync`, null, { timeout: 30000 }).then((res) => res.data?.data ?? [])
