@@ -3,6 +3,7 @@ package com.animeSite.httpclient;
 import com.animeSite.model.JikanAnimeData;
 import com.animeSite.model.JikanListResponse;
 import com.animeSite.model.JikanSingleResponse;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -15,16 +16,16 @@ public class JikanApiClient {
     private final RestTemplate restTemplate;
     private volatile long lastApiCall = 0;
 
-    public JikanApiClient(RestTemplate restTemplate) {
+    public JikanApiClient(@Qualifier("jikanRestTemplate") RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
     }
 
     public JikanListResponse fetchTopAnime(int page) {
-        return callApi(BASE_URL + "/top/anime?page={page}", page);
+        return callApi(BASE_URL + "/top/anime?page={page}", page + 1);
     }
 
     public JikanListResponse searchAnime(String query, int page) {
-        return callApi(BASE_URL + "/anime?q={query}&page={page}", query, page);
+        return callApi(BASE_URL + "/anime?q={query}&page={page}", query, page + 1);
     }
 
     public JikanListResponse filterAnime(String url) {
@@ -36,12 +37,12 @@ public class JikanApiClient {
     }
 
     public JikanListResponse fetchSeasonalAnime(int page) {
-        return callApi(BASE_URL + "/seasons/now?page={page}", page);
+        return callApi(BASE_URL + "/seasons/now?page={page}", page + 1);
     }
 
     public String buildFilterUrl(String baseParams, String genres, String type, String status,
                                   String orderBy, String sort, int page) {
-        StringBuilder url = new StringBuilder(BASE_URL + "/anime?" + baseParams + "page=" + page);
+        StringBuilder url = new StringBuilder(BASE_URL + "/anime?" + baseParams + "page=" + (page + 1));
         if (genres != null && !genres.isBlank()) url.append("&genres=").append(genres);
         if (type != null && !type.isBlank()) url.append("&type=").append(type);
         if (status != null && !status.isBlank()) url.append("&status=").append(status);

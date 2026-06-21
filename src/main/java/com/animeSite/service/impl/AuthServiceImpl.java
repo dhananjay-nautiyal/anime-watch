@@ -5,11 +5,9 @@ import com.animeSite.core.exception.BusinessException;
 import com.animeSite.core.exception.ErrorCode;
 import com.animeSite.model.LoginRequest;
 import com.animeSite.model.RegisterRequest;
-import com.animeSite.persist.EmailVerificationToken;
 import com.animeSite.persist.PasswordResetToken;
 import com.animeSite.persist.RefreshToken;
 import com.animeSite.persist.User;
-import com.animeSite.repo.EmailVerificationTokenRepository;
 import com.animeSite.repo.PasswordResetTokenRepository;
 import com.animeSite.repo.RefreshTokenRepository;
 import com.animeSite.repo.UserRepository;
@@ -31,7 +29,6 @@ import java.util.UUID;
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
-    private final EmailVerificationTokenRepository emailVerificationTokenRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
@@ -40,7 +37,6 @@ public class AuthServiceImpl implements AuthService {
     private final EmailService emailService;
 
     public AuthServiceImpl(UserRepository userRepository,
-                           EmailVerificationTokenRepository emailVerificationTokenRepository,
                            RefreshTokenRepository refreshTokenRepository,
                            PasswordResetTokenRepository passwordResetTokenRepository,
                            PasswordEncoder passwordEncoder,
@@ -48,7 +44,6 @@ public class AuthServiceImpl implements AuthService {
                            JwtTokenProvider jwtTokenProvider,
                            EmailService emailService) {
         this.userRepository = userRepository;
-        this.emailVerificationTokenRepository = emailVerificationTokenRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordResetTokenRepository = passwordResetTokenRepository;
         this.passwordEncoder = passwordEncoder;
@@ -67,61 +62,21 @@ public class AuthServiceImpl implements AuthService {
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setRole(Role.ROLE_USER);
-        user.setVerified(false);
+        user.setVerified(true);
         user = userRepository.save(user);
-
-        sendVerificationToken(user);
         return user;
     }
 
     @Transactional
-    public void resendVerification(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_0001, "User not found"));
-        if (user.isVerified()) {
-            throw new BusinessException(ErrorCode.AUTH_0004, "Email is already verified");
-        }
-        sendVerificationToken(user);
-    }
-
-    private void sendVerificationToken(User user) {
-        String token = UUID.randomUUID().toString();
-        EmailVerificationToken evt = new EmailVerificationToken();
-        evt.setUser(user);
-        evt.setToken(token);
-        evt.setExpiresAt(LocalDateTime.now().plusHours(24));
-        emailVerificationTokenRepository.save(evt);
-        emailService.sendVerificationEmail(user.getEmail(), token);
-    }
-
-    @Transactional
-    public String verifyEmail(String token) {
-        EmailVerificationToken evt = emailVerificationTokenRepository.findByToken(token)
-                .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_0006, "Invalid verification token"));
-        if (evt.isExpired()) {
-            throw new BusinessException(ErrorCode.AUTH_0007, "Verification token has expired");
-        }
-        User user = evt.getUser();
-        user.setVerified(true);
-        userRepository.save(user);
-        emailVerificationTokenRepository.delete(evt);
-        return "Email verified successfully";
-    }
-
-    @Transactional
     public Map<String, Object> login(LoginRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_0001));
+
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
         } catch (BadCredentialsException e) {
-            throw new BusinessException(ErrorCode.AUTH_0003, "Invalid email or password");
-        }
-
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_0001, "User not found"));
-
-        if (!user.isVerified()) {
-            throw new BusinessException(ErrorCode.AUTH_0005, "Please verify your email before logging in");
+            throw new BusinessException(ErrorCode.AUTH_0003);
         }
 
         String accessToken = jwtTokenProvider.generateToken(user.getEmail(), user.getRole().name());

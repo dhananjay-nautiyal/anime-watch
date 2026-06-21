@@ -110,7 +110,7 @@ export default function HeroSection({ items }) {
                 Watch Now
               </Link>
               <Link
-                to={`/anime/${item.malId || item.id}`}
+                to={`/watch/${item.malId || item.id}/1`}
                 className="glass text-link hover:text-white px-6 py-3 rounded-xl text-sm font-medium transition-all hover:bg-white/10 hover:-translate-y-0.5 backdrop-blur-md"
               >
                 More Info

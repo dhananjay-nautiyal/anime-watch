@@ -8,7 +8,6 @@ import com.animeSite.model.ResetPasswordRequest;
 import com.animeSite.persist.User;
 import com.animeSite.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -28,26 +27,11 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    @Operation(summary = "Register a new user", description = "Creates account and sends verification email.")
+    @Operation(summary = "Register a new user", description = "Creates a new user account.")
     public ResponseEntity<ApiResponse<User>> register(@Valid @RequestBody RegisterRequest request) {
         User user = authService.register(request);
         user.setPassword(null);
         return ResponseEntity.ok(ApiResponse.success(user));
-    }
-
-    @PostMapping("/resend-verification")
-    @Operation(summary = "Resend verification email", description = "Resends the email verification link.")
-    public ResponseEntity<ApiResponse<String>> resendVerification(@Valid @RequestBody ForgotPasswordRequest request) {
-        authService.resendVerification(request.getEmail());
-        return ResponseEntity.ok(ApiResponse.success("Verification email sent if the email exists"));
-    }
-
-    @GetMapping("/verify")
-    @Operation(summary = "Verify email", description = "Verifies user email using the token from registration email.")
-    public ResponseEntity<ApiResponse<String>> verifyEmail(
-            @Parameter(description = "Verification token", required = true) @RequestParam String token) {
-        String message = authService.verifyEmail(token);
-        return ResponseEntity.ok(ApiResponse.success(message));
     }
 
     @PostMapping("/login")

@@ -5,7 +5,6 @@ import com.animeSite.model.LoginRequest;
 import com.animeSite.model.RegisterRequest;
 import com.animeSite.persist.User;
 import com.animeSite.constant.Role;
-import com.animeSite.repo.EmailVerificationTokenRepository;
 import com.animeSite.repo.PasswordResetTokenRepository;
 import com.animeSite.repo.RefreshTokenRepository;
 import com.animeSite.repo.UserRepository;
@@ -28,7 +27,6 @@ import static org.mockito.Mockito.*;
 class AuthServiceTest {
 
     @Mock private UserRepository userRepository;
-    @Mock private EmailVerificationTokenRepository tokenRepository;
     @Mock private RefreshTokenRepository refreshTokenRepository;
     @Mock private PasswordResetTokenRepository passwordResetTokenRepository;
     @Mock private PasswordEncoder passwordEncoder;
@@ -40,7 +38,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthServiceImpl(userRepository, tokenRepository, refreshTokenRepository,
+        authService = new AuthServiceImpl(userRepository, refreshTokenRepository,
                 passwordResetTokenRepository, passwordEncoder, authenticationManager,
                 jwtTokenProvider, emailService);
     }
@@ -61,9 +59,7 @@ class AuthServiceTest {
         assertEquals("test@example.com", result.getEmail());
         assertEquals("encoded", result.getPassword());
         assertEquals(Role.ROLE_USER, result.getRole());
-        assertFalse(result.isVerified());
-        verify(tokenRepository).save(any());
-        verify(emailService).sendVerificationEmail(anyString(), anyString());
+        assertTrue(result.isVerified());
     }
 
     @Test
@@ -74,12 +70,6 @@ class AuthServiceTest {
 
         assertThrows(RuntimeException.class, () -> authService.register(request));
         verify(userRepository, never()).save(any());
-    }
-
-    @Test
-    void verifyEmail_ShouldThrow_WhenInvalidToken() {
-        when(tokenRepository.findByToken("invalid")).thenReturn(Optional.empty());
-        assertThrows(RuntimeException.class, () -> authService.verifyEmail("invalid"));
     }
 
     @Test

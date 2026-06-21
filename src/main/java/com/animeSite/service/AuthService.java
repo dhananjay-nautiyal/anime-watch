@@ -9,8 +9,6 @@ import java.util.Map;
 
 public interface AuthService {
     User register(RegisterRequest request);
-    void resendVerification(String email);
-    String verifyEmail(String token);
     Map<String, Object> login(LoginRequest request);
     Map<String, Object> refreshAccessToken(String refreshTokenValue);
     void logout(String refreshTokenValue);

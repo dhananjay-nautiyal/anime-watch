@@ -11,7 +11,7 @@ export default function AnimeCard({ anime, index = 0, rank }) {
       transition={{ duration: 0.4, delay: (index % 8) * 0.05 }}
       className="group"
     >
-      <Link to={`/anime/${anime.malId || anime.id}`} className="block">
+      <Link to={`/watch/${anime.malId || anime.id}/1`} className="block">
         <div className="relative rounded-xl overflow-hidden bg-surface/50 shadow-card">
           <ImageWithFallback
             src={anime.imageUrl || anime.images?.jpg?.image_url}

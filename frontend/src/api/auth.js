@@ -12,12 +12,6 @@ export const logout = (refreshToken) =>
 export const refreshToken = (token) =>
   client.post('/api/auth/refresh', { refreshToken: token })
 
-export const verifyEmail = (token) =>
-  client.get('/api/auth/verify', { params: { token } })
-
-export const resendVerification = (email) =>
-  client.post('/api/auth/resend-verification', { email })
-
 export const forgotPassword = (email) =>
   client.post('/api/auth/forgot-password', { email })
 

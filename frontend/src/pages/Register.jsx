@@ -34,7 +34,7 @@ export default function Register() {
       >
         <div className="text-center mb-8">
           <Link to="/" className="text-3xl font-extrabold gradient-text font-display tracking-tight">
-            WatchAnime
+            AnimeWatch
           </Link>
           <p className="text-muted text-sm mt-2">Create your account</p>
         </div>
