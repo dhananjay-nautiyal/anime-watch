@@ -52,3 +52,4 @@ jwt:
 
 app:
   base-url: ${APP_BASE_URL:http://localhost:8080}
+  frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}

@@ -40,7 +40,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/anime/**").permitAll()
                 .requestMatchers("/api/image-proxy").permitAll()
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/admin/**").permitAll()
                 .requestMatchers("/api/watchlist/**").authenticated()
                 .requestMatchers("/api/favorites/**").authenticated()
                 .requestMatchers("/api/reviews/**").authenticated()

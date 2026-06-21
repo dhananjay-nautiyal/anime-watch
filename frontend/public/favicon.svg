@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0a1628"/>
+  <g transform="translate(256,256) rotate(45) translate(-256,-256)">
+    <rect x="235" y="80" width="42" height="300" rx="8" fill="white"/>
+  </g>
+  <g transform="translate(256,256) rotate(-45) translate(-256,-256)">
+    <rect x="235" y="80" width="42" height="300" rx="8" fill="white"/>
+  </g>
+  <g transform="translate(256,256) rotate(45) translate(-256,-256)">
+    <rect x="235" y="340" width="42" height="60" rx="8" fill="white"/>
+    <polygon points="235,400 277,400 256,430" fill="white"/>
+  </g>
+  <g transform="translate(256,256) rotate(-45) translate(-256,-256)">
+    <rect x="235" y="340" width="42" height="60" rx="8" fill="white"/>
+    <polygon points="235,400 277,400 256,430" fill="white"/>
+  </g>
+  <circle cx="146" cy="366" r="14" fill="#a855f7"/>
+</svg>

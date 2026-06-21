@@ -10,6 +10,10 @@ public class JikanAnimeData {
     private int malId;
 
     private String title;
+
+    @JsonProperty("title_english")
+    private String titleEnglish;
+
     private String synopsis;
     private Double score;
     private Integer episodes;

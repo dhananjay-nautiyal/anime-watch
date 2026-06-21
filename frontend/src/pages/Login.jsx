@@ -29,12 +29,13 @@ export default function Login() {
       login(data.data?.token, data.data?.refreshToken, userData)
       navigate(from, { replace: true })
     } catch (err) {
-      if (err.response) {
-        setError(err.response.data?.message || 'Invalid email or password')
-      } else if (err.request) {
+      console.error('[LOGIN ERROR]', err)
+      if (err?.response) {
+        setError(err.response.data?.message || err.message || 'Invalid email or password')
+      } else if (err?.request) {
         setError('Cannot connect to server. Make sure the backend is running on port 8080.')
       } else {
-        setError('An unexpected error occurred.')
+        setError(err?.message || String(err) || 'Something went wrong. Please try again.')
       }
     } finally {
       setLoading(false)
@@ -50,7 +51,7 @@ export default function Login() {
       >
         <div className="text-center mb-8">
           <Link to="/" className="text-3xl font-extrabold gradient-text font-display tracking-tight">
-            WatchAnime
+            AnimeWatch
           </Link>
           <p className="text-muted text-sm mt-2">Sign in to your account</p>
         </div>
