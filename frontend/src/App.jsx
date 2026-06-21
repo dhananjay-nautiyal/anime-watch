@@ -3,13 +3,11 @@ import { Route, Routes, Navigate, useLocation } from 'react-router-dom'
 import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute'
 import Layout from './components/Layout'
 import Loading from './components/Loading'
-
-const Home = lazy(() => import('./pages/Home'))
+import Home from './pages/Home'
 const Browse = lazy(() => import('./pages/Browse'))
 const Schedule = lazy(() => import('./pages/Schedule'))
 const Login = lazy(() => import('./pages/Login'))
 const Register = lazy(() => import('./pages/Register'))
-const VerifyEmail = lazy(() => import('./pages/VerifyEmail'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const Trending = lazy(() => import('./pages/Trending'))
@@ -37,7 +35,6 @@ function AppRoutes() {
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/trending" element={<Trending />} />

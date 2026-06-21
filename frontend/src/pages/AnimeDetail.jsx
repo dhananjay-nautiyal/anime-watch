@@ -266,7 +266,7 @@ export default function AnimeDetail() {
           <section className="mb-12">
             <h2 className="text-white text-xl font-bold font-display mb-6">Episodes</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {episodes.slice(0, 50).map((ep) => (
+              {episodes.map((ep) => (
                 <EpisodeGridCard
                   key={ep.id || ep.episodeNumber}
                   episode={ep}

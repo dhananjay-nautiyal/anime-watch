@@ -145,7 +145,8 @@ public class AnimeServiceImpl implements AnimeService {
         Optional<Anime> existing = animeRepository.findByMalId(data.getMalId());
         Anime anime = existing.orElseGet(Anime::new);
         anime.setMalId(data.getMalId());
-        anime.setTitle(data.getTitle());
+        String englishTitle = data.getTitleEnglish();
+        anime.setTitle(englishTitle != null && !englishTitle.isBlank() ? englishTitle : data.getTitle());
         anime.setSynopsis(data.getSynopsis());
         anime.setRating(data.getScore());
         anime.setEpisodes(data.getEpisodes());

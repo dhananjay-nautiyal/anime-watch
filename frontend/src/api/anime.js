@@ -2,6 +2,9 @@ import client from './client'
 
 const unwrapData = (res) => res.data?.data ?? res.data ?? []
 
+export const createStreamToken = (embedUrl) =>
+  client.post('/api/stream/token', { url: embedUrl }, { timeout: 5000 }).then((res) => res.data?.data ?? null)
+
 const unwrapPaged = (res) => ({
   data: res.data?.data ?? [],
   page: res.data?.page ?? 0,
@@ -37,4 +40,7 @@ export const getEpisodes = (malId) =>
   client.get(`/api/anime/${malId}/episodes`).then(unwrapData)
 
 export const syncEpisodes = (malId) =>
-  client.post(`/api/anime/${malId}/episodes/sync`, null, { timeout: 30000 }).then((res) => res.data?.data ?? [])
+  client.post(`/api/anime/${malId}/episodes/sync`, null, { timeout: 3000 }).then((res) => res.data?.data ?? [])
+
+export const getEpisodeEmbed = (malId, episodeUrl) =>
+  client.get(`/api/anime/${malId}/episode/embed`, { params: { episodeUrl }, timeout: 500 }).then((res) => res.data?.data ?? null)

@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { logout as logoutApi } from '../api/auth'
+import { searchAnime } from '../api/anime'
+import { useDebounce } from '../hooks/useDebounce'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export default function Navbar() {
@@ -9,10 +11,15 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [suggestions, setSuggestions] = useState([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [suggestLoading, setSuggestLoading] = useState(false)
+  const debouncedQuery = useDebounce(searchQuery, 300)
   const { isAuthenticated, user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const inputRef = useRef(null)
+  const suggestRef = useRef(null)
 
   const isWatchPage = location.pathname.startsWith('/watch')
 
@@ -25,6 +32,24 @@ export default function Navbar() {
   useEffect(() => {
     if (searchOpen && inputRef.current) inputRef.current.focus()
   }, [searchOpen])
+
+  useEffect(() => {
+    if (!debouncedQuery.trim()) { setSuggestions([]); setShowSuggestions(false); return }
+    let cancelled = false
+    setSuggestLoading(true)
+    searchAnime(debouncedQuery.trim(), 0, 6).then((res) => {
+      if (!cancelled) { setSuggestions(res.data || []); setShowSuggestions(true); setSuggestLoading(false) }
+    }).catch(() => { if (!cancelled) setSuggestLoading(false) })
+    return () => { cancelled = true }
+  }, [debouncedQuery])
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (suggestRef.current && !suggestRef.current.contains(e.target)) setShowSuggestions(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const handleSearch = (e) => {
     e.preventDefault()
@@ -56,7 +81,7 @@ export default function Navbar() {
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2 flex-shrink-0">
           <span className="text-2xl font-extrabold gradient-text font-display tracking-tight">
-            WatchAnime
+            AnimeWatch
           </span>
         </Link>
 
@@ -90,7 +115,7 @@ export default function Navbar() {
           </button>
 
           {isAuthenticated ? (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
               <Link
                 to="/watchlist"
                 className="text-muted hover:text-white transition-colors p-2 hidden sm:block"
@@ -109,6 +134,16 @@ export default function Navbar() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                 </svg>
               </Link>
+              <button
+                onClick={handleLogout}
+                className="text-muted hover:text-red-400 transition-colors p-2 hidden sm:block"
+                aria-label="Sign out"
+                title="Sign out"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
               <Link
                 to="/profile"
                 className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white text-xs font-bold ring-2 ring-white/10 hover:ring-primary/50 transition-all"
@@ -150,7 +185,7 @@ export default function Navbar() {
             className="border-t border-white/5 bg-body/95 backdrop-blur-xl"
           >
             <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-3">
-              <form onSubmit={handleSearch}>
+              <form onSubmit={handleSearch} ref={suggestRef}>
                 <div className="relative group">
                   <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted group-focus-within:text-primary transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -167,7 +202,7 @@ export default function Navbar() {
                   {searchQuery && (
                     <button
                       type="button"
-                      onClick={() => setSearchQuery('')}
+                      onClick={() => { setSearchQuery(''); setSuggestions([]); setShowSuggestions(false) }}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-white"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -175,7 +210,43 @@ export default function Navbar() {
                       </svg>
                     </button>
                   )}
+                  {suggestLoading && (
+                    <div className="absolute right-12 top-1/2 -translate-y-1/2">
+                      <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                    </div>
+                  )}
                 </div>
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="mt-2 rounded-xl bg-surface border border-white/10 overflow-hidden shadow-xl">
+                    {suggestions.map((anime) => (
+                      <button
+                        key={anime.malId || anime.id}
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery('')
+                          setShowSuggestions(false)
+                          setSearchOpen(false)
+                          navigate(`/anime/${anime.malId || anime.id}`)
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors text-left"
+                      >
+                        <div className="w-8 h-11 rounded overflow-hidden flex-shrink-0 bg-white/5">
+                          <img src={anime.imageUrl} alt="" className="w-full h-full object-cover" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-white truncate">{anime.title}</p>
+                          <span className="text-[10px] text-muted">{anime.type || 'TV'}</span>
+                        </div>
+                      </button>
+                    ))}
+                    <button
+                      type="submit"
+                      className="w-full text-center text-xs text-muted py-2.5 hover:text-white hover:bg-white/5 transition-colors border-t border-white/5"
+                    >
+                      View all results →
+                    </button>
+                  </div>
+                )}
               </form>
             </div>
           </motion.div>

@@ -18,6 +18,9 @@ public class EmailServiceImpl implements EmailService {
     @Value("${app.base-url}")
     private String baseUrl;
 
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
+
     public EmailServiceImpl(JavaMailSender mailSender) {
         this.mailSender = mailSender;
     }
@@ -33,7 +36,7 @@ public class EmailServiceImpl implements EmailService {
     public void sendPasswordResetEmail(String to, String token) {
         sendEmail(to, "Reset your password - Anime Site",
                 "Click the link below to reset your password:\n\n"
-                + baseUrl + "/api/auth/reset-password?token=" + token
+                + frontendUrl + "/reset-password?token=" + token
                 + "\n\nThis link will expire in 1 hour.");
     }
 

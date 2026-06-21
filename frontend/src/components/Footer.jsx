@@ -20,7 +20,7 @@ export default function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8 mb-10">
           <div className="col-span-2 md:col-span-1">
             <Link to="/" className="text-2xl font-extrabold gradient-text font-display tracking-tight">
-              WatchAnime
+              AnimeWatch
             </Link>
             <p className="text-sm text-muted mt-3 leading-relaxed max-w-xs">
               Your premium destination for anime streaming. Discover, watch, and track your favorite anime series in stunning quality.
@@ -85,7 +85,7 @@ export default function Footer() {
         </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-8 border-t border-white/5">
-          <p className="text-muted text-xs">&copy; 2026 WatchAnime. All rights reserved.</p>
+          <p className="text-muted text-xs">&copy; 2026 AnimeWatch. All rights reserved.</p>
           <p className="text-muted text-xs">Data provided by MyAnimeList via Jikan API</p>
           <button onClick={scrollToTop} className="text-muted hover:text-primary transition-colors p-1" aria-label="Scroll to top">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
