@@ -12,15 +12,19 @@ export default function AdminNews() {
   const [imageUrl, setImageUrl] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const load = () => {
+  const load = (signal) => {
     setLoading(true)
-    getNews(0, 100)
-      .then((res) => setArticles(res.data?.content || []))
+    getNews(0, 100, signal)
+      .then((res) => { if (!signal?.aborted) setArticles(res.content || []) })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { if (!signal?.aborted) setLoading(false) })
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    const controller = new AbortController()
+    load(controller.signal)
+    return () => controller.abort()
+  }, [])
 
   const resetForm = () => {
     setEditing(null)

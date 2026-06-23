@@ -11,14 +11,20 @@ export default function Seasonal() {
   const [totalPages, setTotalPages] = useState(1)
 
   useEffect(() => {
+    const controller = new AbortController()
+    const { signal } = controller
+
     setLoading(true)
-    getSeasonal(page, 25)
+    getSeasonal(page, 25, signal)
       .then((res) => {
+        if (signal.aborted) return
         setItems(res.data || [])
         setTotalPages(res.totalPages || 1)
       })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { if (!signal.aborted) setLoading(false) })
+
+    return () => controller.abort()
   }, [page])
 
   const seasonNames = ['Winter', 'Spring', 'Summer', 'Fall']

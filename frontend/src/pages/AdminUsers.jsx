@@ -7,15 +7,19 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
 
-  const load = () => {
+  const load = (signal) => {
     setLoading(true)
-    getUsers()
-      .then((res) => setUsers(res.data || []))
+    getUsers(signal)
+      .then((res) => { if (!signal?.aborted) setUsers(res.data || []) })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { if (!signal?.aborted) setLoading(false) })
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    const controller = new AbortController()
+    load(controller.signal)
+    return () => controller.abort()
+  }, [])
 
   const handleDelete = async (id, email) => {
     if (!window.confirm(`Delete user ${email}?`)) return

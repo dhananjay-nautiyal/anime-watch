@@ -24,22 +24,28 @@ export default function Browse() {
   const status = searchParams.get('status') || ''
 
   useEffect(() => {
+    const controller = new AbortController()
+    const { signal } = controller
+
     setLoading(true)
     setError(false)
 
     const fetchData = q
-      ? searchAnime(q, page, 25)
+      ? searchAnime(q, page, 25, signal)
       : genre || year || status
-        ? filterAnime({ genres: genre, year, status, page, size: 25 })
-        : getTrending(page, 25)
+        ? filterAnime({ genres: genre, year, status, page, size: 25 }, signal)
+        : getTrending(page, 25, signal)
 
     fetchData
       .then((res) => {
+        if (signal.aborted) return
         setItems(res.data || [])
         setTotalPages(res.totalPages || 1)
       })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false))
+      .catch(() => { if (!signal.aborted) setError(true) })
+      .finally(() => { if (!signal.aborted) setLoading(false) })
+
+    return () => controller.abort()
   }, [q, genre, year, status, page])
 
   const updateFilter = (key, value) => {

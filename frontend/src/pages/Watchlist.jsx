@@ -9,15 +9,19 @@ export default function Watchlist() {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
 
-  const load = () => {
+  const load = (signal) => {
     setLoading(true)
-    getWatchlist()
-      .then(setEntries)
+    getWatchlist(signal)
+      .then((data) => { if (!signal?.aborted) setEntries(data) })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { if (!signal?.aborted) setLoading(false) })
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    const controller = new AbortController()
+    load(controller.signal)
+    return () => controller.abort()
+  }, [])
 
   const handleStatusChange = async (id, status) => {
     try {

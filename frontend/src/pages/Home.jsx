@@ -18,20 +18,28 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const controller = new AbortController()
+    const { signal } = controller
+
     Promise.all([
-      getTrending(0, 25).then(r => r.data || []).catch(() => []),
-      getSeasonal(0, 20).then(r => r.data.slice(0, 20)).catch(() => []),
-      filterAnime({ status: 'airing', page: 0, size: 20 }).then(r => r.data.slice(0, 20)).catch(() => []),
-      filterAnime({ status: 'complete', page: 0, size: 20 }).then(r => r.data.slice(0, 20)).catch(() => []),
-      filterAnime({ status: 'upcoming', page: 0, size: 20 }).then(r => r.data.slice(0, 20)).catch(() => []),
+      getTrending(0, 25, signal).then(r => r.data || []).catch(() => []),
+      getSeasonal(0, 20, signal).then(r => r.data.slice(0, 20)).catch(() => []),
+      filterAnime({ status: 'airing', page: 0, size: 20 }, signal).then(r => r.data.slice(0, 20)).catch(() => []),
+      filterAnime({ status: 'complete', page: 0, size: 20 }, signal).then(r => r.data.slice(0, 20)).catch(() => []),
+      filterAnime({ status: 'upcoming', page: 0, size: 20 }, signal).then(r => r.data.slice(0, 20)).catch(() => []),
     ]).then(([trend, season, air, complete, up]) => {
+      if (signal.aborted) return
       setTrending(trend)
       setSeasonal(season)
       setPopular(trend.slice(0, 10))
       setAiring(air)
       setTopRated(complete)
       setUpcoming(up)
-    }).finally(() => setLoading(false))
+    }).finally(() => {
+      if (!signal.aborted) setLoading(false)
+    })
+
+    return () => controller.abort()
   }, [])
 
   return (

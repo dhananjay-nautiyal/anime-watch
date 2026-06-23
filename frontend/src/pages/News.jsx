@@ -13,14 +13,20 @@ export default function News() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const controller = new AbortController()
+    const { signal } = controller
+
     setLoading(true)
-    getNews(page, 10)
+    getNews(page, 10, signal)
       .then((res) => {
+        if (signal.aborted) return
         setArticles(res.content || [])
         setTotalPages(res.totalPages || 1)
       })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { if (!signal.aborted) setLoading(false) })
+
+    return () => controller.abort()
   }, [page])
 
   if (loading) return <div className="max-w-[1440px] mx-auto px-4 py-8"><CardSkeleton count={6} /></div>

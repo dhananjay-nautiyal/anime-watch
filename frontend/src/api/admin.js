@@ -9,8 +9,8 @@ export const adminDeleteAnime = (id) =>
 export const adminDeleteReview = (id) =>
   client.delete(`/api/admin/review/${id}`)
 
-export const getUsers = () =>
-  client.get('/api/admin/users')
+export const getUsers = (signal) =>
+  client.get('/api/admin/users', { signal })
 
 export const adminDeleteUser = (id) =>
   client.delete(`/api/admin/users/${id}`)

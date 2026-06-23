@@ -29,24 +29,31 @@ export default function AnimeDetail() {
   const [reviewMsg, setReviewMsg] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (signal) => {
     setLoading(true)
     setError(false)
     try {
-      const data = await getAnimeById(malId)
+      const data = await getAnimeById(malId, signal)
+      if (signal.aborted) return
       setAnime(data)
     } catch {
       setError(true)
     } finally {
-      setLoading(false)
+      if (!signal.aborted) setLoading(false)
     }
   }, [malId])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchData(controller.signal)
+    return () => controller.abort()
+  }, [fetchData])
 
   useEffect(() => {
     if (!anime?.malId) return
-    getEpisodes(anime.malId).then((eps) => {
+    const controller = new AbortController()
+    getEpisodes(anime.malId, controller.signal).then((eps) => {
+      if (controller.signal.aborted) return
       const unique = []
       const seen = new Set()
       for (const ep of eps) {
@@ -58,31 +65,38 @@ export default function AnimeDetail() {
       unique.sort((a, b) => a.episodeNumber - b.episodeNumber)
       setEpisodes(unique)
     }).catch(() => {})
+    return () => controller.abort()
   }, [anime?.malId])
 
   useEffect(() => {
     if (!anime?.id) return
-    getReviews(anime.id, reviewPage, 10)
+    const controller = new AbortController()
+    getReviews(anime.id, reviewPage, 10, controller.signal)
       .then((res) => {
+        if (controller.signal.aborted) return
         setReviews(res.content || [])
         setReviewTotalPages(res.totalPages || 1)
       })
       .catch(() => {})
+    return () => controller.abort()
   }, [anime?.id, reviewPage])
 
   useEffect(() => {
-    if (isAuthenticated && anime?.id) {
-      getFavorites().then((list) => {
-        setIsFavorited((list || []).some((f) => f.anime?.id === anime.id))
-      }).catch(() => {})
-      getWatchlist().then((list) => {
-        const found = (list || []).find((e) => e.anime?.id === anime.id)
-        if (found) {
-          setWatchlistStatus(found.status)
-          setWatchlistId(found.id)
-        }
-      }).catch(() => {})
-    }
+    if (!isAuthenticated || !anime?.id) return
+    const controller = new AbortController()
+    getFavorites(controller.signal).then((list) => {
+      if (controller.signal.aborted) return
+      setIsFavorited((list || []).some((f) => f.anime?.id === anime.id))
+    }).catch(() => {})
+    getWatchlist(controller.signal).then((list) => {
+      if (controller.signal.aborted) return
+      const found = (list || []).find((e) => e.anime?.id === anime.id)
+      if (found) {
+        setWatchlistStatus(found.status)
+        setWatchlistId(found.id)
+      }
+    }).catch(() => {})
+    return () => controller.abort()
   }, [isAuthenticated, anime?.id])
 
   const handleFavorite = async () => {

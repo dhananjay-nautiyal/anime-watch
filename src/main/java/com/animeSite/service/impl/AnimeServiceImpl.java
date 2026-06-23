@@ -8,6 +8,8 @@ import com.animeSite.model.JikanListResponse;
 import com.animeSite.persist.Anime;
 import com.animeSite.repo.AnimeRepository;
 import com.animeSite.service.AnimeService;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,7 @@ public class AnimeServiceImpl implements AnimeService {
         this.animeRepository = animeRepository;
     }
 
+    @Cacheable(value = "trending", key = "'page-'+#page", unless = "#result == null")
     public AnimePage getTrending(int page) {
         try {
             return toAnimePage(jikanApiClient.fetchTopAnime(page), page);
@@ -38,6 +41,7 @@ public class AnimeServiceImpl implements AnimeService {
         }
     }
 
+    @Cacheable(value = "search", key = "'q-'+#query+'-page-'+#page", unless = "#result == null")
     public AnimePage searchAnime(String query, int page) {
         try {
             return toAnimePage(jikanApiClient.searchAnime(query, page), page);
@@ -47,6 +51,7 @@ public class AnimeServiceImpl implements AnimeService {
         }
     }
 
+    @Cacheable(value = "search", key = "'filter-'+#genres+'-'+#type+'-'+#status+'-'+#orderBy+'-'+#sort+'-'+#page", unless = "#result == null")
     public AnimePage filterAnime(String genres, String type, String status, String orderBy, String sort, int page) {
         try {
             String url = jikanApiClient.buildFilterUrl("", genres, type, status, orderBy, sort, page);
@@ -57,6 +62,7 @@ public class AnimeServiceImpl implements AnimeService {
         }
     }
 
+    @Cacheable(value = "anime", key = "'id-'+#id", unless = "#result == null")
     public Anime getAnimeById(int id) {
         try {
             var response = jikanApiClient.fetchAnimeById(id);
@@ -68,6 +74,7 @@ public class AnimeServiceImpl implements AnimeService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with ID: " + id));
     }
 
+    @Cacheable(value = "seasonal", key = "'page-'+#page", unless = "#result == null")
     public AnimePage getSeasonal(int page) {
         try {
             return toAnimePage(jikanApiClient.fetchSeasonalAnime(page), page);
@@ -78,6 +85,7 @@ public class AnimeServiceImpl implements AnimeService {
     }
 
     @Transactional
+    @CacheEvict(value = "anime", key = "'id-'+#malId")
     public Anime addAnimeByMalId(int malId) {
         var response = jikanApiClient.fetchAnimeById(malId);
         if (response == null || response.getData() == null) {
@@ -87,12 +95,14 @@ public class AnimeServiceImpl implements AnimeService {
     }
 
     @Transactional
+    @CacheEvict(value = "trending", allEntries = true)
     public List<Anime> importTrendingAnime(int page) {
         JikanListResponse response = jikanApiClient.fetchTopAnime(page);
         return importFromResponse(response);
     }
 
     @Transactional
+    @CacheEvict(value = "seasonal", allEntries = true)
     public List<Anime> importSeasonalAnime(int page) {
         JikanListResponse response = jikanApiClient.fetchSeasonalAnime(page);
         return importFromResponse(response);
@@ -109,6 +119,7 @@ public class AnimeServiceImpl implements AnimeService {
     }
 
     @Transactional
+    @CacheEvict(value = "anime", allEntries = true)
     public Anime updateAffiliateUrl(UUID animeId, String affiliateUrl) {
         Anime anime = animeRepository.findById(animeId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with ID: " + animeId));
@@ -117,6 +128,7 @@ public class AnimeServiceImpl implements AnimeService {
     }
 
     @Transactional
+    @CacheEvict(value = "anime", allEntries = true)
     public void deleteAnime(UUID animeId) {
         Anime anime = animeRepository.findById(animeId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with ID: " + animeId));

@@ -10,15 +10,19 @@ export default function Favorites() {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
 
-  const load = () => {
+  const load = (signal) => {
     setLoading(true)
-    getFavorites()
-      .then(setFavorites)
+    getFavorites(signal)
+      .then((data) => { if (!signal?.aborted) setFavorites(data) })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { if (!signal?.aborted) setLoading(false) })
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    const controller = new AbortController()
+    load(controller.signal)
+    return () => controller.abort()
+  }, [])
 
   const handleRemove = async (animeId) => {
     try {

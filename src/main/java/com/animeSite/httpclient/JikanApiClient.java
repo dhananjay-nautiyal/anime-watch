@@ -7,6 +7,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.concurrent.Semaphore;
+
 @Component
 public class JikanApiClient {
 
@@ -14,6 +16,7 @@ public class JikanApiClient {
     private static final long RATE_LIMIT_MS = 1000;
 
     private final RestTemplate restTemplate;
+    private final Semaphore rateLimiter = new Semaphore(1);
     private volatile long lastApiCall = 0;
 
     public JikanApiClient(@Qualifier("jikanRestTemplate") RestTemplate restTemplate) {
@@ -51,17 +54,20 @@ public class JikanApiClient {
         return url.toString();
     }
 
-    private synchronized void rateLimit() {
-        long now = System.currentTimeMillis();
-        long wait = RATE_LIMIT_MS - (now - lastApiCall);
-        if (wait > 0) {
-            try {
+    private void rateLimit() {
+        rateLimiter.acquireUninterruptibly();
+        try {
+            long now = System.currentTimeMillis();
+            long wait = RATE_LIMIT_MS - (now - lastApiCall);
+            if (wait > 0) {
                 Thread.sleep(wait);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
             }
+            lastApiCall = System.currentTimeMillis();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            rateLimiter.release();
         }
-        lastApiCall = System.currentTimeMillis();
     }
 
     private JikanListResponse callApi(String url, Object... args) {
