@@ -57,14 +57,14 @@ function useSyncedEpisodes(malId) {
     if (syncTimerRef.current) clearInterval(syncTimerRef.current)
   }, [malId])
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (signal) => {
     if (!mountedRef.current) return
     setLoading(true); setError(null); setSyncTick(0)
     const [animeData, eps] = await Promise.all([
-      getAnimeById(malId).catch(() => null),
-      getEpisodes(malId).catch(() => []),
+      getAnimeById(malId, signal).catch(() => null),
+      getEpisodes(malId, signal).catch(() => []),
     ])
-    if (!mountedRef.current) return
+    if (!mountedRef.current || signal?.aborted) return
     if (animeData) setAnime(animeData)
     else { setError('Anime not found'); setLoading(false); return }
     const seen = new Set()
@@ -80,7 +80,11 @@ function useSyncedEpisodes(malId) {
     await doSync()
   }, [malId, doSync])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchData(controller.signal)
+    return () => controller.abort()
+  }, [fetchData])
   return { anime, episodes, syncing, error, retry: fetchData, loading, syncTick }
 }
 
@@ -109,10 +113,13 @@ export default function WatchPage() {
   const [recommended, setRecommended] = useState([])
 
   useEffect(() => {
-    getTrending(0, 30).then((res) => {
+    const controller = new AbortController()
+    getTrending(0, 30, controller.signal).then((res) => {
+      if (controller.signal.aborted) return
       const list = (res.data || []).filter((a) => String(a.malId || a.id) !== String(malId))
       setRecommended(list.slice(0, 20))
     }).catch(() => {})
+    return () => controller.abort()
   }, [malId])
 
   useEffect(() => {
@@ -120,23 +127,24 @@ export default function WatchPage() {
   }, [episodeNumber])
 
   useEffect(() => {
-    let cancelled = false
+    const controller = new AbortController()
+    const { signal } = controller
     async function loadEmbed() {
       if (episodes.length === 0) { setEmbedUrl(''); return }
       const ep = episodes.find((e) => e.episodeNumber === currentEp) || episodes[0]
       if (!ep?.embedUrl) { setEmbedUrl(''); return }
       if (ep.embedUrl.startsWith('https://anineko.to/')) {
         setEmbedUrl('')
-        const rawUrl = await getEpisodeEmbed(malId, ep.embedUrl)
-        if (cancelled || !rawUrl) return
-        const token = await createStreamToken(rawUrl)
-        if (!cancelled && token) setEmbedUrl(`/api/stream/proxy/${token}`)
+        const rawUrl = await getEpisodeEmbed(malId, ep.embedUrl, signal)
+        if (signal.aborted || !rawUrl) return
+        const token = await createStreamToken(rawUrl, signal)
+        if (!signal.aborted && token) setEmbedUrl(`/api/stream/proxy/${token}`)
       } else {
         setEmbedUrl('')
       }
     }
     loadEmbed()
-    return () => { cancelled = true }
+    return () => controller.abort()
   }, [episodes, currentEp, malId])
 
   const handleEpisodeSelect = (ep) => {

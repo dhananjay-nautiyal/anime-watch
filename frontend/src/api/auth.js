@@ -18,8 +18,8 @@ export const forgotPassword = (email) =>
 export const resetPassword = (token, password) =>
   client.post('/api/auth/reset-password', { token, password })
 
-export const getProfile = () =>
-  client.get('/api/user/me')
+export const getProfile = (signal) =>
+  client.get('/api/user/me', { signal })
 
 export const updateProfile = (data) =>
   client.put('/api/user/me', data)

@@ -13,12 +13,17 @@ export default function NewsDetail() {
   const [error, setError] = useState(false)
 
   useEffect(() => {
+    const controller = new AbortController()
+    const { signal } = controller
+
     setLoading(true)
     setError(false)
-    getNewsById(id)
-      .then(setArticle)
-      .catch(() => setError(true))
-      .finally(() => setLoading(false))
+    getNewsById(id, signal)
+      .then((data) => { if (!signal.aborted) setArticle(data) })
+      .catch(() => { if (!signal.aborted) setError(true) })
+      .finally(() => { if (!signal.aborted) setLoading(false) })
+
+    return () => controller.abort()
   }, [id])
 
   if (loading) return <Loading />

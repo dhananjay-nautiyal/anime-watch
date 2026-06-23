@@ -11,11 +11,19 @@ export default function Schedule() {
   const [activeDay, setActiveDay] = useState(DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1])
 
   useEffect(() => {
+    const controller = new AbortController()
+    const { signal } = controller
+
     setLoading(true)
-    getTrending(0, 50)
-      .then((res) => setItems(res.data?.content || res.data || []))
+    getTrending(0, 50, signal)
+      .then((res) => {
+        if (signal.aborted) return
+        setItems(res.data?.content || res.data || [])
+      })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { if (!signal.aborted) setLoading(false) })
+
+    return () => controller.abort()
   }, [])
 
   const filtered = items.filter((_, i) => i % 7 === DAYS.indexOf(activeDay) % 7)

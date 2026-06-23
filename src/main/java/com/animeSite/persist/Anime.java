@@ -14,7 +14,11 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "anime")
+@Table(name = "anime", indexes = {
+    @Index(name = "idx_anime_title", columnList = "title"),
+    @Index(name = "idx_anime_rating", columnList = "rating"),
+    @Index(name = "idx_anime_created_at", columnList = "created_at")
+})
 @Getter
 @Setter
 @NoArgsConstructor

@@ -9,7 +9,7 @@ export function AuthProvider({ children }) {
 
   const isAuthenticated = !!user
 
-  const fetchUser = useCallback(async () => {
+  const fetchUser = useCallback(async (signal) => {
     const token = localStorage.getItem('token')
     if (!token) {
       setUser(null)
@@ -17,18 +17,23 @@ export function AuthProvider({ children }) {
       return
     }
     try {
-      const res = await getProfile()
+      const res = await getProfile(signal)
+      if (signal?.aborted) return
       setUser(res.data?.data ?? res.data)
     } catch {
       localStorage.removeItem('token')
       localStorage.removeItem('refreshToken')
       setUser(null)
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }, [])
 
-  useEffect(() => { fetchUser() }, [fetchUser])
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchUser(controller.signal)
+    return () => controller.abort()
+  }, [fetchUser])
 
   const login = (token, refreshToken, userData) => {
     localStorage.setItem('token', token)

@@ -1,5 +1,9 @@
 server:
   port: ${PORT:8080}
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/plain,text/css,application/javascript
+    min-response-size: 1024
 
 spring:
   application:
@@ -46,7 +50,7 @@ springdoc:
   packages-to-scan: com.animeSite.controller
 
 jwt:
-  secret: ${JWT_SECRET:my-super-secret-key-for-anime-backend-jwt-token-2026}
+  secret: ${JWT_SECRET}
   expiration-ms: ${JWT_EXPIRATION_MS:86400000}
   refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
 
