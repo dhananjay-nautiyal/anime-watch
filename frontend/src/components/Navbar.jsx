@@ -1,25 +1,26 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, memo } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { logout as logoutApi } from '../api/auth'
-import { searchAnime } from '../api/anime'
+import { useSearchAnime } from '../hooks/useAnimeData'
 import { useDebounce } from '../hooks/useDebounce'
 import { motion, AnimatePresence } from 'framer-motion'
 
-export default function Navbar() {
+const Navbar = memo(function Navbar() {
   const [searchQuery, setSearchQuery] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
-  const [suggestions, setSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
-  const [suggestLoading, setSuggestLoading] = useState(false)
   const debouncedQuery = useDebounce(searchQuery, 300)
   const { isAuthenticated, user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const inputRef = useRef(null)
   const suggestRef = useRef(null)
+
+  const { data: suggestionsData, isLoading: suggestLoading } = useSearchAnime(debouncedQuery.trim(), 0, 6)
+  const suggestions = suggestionsData?.data || []
 
   const isWatchPage = location.pathname.startsWith('/watch')
 
@@ -34,14 +35,8 @@ export default function Navbar() {
   }, [searchOpen])
 
   useEffect(() => {
-    if (!debouncedQuery.trim()) { setSuggestions([]); setShowSuggestions(false); return }
-    let cancelled = false
-    setSuggestLoading(true)
-    searchAnime(debouncedQuery.trim(), 0, 6).then((res) => {
-      if (!cancelled) { setSuggestions(res.data || []); setShowSuggestions(true); setSuggestLoading(false) }
-    }).catch(() => { if (!cancelled) setSuggestLoading(false) })
-    return () => { cancelled = true }
-  }, [debouncedQuery])
+    setShowSuggestions(!!(debouncedQuery.trim() && suggestions?.length > 0))
+  }, [debouncedQuery, suggestions])
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -231,7 +226,7 @@ export default function Navbar() {
                         className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors text-left"
                       >
                         <div className="w-8 h-11 rounded overflow-hidden flex-shrink-0 bg-white/5">
-                          <img src={anime.imageUrl} alt="" className="w-full h-full object-cover" />
+                          <img src={anime.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm text-white truncate">{anime.title}</p>
@@ -274,7 +269,7 @@ export default function Navbar() {
                   <button onClick={() => { handleLogout(); setMenuOpen(false) }} className="text-sm text-muted hover:text-primary">Sign Out</button>
                 </>
               ) : (
-                <Link to="/login" onClick={() => setMenuOpen(false)} className="block text-sm text-primary">Sign In</Link>
+                <Link to="/login" onClick={() => setMenuOpen(false)} className="text-sm text-primary">Sign In</Link>
               )}
             </div>
           </motion.div>
@@ -282,4 +277,6 @@ export default function Navbar() {
       </AnimatePresence>
     </motion.header>
   )
-}
+})
+
+export default Navbar

@@ -1,8 +1,9 @@
+import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import ImageWithFallback from './ImageWithFallback'
 
-export default function AnimeCard({ anime, index = 0, rank }) {
+const AnimeCard = memo(function AnimeCard({ anime, index = 0, rank }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -47,4 +48,6 @@ export default function AnimeCard({ anime, index = 0, rank }) {
       </Link>
     </motion.div>
   )
-}
+})
+
+export default AnimeCard

@@ -3,6 +3,7 @@ package com.animeSite.controller;
 import com.animeSite.core.model.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
@@ -19,7 +20,7 @@ public class StreamProxyController {
     private final RestTemplate restTemplate;
     private final Map<String, String> tokenStore = new ConcurrentHashMap<>();
 
-    public StreamProxyController(RestTemplate restTemplate) {
+    public StreamProxyController(@Qualifier("aninekoRestTemplate") RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
     }
 

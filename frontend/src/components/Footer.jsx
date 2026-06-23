@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Link } from 'react-router-dom'
 
 const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -13,7 +14,7 @@ const FOOTER_LINKS = [
 
 const GENRES = ['Action', 'Romance', 'Comedy', 'Fantasy', 'Horror', 'Drama', 'Sci-Fi', 'Slice of Life']
 
-export default function Footer() {
+const Footer = memo(function Footer() {
   return (
     <footer className="mt-20 border-t border-white/5 bg-body">
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -96,4 +97,6 @@ export default function Footer() {
       </div>
     </footer>
   )
-}
+})
+
+export default Footer

@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, memo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { BannerImage } from './ImageWithFallback'
 
-export default function HeroSection({ items }) {
+const HeroSection = memo(function HeroSection({ items }) {
   const [idx, setIdx] = useState(0)
   const [direction, setDirection] = useState(1)
   const timer = useRef(null)
@@ -110,7 +110,7 @@ export default function HeroSection({ items }) {
                 Watch Now
               </Link>
               <Link
-                to={`/watch/${item.malId || item.id}/1`}
+                to={`/anime/${item.malId || item.id}`}
                 className="glass text-link hover:text-white px-6 py-3 rounded-xl text-sm font-medium transition-all hover:bg-white/10 hover:-translate-y-0.5 backdrop-blur-md"
               >
                 More Info
@@ -134,4 +134,6 @@ export default function HeroSection({ items }) {
       </div>
     </section>
   )
-}
+})
+
+export default HeroSection

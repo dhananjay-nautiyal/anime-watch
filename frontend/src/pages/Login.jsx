@@ -3,8 +3,10 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { login as loginApi } from '../api/auth'
 import { useAuth } from '../context/AuthContext'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 
 export default function Login() {
+  useDocumentTitle('Sign In')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')

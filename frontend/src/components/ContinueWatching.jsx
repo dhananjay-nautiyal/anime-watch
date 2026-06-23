@@ -1,8 +1,9 @@
+import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import ImageWithFallback from './ImageWithFallback'
 
-function ContinueCard({ anime, progress = 0.3 }) {
+const ContinueCard = memo(function ContinueCard({ anime, progress = 0.3 }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -36,9 +37,9 @@ function ContinueCard({ anime, progress = 0.3 }) {
       </Link>
     </motion.div>
   )
-}
+})
 
-export default function ContinueWatching({ items = [], isLoading }) {
+const ContinueWatching = memo(function ContinueWatching({ items = [], isLoading }) {
   if (isLoading) {
     return (
       <section>
@@ -68,4 +69,6 @@ export default function ContinueWatching({ items = [], isLoading }) {
       </div>
     </section>
   )
-}
+})
+
+export default ContinueWatching

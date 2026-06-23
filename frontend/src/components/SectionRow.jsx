@@ -1,8 +1,9 @@
+import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import ImageWithFallback from './ImageWithFallback'
 
-function SectionCard({ anime, index }) {
+const SectionCard = memo(function SectionCard({ anime, index }) {
   return (
     <motion.div
       initial={{ opacity: 0, x: 30 }}
@@ -39,9 +40,9 @@ function SectionCard({ anime, index }) {
       </Link>
     </motion.div>
   )
-}
+})
 
-export default function SectionRow({ title, viewAllLink, items = [], isLoading }) {
+const SectionRow = memo(function SectionRow({ title, viewAllLink, items = [], isLoading }) {
   if (isLoading) {
     return (
       <section>
@@ -78,4 +79,6 @@ export default function SectionRow({ title, viewAllLink, items = [], isLoading }
       </div>
     </section>
   )
-}
+})
+
+export default SectionRow

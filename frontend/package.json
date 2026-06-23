@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
+    "@tanstack/react-query": "^5.101.0",
     "axios": "^1.18.0",
     "framer-motion": "^12.40.0",
     "react": "^18.2.0",
