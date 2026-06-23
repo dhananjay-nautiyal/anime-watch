@@ -3,8 +3,10 @@ import { getTrending } from '../api/anime'
 import AnimeCard from '../components/AnimeCard'
 import { CardSkeleton } from '../components/Skeleton'
 import Pagination from '../components/Pagination'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 
 export default function Trending() {
+  useDocumentTitle('Trending')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(0)

@@ -1,0 +1,19 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:anime_db;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+jwt:
+  secret: dev-secret-key-change-in-production-123456789
+  expiration-ms: 86400000
+  refresh-expiration-ms: 604800000

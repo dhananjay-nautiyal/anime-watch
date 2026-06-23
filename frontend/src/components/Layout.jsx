@@ -1,7 +1,8 @@
+import { memo } from 'react'
 import Navbar from './Navbar'
 import Footer from './Footer'
 
-export default function Layout({ children, hideNav = false, hideFooter = false }) {
+const Layout = memo(function Layout({ children, hideNav = false, hideFooter = false }) {
   return (
     <div className="min-h-screen bg-body flex flex-col">
       {!hideNav && <Navbar />}
@@ -11,4 +12,6 @@ export default function Layout({ children, hideNav = false, hideFooter = false }
       {!hideFooter && <Footer />}
     </div>
   )
-}
+})
+
+export default Layout

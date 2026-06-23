@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { proxyImage } from '../api/imageProxy'
 
 const FALLBACK_IMAGE = '/images/placeholder-anime.svg'
 
-export default function ImageWithFallback({
+const ImageWithFallback = memo(function ImageWithFallback({
   src,
   alt = '',
   className = '',
@@ -26,6 +26,7 @@ export default function ImageWithFallback({
         alt={alt}
         className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'} ${className}`}
         loading={lazy ? 'lazy' : 'eager'}
+        decoding="async"
         onLoad={() => setLoaded(true)}
         onError={() => setError(true)}
         onClick={onClick}
@@ -33,9 +34,9 @@ export default function ImageWithFallback({
       {children}
     </div>
   )
-}
+})
 
-export function BannerImage({ src, alt = '', className = '' }) {
+export const BannerImage = memo(function BannerImage({ src, alt = '', className = '' }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
 
@@ -49,9 +50,12 @@ export function BannerImage({ src, alt = '', className = '' }) {
         alt={alt}
         className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-700 ${loaded ? 'opacity-100' : 'opacity-0'} ${className}`}
         loading="eager"
+        decoding="async"
         onLoad={() => setLoaded(true)}
         onError={() => setError(true)}
       />
     </>
   )
-}
+})
+
+export default ImageWithFallback

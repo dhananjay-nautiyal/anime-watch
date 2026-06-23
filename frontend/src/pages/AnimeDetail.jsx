@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { getAnimeById, getReviews, addReview, getEpisodes } from '../api/anime'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { addFavorite, removeFavorite, getFavorites } from '../api/favorite'
 import { addToWatchlist, getWatchlist, removeFromWatchlist, updateWatchlistStatus } from '../api/watchlist'
 import { deleteReview } from '../api/review'
@@ -17,6 +18,7 @@ export default function AnimeDetail() {
   const [anime, setAnime] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  useDocumentTitle(anime?.title)
   const [reviews, setReviews] = useState([])
   const [reviewPage, setReviewPage] = useState(0)
   const [reviewTotalPages, setReviewTotalPages] = useState(0)

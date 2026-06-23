@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { searchAnime, filterAnime, getTrending } from '../api/anime'
 import AnimeCard from '../components/AnimeCard'
+import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { CardSkeleton } from '../components/Skeleton'
 import Pagination from '../components/Pagination'
 import ErrorState from '../components/ErrorState'
@@ -13,6 +14,7 @@ const STATUSES = ['airing', 'complete', 'upcoming']
 export default function Browse() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [items, setItems] = useState([])
+  useDocumentTitle('Browse')
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(0)
   const [totalPages, setTotalPages] = useState(1)

@@ -43,6 +43,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/watchlist/**").authenticated()
                 .requestMatchers("/api/favorites/**").authenticated()
+                .requestMatchers("/api/stream/**").permitAll()
                 .requestMatchers("/api/reviews/**").authenticated()
                 .requestMatchers("/api/user/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/news/**").permitAll()

@@ -1,7 +1,7 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, memo } from 'react'
 import { Link } from 'react-router-dom'
 
-export default function VideoPlayer({ embedUrl, poster, animeTitle, episodeNumber, animeId, onRetry, onChangeSource }) {
+const VideoPlayer = memo(function VideoPlayer({ embedUrl, poster, animeTitle, episodeNumber, animeId, onRetry, onChangeSource }) {
   const [userClicked, setUserClicked] = useState(false)
   const [iframeLoading, setIframeLoading] = useState(false)
   const [error, setError] = useState(false)
@@ -85,12 +85,11 @@ export default function VideoPlayer({ embedUrl, poster, animeTitle, episodeNumbe
 
   return (
     <div className="relative w-full aspect-video bg-[#050816] rounded-xl overflow-hidden group shadow-2xl">
-      {/* Poster overlay with Watch button */}
       {showPoster && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm cursor-pointer" onClick={handleWatch}>
           {poster && (
             <>
-              <img src={poster} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60" />
+              <img src={poster} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60" loading="lazy" decoding="async" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#050816] via-black/40 to-[#050816]/60" />
             </>
           )}
@@ -108,7 +107,6 @@ export default function VideoPlayer({ embedUrl, poster, animeTitle, episodeNumbe
         </div>
       )}
 
-      {/* Loading spinner */}
       {userClicked && iframeLoading && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#050816] z-10 p-6">
           <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-3" />
@@ -116,7 +114,6 @@ export default function VideoPlayer({ embedUrl, poster, animeTitle, episodeNumbe
         </div>
       )}
 
-      {/* Iframe */}
       {userClicked && embedUrl ? (
         <iframe
           ref={iframeRef}
@@ -138,7 +135,6 @@ export default function VideoPlayer({ embedUrl, poster, animeTitle, episodeNumbe
         </div>
       ) : null}
 
-      {/* overlay controls */}
       {userClicked && !iframeLoading && !error && embedUrl && (
         <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
           <div className="flex items-center gap-2">
@@ -149,4 +145,6 @@ export default function VideoPlayer({ embedUrl, poster, animeTitle, episodeNumbe
       )}
     </div>
   )
-}
+})
+
+export default VideoPlayer
