@@ -62,13 +62,14 @@ public class AnimeController {
     @Operation(summary = "Filter anime", description = "Filter anime by genres, type, status, etc.")
     public ResponseEntity<ApiResponse<java.util.List<Anime>>> filterAnime(
             @Parameter(description = "Genre IDs (comma-separated)") @RequestParam(required = false) String genres,
+            @Parameter(description = "Genre IDs to exclude (comma-separated)") @RequestParam(required = false) String genresExclude,
             @Parameter(description = "Type (tv, movie, ova, special, ona, music)") @RequestParam(required = false) String type,
             @Parameter(description = "Status (airing, complete, upcoming)") @RequestParam(required = false) String status,
             @Parameter(description = "Order by (title, score, episodes, start_date, end_date)") @RequestParam(required = false) String orderBy,
             @Parameter(description = "Sort direction (asc, desc)") @RequestParam(required = false) String sort,
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "25") int size) {
-        AnimePage result = animeService.filterAnime(genres, type, status, orderBy, sort, page);
+        AnimePage result = animeService.filterAnime(genres, genresExclude, type, status, orderBy, sort, page);
         return ResponseEntity.ok(ApiResponse.success(result.animeList(), result.page(), result.totalPages()));
     }
 

@@ -19,12 +19,16 @@ const ImageWithFallback = memo(function ImageWithFallback({
   const imageSrc = error ? FALLBACK_IMAGE : (proxyImage(src) || FALLBACK_IMAGE)
 
   return (
-    <div className={`relative overflow-hidden ${aspectRatio} ${containerClass}`}>
-      {!loaded && !error && <div className="absolute inset-0 skeleton" />}
+    <div className={`relative overflow-hidden bg-surface/50 ${aspectRatio} ${containerClass}`}>
+      {!loaded && !error && (
+        <div className="absolute inset-0 skeleton" />
+      )}
       <img
         src={imageSrc}
         alt={alt}
-        className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'} ${className}`}
+        className={`absolute inset-0 w-full h-full object-cover object-center transition-all duration-700 ${
+          loaded ? 'opacity-100 blur-0' : 'opacity-0 blur-sm'
+        } ${className}`}
         loading={lazy ? 'lazy' : 'eager'}
         decoding="async"
         onLoad={() => setLoaded(true)}
@@ -48,7 +52,9 @@ export const BannerImage = memo(function BannerImage({ src, alt = '', className 
       <img
         src={imageSrc}
         alt={alt}
-        className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-700 ${loaded ? 'opacity-100' : 'opacity-0'} ${className}`}
+        className={`absolute inset-0 w-full h-full object-cover object-center transition-all duration-700 ${
+          loaded ? 'opacity-100 blur-0' : 'opacity-0 blur-sm'
+        } ${className}`}
         loading="eager"
         decoding="async"
         onLoad={() => setLoaded(true)}

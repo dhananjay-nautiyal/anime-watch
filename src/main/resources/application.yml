@@ -17,7 +17,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
@@ -50,7 +50,7 @@ springdoc:
   packages-to-scan: com.animeSite.controller
 
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET:dev-secret-key-change-in-production-123456789}
   expiration-ms: ${JWT_EXPIRATION_MS:86400000}
   refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
 

@@ -43,10 +43,11 @@ public class JikanApiClient {
         return callApi(BASE_URL + "/seasons/now?page={page}", page + 1);
     }
 
-    public String buildFilterUrl(String baseParams, String genres, String type, String status,
+    public String buildFilterUrl(String baseParams, String genres, String genresExclude, String type, String status,
                                   String orderBy, String sort, int page) {
         StringBuilder url = new StringBuilder(BASE_URL + "/anime?" + baseParams + "page=" + (page + 1));
         if (genres != null && !genres.isBlank()) url.append("&genres=").append(genres);
+        if (genresExclude != null && !genresExclude.isBlank()) url.append("&genres_exclude=").append(genresExclude);
         if (type != null && !type.isBlank()) url.append("&type=").append(type);
         if (status != null && !status.isBlank()) url.append("&status=").append(status);
         if (orderBy != null && !orderBy.isBlank()) url.append("&order_by=").append(orderBy);

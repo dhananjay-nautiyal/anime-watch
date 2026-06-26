@@ -19,3 +19,7 @@ Thumbs.db
 
 application-local.properties
 application-local.yml
+
+.env
+
+cache-data/

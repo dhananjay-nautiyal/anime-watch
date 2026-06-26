@@ -51,10 +51,10 @@ public class AnimeServiceImpl implements AnimeService {
         }
     }
 
-    @Cacheable(value = "search", key = "'filter-'+#genres+'-'+#type+'-'+#status+'-'+#orderBy+'-'+#sort+'-'+#page", unless = "#result == null")
-    public AnimePage filterAnime(String genres, String type, String status, String orderBy, String sort, int page) {
+    @Cacheable(value = "search", key = "'filter-'+#genres+'-'+#genresExclude+'-'+#type+'-'+#status+'-'+#orderBy+'-'+#sort+'-'+#page", unless = "#result == null")
+    public AnimePage filterAnime(String genres, String genresExclude, String type, String status, String orderBy, String sort, int page) {
         try {
-            String url = jikanApiClient.buildFilterUrl("", genres, type, status, orderBy, sort, page);
+            String url = jikanApiClient.buildFilterUrl("", genres, genresExclude, type, status, orderBy, sort, page);
             return toAnimePage(jikanApiClient.filterAnime(url), page);
         } catch (Exception e) {
             Page<Anime> dbPage = animeRepository.findAllByOrderByRatingDesc(PageRequest.of(page, 25));
