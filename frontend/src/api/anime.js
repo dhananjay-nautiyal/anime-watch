@@ -47,8 +47,18 @@ export const getEpisodes = (malId, signal) =>
   withCache(`episodes:${malId}`, () =>
     client.get(`/api/anime/${malId}/episodes`, { signal }).then(unwrapData), 120000)
 
-export const syncEpisodes = (malId) =>
-  client.post(`/api/anime/${malId}/episodes/sync`, null, { timeout: 3000 }).then((res) => res.data?.data ?? [])
+export const syncEpisodes = (malId) => {
+  console.log('[Sync] Request body: null (malId in URL path: ' + malId + ')')
+  return client.post(`/api/anime/${malId}/episodes/sync`, null, { timeout: 3000 }).then((res) => {
+    console.log('[Sync] Response:', res.data)
+    return res.data?.data ?? []
+  })
+}
 
 export const getEpisodeEmbed = (malId, episodeUrl, signal) =>
-  client.get(`/api/anime/${malId}/episode/embed`, { params: { episodeUrl }, timeout: 500, signal }).then((res) => res.data?.data ?? null)
+  client.get(`/api/anime/${malId}/episode/embed`, { params: { episodeUrl }, timeout: 20000, signal }).then((res) => {
+    const payload = res.data?.data
+    if (!payload) return null
+    if (typeof payload === 'string') return payload
+    return payload?.embedUrl ?? null
+  })

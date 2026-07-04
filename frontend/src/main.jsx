@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from './context/AuthContext'
+
+console.log('API URL:', import.meta.env.VITE_API_URL || '(empty — using Vite proxy)')
 import App from './App'
 import ErrorBoundary from './components/ErrorBoundary'
 import './index.css'

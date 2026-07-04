@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { filterAnime } from '../api/anime'
-import { getEpisodes, syncEpisodes } from '../api/anime'
+
 import HeroSection from '../components/HeroSection'
 import ContinueWatching from '../components/ContinueWatching'
 import SectionRow from '../components/SectionRow'
@@ -19,26 +19,28 @@ const SECTION_SIZES = {
   seasonal: 20,
 }
 
-const VALID_TYPES = 'tv,movie,ova,ona'
 const EXCLUDE_GENRES = '15'
 
 const SECTION_FILTERS = {
-  trending: { type: VALID_TYPES, genresExclude: EXCLUDE_GENRES, orderBy: 'popularity', sort: 'desc', page: 0, size: SECTION_SIZES.trending },
-  airing: { status: 'airing', type: VALID_TYPES, genresExclude: EXCLUDE_GENRES, page: 0, size: SECTION_SIZES.airing },
-  topRated: { status: 'complete', type: VALID_TYPES, genresExclude: EXCLUDE_GENRES, orderBy: 'score', sort: 'desc', page: 0, size: SECTION_SIZES.topRated },
-  upcoming: { status: 'upcoming', type: VALID_TYPES, genresExclude: EXCLUDE_GENRES, page: 0, size: SECTION_SIZES.upcoming },
-  seasonal: { type: VALID_TYPES, genresExclude: EXCLUDE_GENRES, orderBy: 'popularity', sort: 'desc', page: 0, size: SECTION_SIZES.seasonal },
+  trending: { genresExclude: EXCLUDE_GENRES, orderBy: 'popularity', sort: 'desc', page: 0, size: SECTION_SIZES.trending },
+  airing: { status: 'airing', genresExclude: EXCLUDE_GENRES, page: 0, size: SECTION_SIZES.airing },
+  topRated: { status: 'complete', genresExclude: EXCLUDE_GENRES, orderBy: 'score', sort: 'desc', page: 0, size: SECTION_SIZES.topRated },
+  upcoming: { status: 'upcoming', genresExclude: EXCLUDE_GENRES, page: 0, size: SECTION_SIZES.upcoming },
+  seasonal: { genresExclude: EXCLUDE_GENRES, orderBy: 'popularity', sort: 'desc', page: 0, size: SECTION_SIZES.seasonal },
 }
 
 async function fetchWithFallback(filters, targetCount, maxPages = 3) {
   const results = []
   const logLabel = Object.entries(filters).map(([k, v]) => `${k}=${v}`).join(', ')
 
+  if (import.meta.env.DEV) console.log(`[Home] Fetching ${logLabel}`)
+
   for (let page = 0; page < maxPages; page++) {
     if (results.length >= targetCount) break
     try {
       const res = await filterAnime({ ...filters, page, size: 50 })
       const items = res.data || []
+      if (import.meta.env.DEV) console.log(`[Home] Page ${page}: got ${items.length} items`)
       if (items.length === 0) break
       for (const item of items) {
         if (results.length >= targetCount) break
@@ -63,56 +65,6 @@ async function fetchWithFallback(filters, targetCount, maxPages = 3) {
   return results.slice(0, targetCount)
 }
 
-async function checkEpisodes(malId) {
-  if (!malId) return false
-  try {
-    const eps = await getEpisodes(malId)
-    if (eps && eps.length > 0) return true
-    const synced = await syncEpisodes(malId)
-    return synced && synced.length > 0
-  } catch {
-    return false
-  }
-}
-
-async function verifySections(sections) {
-  const verified = { trending: [], popular: [], airing: [], topRated: [], upcoming: [], seasonal: [] }
-  const allItems = []
-
-  for (const [key, items] of Object.entries(sections)) {
-    allItems.push(...items.map(item => ({ key, item })))
-  }
-
-  if (import.meta.env.DEV) {
-    console.log(`[Home] Verifying ${allItems.length} items for stream availability...`)
-  }
-
-  const concurrency = 3
-  for (let i = 0; i < allItems.length; i += concurrency) {
-    const batch = allItems.slice(i, i + concurrency)
-    const results = await Promise.allSettled(
-      batch.map(({ item }) => checkEpisodes(item.malId || item.id))
-    )
-    for (let j = 0; j < batch.length; j++) {
-      const { key, item } = batch[j]
-      const hasEpisodes = results[j].status === 'fulfilled' && results[j].value
-      if (hasEpisodes) {
-        verified[key].push(item)
-      } else if (import.meta.env.DEV) {
-        console.warn(`[Home] No stream for "${item.title}" (malId: ${item.malId || item.id})`)
-      }
-    }
-  }
-
-  if (import.meta.env.DEV) {
-    console.log('[Home] Verification complete:', Object.fromEntries(
-      Object.entries(verified).map(([k, v]) => [k, v.length])
-    ))
-  }
-
-  return verified
-}
-
 export default function Home() {
   const [trending, setTrending] = useState([])
   const [seasonal, setSeasonal] = useState([])
@@ -121,7 +73,6 @@ export default function Home() {
   const [airing, setAiring] = useState([])
   const [upcoming, setUpcoming] = useState([])
   const [loading, setLoading] = useState(true)
-  const [verifying, setVerifying] = useState(true)
 
   const fetchHomeData = useCallback(async (controller) => {
     const signal = controller.signal
@@ -141,46 +92,18 @@ export default function Home() {
 
       if (import.meta.env.DEV) console.timeEnd('[Home] Fetch')
 
-      const unverified = {
-        trending: trendItems,
-        popular: trendItems.slice(0, SECTION_SIZES.popular),
-        airing: airItems,
-        topRated: ratedItems,
-        upcoming: upItems,
-        seasonal: seasonItems,
-      }
-
-      setTrending(unverified.trending)
-      setPopular(unverified.popular)
-      setAiring(unverified.airing)
-      setTopRated(unverified.topRated)
-      setUpcoming(unverified.upcoming)
-      setSeasonal(unverified.seasonal)
-      setLoading(false)
-
-      if (import.meta.env.DEV) console.time('[Home] Verify streams')
-
-      const verified = await verifySections(unverified)
-
-      if (signal.aborted) return
-
-      if (import.meta.env.DEV) console.timeEnd('[Home] Verify streams')
-
-      setTrending(verified.trending)
-      setPopular(verified.popular.slice(0, SECTION_SIZES.popular))
-      setAiring(verified.airing)
-      setTopRated(verified.topRated)
-      setUpcoming(verified.upcoming)
-      setSeasonal(verified.seasonal)
+      setTrending(trendItems)
+      setPopular(trendItems.slice(0, SECTION_SIZES.popular))
+      setAiring(airItems)
+      setTopRated(ratedItems)
+      setUpcoming(upItems)
+      setSeasonal(seasonItems)
     } catch {
-      if (!signal.aborted) {
-        setLoading(false)
-      }
-    } finally {
-      if (!signal.aborted) {
-        setVerifying(false)
-      }
+      if (!signal.aborted) setLoading(false)
+      return
     }
+
+    if (!signal.aborted) setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -196,14 +119,14 @@ export default function Home() {
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 space-y-12 mt-8">
         <ContinueWatching
           items={trending.slice(0, 8)}
-          isLoading={loading || verifying}
+          isLoading={loading}
         />
 
         <SectionRow
           title="Trending Now"
           viewAllLink="/trending"
           items={trending.slice(0, 12)}
-          isLoading={loading || verifying}
+          isLoading={loading}
         />
 
         <section>
@@ -211,7 +134,7 @@ export default function Home() {
             <h2 className="text-white text-xl md:text-2xl font-bold font-display">Popular This Week</h2>
             <Link to="/trending" className="text-sm text-primary hover:text-primary/80 transition-colors font-medium">View All</Link>
           </div>
-          {loading || verifying ? (
+          {loading ? (
             <CardSkeleton count={6} />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -226,7 +149,7 @@ export default function Home() {
           title="Airing Now"
           viewAllLink="/seasonal"
           items={airing.slice(0, 12)}
-          isLoading={loading || verifying}
+          isLoading={loading}
         />
 
         <section>
@@ -234,7 +157,7 @@ export default function Home() {
             <h2 className="text-white text-xl md:text-2xl font-bold font-display">Top Rated Anime</h2>
             <Link to="/trending" className="text-sm text-primary hover:text-primary/80 transition-colors font-medium">View All</Link>
           </div>
-          {loading || verifying ? (
+          {loading ? (
             <CardSkeleton count={6} />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -279,14 +202,14 @@ export default function Home() {
           title="New Releases"
           viewAllLink="/browse"
           items={seasonal.slice(0, 12)}
-          isLoading={loading || verifying}
+          isLoading={loading}
         />
 
         <SectionRow
           title="Upcoming Anime"
           viewAllLink="/seasonal"
           items={upcoming.slice(0, 12)}
-          isLoading={loading || verifying}
+          isLoading={loading}
         />
       </div>
     </div>

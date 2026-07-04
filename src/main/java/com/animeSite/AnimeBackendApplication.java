@@ -8,6 +8,7 @@ import com.animeSite.repo.UserRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -25,12 +26,13 @@ public class AnimeBackendApplication {
     }
 
     @Bean
-    public CommandLineRunner printUrls() {
+    public CommandLineRunner printUrls(ServletWebServerApplicationContext ctx) {
         return args -> {
+            int port = ctx.getWebServer().getPort();
             System.out.println("===========================================");
             System.out.println("Anime Backend API is running!");
-            System.out.println("Swagger UI: http://localhost:8080/swagger-ui.html");
-            System.out.println("OpenAPI Docs: http://localhost:8080/api-docs");
+            System.out.println("Swagger UI: http://localhost:" + port + "/swagger-ui.html");
+            System.out.println("OpenAPI Docs: http://localhost:" + port + "/api-docs");
             System.out.println("===========================================");
         };
     }

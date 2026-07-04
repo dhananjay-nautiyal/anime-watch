@@ -10,6 +10,7 @@ const EPISODES_PER_PAGE = 30
 
 function useEpisodes(malId) {
   const queryClient = useQueryClient()
+  const syncAttempted = useRef(false)
 
   const animeQuery = useQuery({
     queryKey: ['anime', malId],
@@ -30,8 +31,11 @@ function useEpisodes(malId) {
   const [syncError, setSyncError] = useState(null)
 
   const doSync = useCallback(async () => {
+    if (syncAttempted.current) return
+    syncAttempted.current = true
     setSyncing(true)
     setSyncError(null)
+    console.log('[Sync] POST /api/anime/' + malId + '/episodes/sync payload: malId=' + malId)
     try {
       const synced = await syncEpisodes(malId)
       if (synced?.length > 0) {
@@ -47,7 +51,7 @@ function useEpisodes(malId) {
   }, [malId, queryClient])
 
   useEffect(() => {
-    if (episodesQuery.data?.length === 0 && !episodesQuery.isLoading && !syncing) {
+    if (episodesQuery.data?.length === 0 && !episodesQuery.isLoading && !syncing && !syncAttempted.current) {
       doSync()
     }
   }, [episodesQuery.data, episodesQuery.isLoading, syncing, doSync])
@@ -120,13 +124,16 @@ export default function WatchPage() {
       const rawUrl = await getEpisodeEmbed(malId, ep.embedUrl)
       if (!mountedRef.current) return
       if (rawUrl) {
+        console.log('[WatchPage] Embed URL resolved:', rawUrl)
         setEmbedUrl(rawUrl)
       } else {
         setEmbedError('Could not retrieve stream URL.')
       }
     } catch (err) {
       if (!mountedRef.current) return
-      setEmbedError(extractErrorMessage(err))
+      const errorMsg = extractErrorMessage(err)
+      console.error('[WatchPage] Embed error:', err.response?.data || errorMsg)
+      setEmbedError(errorMsg)
     } finally {
       if (mountedRef.current) setEmbedLoading(false)
     }

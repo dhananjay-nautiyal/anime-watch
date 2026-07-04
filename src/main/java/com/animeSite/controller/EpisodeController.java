@@ -57,17 +57,17 @@ public class EpisodeController {
 
         log.info("[SYNC] ANIME FOUND | title='{}' malId={}", anime.getTitle(), malId);
 
-        episodeRepository.deleteByAnimeMalId(malId);
         List<Episode> episodes = aninekoService.fetchEpisodes(anime.getMalId(), anime.getTitle());
 
         long elapsed = System.currentTimeMillis() - start;
 
         if (episodes.isEmpty()) {
             log.warn("[SYNC] FAILED | no episodes found for '{}' | duration={}ms", anime.getTitle(), elapsed);
-            return ResponseEntity.badRequest().body(ApiResponse.error(
-                "Could not find episodes for this anime on the streaming provider."));
+            return ResponseEntity.ok(ApiResponse.error(
+                "No episodes available on the streaming provider for \"" + anime.getTitle() + "\" (MAL ID: " + malId + ")."));
         }
 
+        episodeRepository.deleteByAnimeMalId(malId);
         episodeRepository.saveAll(episodes);
         log.info("[SYNC] COMPLETE | saved {} episodes for '{}' | duration={}ms", episodes.size(), anime.getTitle(), elapsed);
 
@@ -80,13 +80,34 @@ public class EpisodeController {
         log.info("[EMBED] GET | malId={} episodeUrl={}", malId, episodeUrl);
 
         String embedUrl = aninekoService.fetchEmbedUrl(episodeUrl);
+        long elapsed = System.currentTimeMillis() - start;
+
         if (embedUrl == null) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("No stream source found for this episode."));
+            log.warn("[EMBED] FAILED | malId={} url={} duration={}ms", malId, episodeUrl, elapsed);
+            return ResponseEntity.ok(ApiResponse.builder()
+                .success(false)
+                .message("No stream source found for this episode.")
+                .data(Map.of(
+                    "provider", "Anineko",
+                    "step", "Extract embed url",
+                    "reason", "No data-video attribute found on episode page",
+                    "durationMs", elapsed
+                ))
+                .timestamp(java.time.Instant.now())
+                .build());
         }
 
-        long elapsed = System.currentTimeMillis() - start;
         log.info("[EMBED] SUCCESS | embedUrl={} duration={}ms", embedUrl, elapsed);
-        return ResponseEntity.ok(ApiResponse.success(embedUrl));
+        return ResponseEntity.ok(ApiResponse.builder()
+            .success(true)
+            .message("Stream source found")
+            .data(Map.of(
+                "embedUrl", embedUrl,
+                "provider", "Anineko",
+                "type", "iframe"
+            ))
+            .timestamp(java.time.Instant.now())
+            .build());
     }
 
     @PostMapping("/{malId}/episodes/clear")
