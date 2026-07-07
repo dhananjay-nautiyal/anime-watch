@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.concurrent.Semaphore;
+import com.google.common.util.concurrent.RateLimiter;
 
 @Component
 public class JikanApiClient {
@@ -16,8 +16,8 @@ public class JikanApiClient {
     private static final long RATE_LIMIT_MS = 1000;
 
     private final RestTemplate restTemplate;
-    private final Semaphore rateLimiter = new Semaphore(1);
-    private volatile long lastApiCall = 0;
+    @SuppressWarnings("UnstableApiUsage")
+    private final RateLimiter rateLimiter = RateLimiter.create(1.0);
 
     public JikanApiClient(@Qualifier("jikanRestTemplate") RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
@@ -56,19 +56,7 @@ public class JikanApiClient {
     }
 
     private void rateLimit() {
-        rateLimiter.acquireUninterruptibly();
-        try {
-            long now = System.currentTimeMillis();
-            long wait = RATE_LIMIT_MS - (now - lastApiCall);
-            if (wait > 0) {
-                Thread.sleep(wait);
-            }
-            lastApiCall = System.currentTimeMillis();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } finally {
-            rateLimiter.release();
-        }
+        rateLimiter.acquire();
     }
 
     private JikanListResponse callApi(String url, Object... args) {

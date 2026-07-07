@@ -12,6 +12,7 @@ import java.util.UUID;
 public interface AnimeRepository extends JpaRepository<Anime, UUID> {
     Optional<Anime> findByMalId(Integer malId);
     boolean existsByMalId(Integer malId);
+    java.util.List<Anime> findAllByMalIdIn(java.util.Collection<Integer> malIds);
     Page<Anime> findAllByOrderByRatingDesc(Pageable pageable);
     Page<Anime> findAllByOrderByCreatedAtDesc(Pageable pageable);
     Page<Anime> findByTitleContainingIgnoreCase(String query, Pageable pageable);

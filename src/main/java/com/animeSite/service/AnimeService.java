@@ -2,6 +2,7 @@ package com.animeSite.service;
 
 import com.animeSite.persist.Anime;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.UUID;
 
@@ -18,5 +19,5 @@ public interface AnimeService {
     List<Anime> importTrendingAnime(int page);
     List<Anime> importSeasonalAnime(int page);
 
-    record AnimePage(List<Anime> animeList, int page, int totalPages) {}
+    record AnimePage(List<Anime> animeList, int page, int totalPages) implements Serializable {}
 }

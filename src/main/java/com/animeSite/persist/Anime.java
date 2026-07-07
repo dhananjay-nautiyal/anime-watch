@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import java.util.ArrayList;
 import java.util.List;
+import java.io.Serializable;
 import java.util.UUID;
 
 @Entity
@@ -25,7 +26,8 @@ import java.util.UUID;
 @AllArgsConstructor
 @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Schema(description = "Anime entity mapped to the MySQL database")
-public class Anime extends Auditable {
+public class Anime extends Auditable implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     @Id
     @Column(length = 36)

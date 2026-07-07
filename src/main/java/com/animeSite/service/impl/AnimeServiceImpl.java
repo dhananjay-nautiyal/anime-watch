@@ -108,14 +108,46 @@ public class AnimeServiceImpl implements AnimeService {
         return importFromResponse(response);
     }
 
-    private List<Anime> importFromResponse(JikanListResponse response) {
-        List<Anime> imported = new ArrayList<>();
-        if (response != null && response.getData() != null) {
-            for (JikanAnimeData data : response.getData()) {
-                imported.add(saveAnime(data));
-            }
+    private List<Anime> saveAnimeBatch(List<JikanAnimeData> dataList) {
+        if (dataList == null || dataList.isEmpty()) {
+            return List.of();
         }
-        return imported;
+        List<Integer> malIds = dataList.stream().map(JikanAnimeData::getMalId).toList();
+        List<Anime> existingList = animeRepository.findAllByMalIdIn(malIds);
+        java.util.Map<Integer, Anime> existingMap = existingList.stream()
+                .collect(java.util.stream.Collectors.toMap(Anime::getMalId, a -> a));
+
+        List<Anime> toSave = new ArrayList<>();
+        for (JikanAnimeData data : dataList) {
+            Anime anime = existingMap.get(data.getMalId());
+            if (anime == null) {
+                anime = new Anime();
+                anime.setMalId(data.getMalId());
+            }
+            String englishTitle = data.getTitleEnglish();
+            anime.setTitle(englishTitle != null && !englishTitle.isBlank() ? englishTitle : data.getTitle());
+            anime.setSynopsis(data.getSynopsis());
+            anime.setRating(data.getScore());
+            anime.setEpisodes(data.getEpisodes());
+            if (data.getTrailer() != null) {
+                anime.setTrailerUrl(data.getTrailer().getUrl());
+                anime.setTrailerEmbedUrl(data.getTrailer().getEmbedUrl());
+            }
+            anime.setImageUrl(data.getImages() != null && data.getImages().getJpg() != null
+                    ? data.getImages().getJpg().getLargeImageUrl() != null
+                        ? data.getImages().getJpg().getLargeImageUrl()
+                        : data.getImages().getJpg().getImageUrl()
+                    : null);
+            toSave.add(anime);
+        }
+        return animeRepository.saveAll(toSave);
+    }
+
+    private List<Anime> importFromResponse(JikanListResponse response) {
+        if (response != null && response.getData() != null) {
+            return saveAnimeBatch(response.getData());
+        }
+        return new ArrayList<>();
     }
 
     @Transactional
@@ -139,9 +171,7 @@ public class AnimeServiceImpl implements AnimeService {
         List<Anime> animeList = new ArrayList<>();
         int totalPages = 1;
         if (response != null && response.getData() != null) {
-            for (JikanAnimeData data : response.getData()) {
-                animeList.add(saveAnime(data));
-            }
+            animeList = saveAnimeBatch(response.getData());
             if (response.getPagination() != null) {
                 totalPages = response.getPagination().getLastVisiblePage();
             }
