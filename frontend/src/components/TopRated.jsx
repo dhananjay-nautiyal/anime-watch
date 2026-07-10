@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
-import { proxyImage } from '../api/imageProxy'
 import { motion } from 'framer-motion'
+import ImageWithFallback from './ImageWithFallback'
 
 function RatedCard({ anime, index }) {
   return (
@@ -15,7 +15,7 @@ function RatedCard({ anime, index }) {
           {String(index + 1).padStart(2, '0')}
         </span>
         <div className="w-14 h-20 rounded-lg overflow-hidden flex-shrink-0">
-          <img src={proxyImage(anime.imageUrl) || ''} alt="" className="w-full h-full object-cover" loading="lazy" />
+          <ImageWithFallback src={anime.imageUrl} alt="" className="w-full h-full object-cover" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-white text-sm font-medium truncate group-hover:text-primary transition-colors">{anime.title}</p>

@@ -7,7 +7,7 @@ export function getAnimeImage(anime) {
   if (anime.imageUrl) return anime.imageUrl
   if (anime.images?.jpg?.large_image_url) return anime.images.jpg.large_image_url
   if (anime.images?.jpg?.image_url) return anime.images.jpg.image_url
-  if (anime.images?.webp?.large_image_url) return anime.images.webp.images.webp.large_image_url
+  if (anime.images?.webp?.large_image_url) return anime.images.webp.large_image_url
   if (anime.images?.webp?.image_url) return anime.images.webp.image_url
 
   return '/placeholder-anime.jpg'

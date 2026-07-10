@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
-import { proxyImage } from '../api/imageProxy'
 import { motion } from 'framer-motion'
+import ImageWithFallback from './ImageWithFallback'
 
 function TrendingCard({ anime, index }) {
   return (
@@ -13,11 +13,11 @@ function TrendingCard({ anime, index }) {
     >
       <Link to={`/anime/${anime.malId}`} className="block">
         <div className="relative rounded-xl overflow-hidden" style={{ width: '180px', height: '270px' }}>
-          <img
-            src={proxyImage(anime.imageUrl) || ''}
+          <ImageWithFallback
+            src={anime.imageUrl}
             alt={anime.title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            loading="lazy"
+            containerClass="w-full h-full"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           <div className="absolute top-2 left-2 flex gap-1">

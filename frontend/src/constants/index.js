@@ -12,5 +12,3 @@ export const SORT_OPTIONS = [
 ]
 
 export const SEASONS = ['winter', 'spring', 'summer', 'fall']
-
-export const PROXY_BASE = '/api/anime/proxy/animepahe?url='

@@ -1,6 +1,7 @@
 package com.animeSite.controller;
 
 import com.animeSite.core.model.ApiResponse;
+import com.animeSite.httpclient.AnimeGogoService;
 import com.animeSite.httpclient.AninekoService;
 import com.animeSite.persist.Anime;
 import com.animeSite.persist.Episode;
@@ -25,12 +26,14 @@ public class EpisodeController {
     private final EpisodeRepository episodeRepository;
     private final AnimeRepository animeRepository;
     private final AninekoService aninekoService;
+    private final AnimeGogoService animeGogoService;
 
     public EpisodeController(EpisodeRepository episodeRepository, AnimeRepository animeRepository,
-                             AninekoService aninekoService) {
+                             AninekoService aninekoService, AnimeGogoService animeGogoService) {
         this.episodeRepository = episodeRepository;
         this.animeRepository = animeRepository;
         this.aninekoService = aninekoService;
+        this.animeGogoService = animeGogoService;
     }
 
     @GetMapping("/{malId}/episodes")
@@ -57,19 +60,40 @@ public class EpisodeController {
 
         log.info("[SYNC] ANIME FOUND | title='{}' malId={}", anime.getTitle(), malId);
 
-        List<Episode> episodes = aninekoService.fetchEpisodes(anime.getMalId(), anime.getTitle());
+        List<Episode> episodes = List.of();
+        String provider = "Anineko";
+
+        try {
+            episodes = aninekoService.fetchEpisodes(anime.getMalId(), anime.getTitle());
+        } catch (Exception e) {
+            long elapsed = System.currentTimeMillis() - start;
+            log.warn("[SYNC] ANINEKO ERROR | title='{}' error='{}' duration={}ms", anime.getTitle(), e.getMessage(), elapsed);
+        }
+
+        if (episodes.isEmpty()) {
+            log.info("[SYNC] ANINEKO EMPTY | falling back to GoGoAnime...");
+            provider = "GoGoAnime";
+            try {
+                episodes = animeGogoService.fetchEpisodes(anime.getMalId(), anime.getTitle());
+            } catch (Exception e) {
+                long elapsed = System.currentTimeMillis() - start;
+                log.error("[SYNC] BOTH PROVIDERS FAILED | title='{}' error='{}' duration={}ms", anime.getTitle(), e.getMessage(), elapsed);
+                return ResponseEntity.ok(ApiResponse.error("PROVIDER_ERROR",
+                    "Both streaming providers returned errors: " + e.getMessage()));
+            }
+        }
 
         long elapsed = System.currentTimeMillis() - start;
 
         if (episodes.isEmpty()) {
-            log.warn("[SYNC] FAILED | no episodes found for '{}' | duration={}ms", anime.getTitle(), elapsed);
-            return ResponseEntity.ok(ApiResponse.error(
-                "No episodes available on the streaming provider for \"" + anime.getTitle() + "\" (MAL ID: " + malId + ")."));
+            log.warn("[SYNC] NO EPISODES | title='{}' duration={}ms", anime.getTitle(), elapsed);
+            return ResponseEntity.ok(ApiResponse.error("PROVIDER_NOT_FOUND",
+                "No episodes available on streaming providers for \"" + anime.getTitle() + "\" (MAL ID: " + malId + ")."));
         }
 
         episodeRepository.deleteByAnimeMalId(malId);
         episodeRepository.saveAll(episodes);
-        log.info("[SYNC] COMPLETE | saved {} episodes for '{}' | duration={}ms", episodes.size(), anime.getTitle(), elapsed);
+        log.info("[SYNC] COMPLETE | provider={} saved {} episodes for '{}' | duration={}ms", provider, episodes.size(), anime.getTitle(), elapsed);
 
         return ResponseEntity.ok(ApiResponse.success("Episodes synced successfully", episodes));
     }
@@ -79,32 +103,45 @@ public class EpisodeController {
         long start = System.currentTimeMillis();
         log.info("[EMBED] GET | malId={} episodeUrl={}", malId, episodeUrl);
 
-        String embedUrl = aninekoService.fetchEmbedUrl(episodeUrl);
+        String embedUrl = null;
+        String provider;
+        String streamType;
+
+        if (episodeUrl.contains("gogoanime")) {
+            provider = "GoGoAnime";
+            embedUrl = animeGogoService.fetchEmbedUrl(episodeUrl);
+            streamType = "iframe";
+        } else {
+            provider = "Anineko";
+            embedUrl = aninekoService.fetchEmbedUrl(episodeUrl);
+            streamType = embedUrl != null && embedUrl.contains(".m3u8") ? "hls" : "iframe";
+        }
+
         long elapsed = System.currentTimeMillis() - start;
 
         if (embedUrl == null) {
-            log.warn("[EMBED] FAILED | malId={} url={} duration={}ms", malId, episodeUrl, elapsed);
+            log.warn("[EMBED] FAILED | malId={} provider={} url={} duration={}ms", malId, provider, episodeUrl, elapsed);
             return ResponseEntity.ok(ApiResponse.builder()
                 .success(false)
                 .message("No stream source found for this episode.")
                 .data(Map.of(
-                    "provider", "Anineko",
+                    "provider", provider,
                     "step", "Extract embed url",
-                    "reason", "No data-video attribute found on episode page",
+                    "reason", "No video source found on episode page",
                     "durationMs", elapsed
                 ))
                 .timestamp(java.time.Instant.now())
                 .build());
         }
 
-        log.info("[EMBED] SUCCESS | embedUrl={} duration={}ms", embedUrl, elapsed);
+        log.info("[EMBED] SUCCESS | provider={} type={} embedUrl={} duration={}ms", provider, streamType, embedUrl, elapsed);
         return ResponseEntity.ok(ApiResponse.builder()
             .success(true)
             .message("Stream source found")
             .data(Map.of(
                 "embedUrl", embedUrl,
-                "provider", "Anineko",
-                "type", "iframe"
+                "provider", provider,
+                "type", streamType
             ))
             .timestamp(java.time.Instant.now())
             .build());
@@ -137,6 +174,9 @@ public class EpisodeController {
             try {
                 episodeRepository.deleteByAnimeMalId(anime.getMalId());
                 List<Episode> episodes = aninekoService.fetchEpisodes(anime.getMalId(), anime.getTitle());
+                if (episodes.isEmpty()) {
+                    episodes = animeGogoService.fetchEpisodes(anime.getMalId(), anime.getTitle());
+                }
                 if (episodes.isEmpty()) {
                     skipped++;
                     log.warn("[BULK SYNC] no episodes found for '{}'", anime.getTitle());

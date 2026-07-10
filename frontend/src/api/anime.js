@@ -49,9 +49,16 @@ export const getEpisodes = (malId, signal) =>
 
 export const syncEpisodes = (malId) => {
   console.log('[Sync] Request body: null (malId in URL path: ' + malId + ')')
-  return client.post(`/api/anime/${malId}/episodes/sync`, null, { timeout: 3000 }).then((res) => {
+  return client.post(`/api/anime/${malId}/episodes/sync`, null, { timeout: 60000 }).then((res) => {
     console.log('[Sync] Response:', res.data)
-    return res.data?.data ?? []
+    const body = res.data
+    if (!body?.success) {
+      const err = new Error(body?.message || 'Sync failed')
+      err.errorCode = body?.errorCode
+      err.data = body?.data
+      throw err
+    }
+    return body.data ?? []
   })
 }
 
@@ -59,6 +66,5 @@ export const getEpisodeEmbed = (malId, episodeUrl, signal) =>
   client.get(`/api/anime/${malId}/episode/embed`, { params: { episodeUrl }, timeout: 20000, signal }).then((res) => {
     const payload = res.data?.data
     if (!payload) return null
-    if (typeof payload === 'string') return payload
-    return payload?.embedUrl ?? null
+    return payload
   })

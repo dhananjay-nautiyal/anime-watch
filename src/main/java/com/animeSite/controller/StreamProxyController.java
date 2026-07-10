@@ -53,4 +53,29 @@ public class StreamProxyController {
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(ApiResponse.error("Failed to fetch stream source"));
         }
     }
+
+    @GetMapping("/hls")
+    public ResponseEntity<?> proxyHls(@RequestParam String url) {
+        log.info("[STREAM HLS] fetch | url={}", url);
+        try {
+            ResponseEntity<byte[]> response = restTemplate.getForEntity(url, byte[].class);
+            HttpHeaders headers = new HttpHeaders();
+            MediaType contentType = response.getHeaders().getContentType();
+            if (contentType == null) {
+                if (url.endsWith(".m3u8")) {
+                    contentType = MediaType.parseMediaType("application/vnd.apple.mpegurl");
+                } else if (url.endsWith(".ts")) {
+                    contentType = MediaType.parseMediaType("video/MP2T");
+                } else {
+                    contentType = MediaType.APPLICATION_OCTET_STREAM;
+                }
+            }
+            headers.setContentType(contentType);
+            headers.set("Access-Control-Allow-Origin", "*");
+            return new ResponseEntity<>(response.getBody(), headers, HttpStatus.OK);
+        } catch (Exception e) {
+            log.error("[STREAM HLS] failed | url={} error={}", url, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).build();
+        }
+    }
 }

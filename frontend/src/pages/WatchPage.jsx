@@ -5,6 +5,7 @@ import { getAnimeById, getEpisodes, syncEpisodes, getEpisodeEmbed, getTrending }
 import { extractErrorMessage } from '../api/client'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import VideoPlayer from '../components/VideoPlayer'
+import ImageWithFallback from '../components/ImageWithFallback'
 
 const EPISODES_PER_PAGE = 30
 
@@ -30,8 +31,8 @@ function useEpisodes(malId) {
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState(null)
 
-  const doSync = useCallback(async () => {
-    if (syncAttempted.current) return
+  const doSync = useCallback(async (force) => {
+    if (syncAttempted.current && !force) return
     syncAttempted.current = true
     setSyncing(true)
     setSyncError(null)
@@ -41,10 +42,18 @@ function useEpisodes(malId) {
       if (synced?.length > 0) {
         queryClient.setQueryData(['episodes', malId], synced)
       } else {
-        setSyncError('No episodes available for this anime.')
+        setSyncError('No episodes available on the streaming provider for this title.')
       }
     } catch (err) {
-      setSyncError(extractErrorMessage(err))
+      const code = err.errorCode
+      const msg = err.message || extractErrorMessage(err)
+      if (code === 'PROVIDER_NOT_FOUND') {
+        setSyncError(msg)
+      } else if (code === 'PROVIDER_ERROR') {
+        setSyncError('Streaming provider error. Please try again later. (' + msg + ')')
+      } else {
+        setSyncError(msg)
+      }
     } finally {
       setSyncing(false)
     }
@@ -60,7 +69,12 @@ function useEpisodes(malId) {
   const loading = animeQuery.isLoading || syncing
   const error = animeQuery.error ? extractErrorMessage(animeQuery.error) : syncError
 
-  return { anime: animeQuery.data, episodes, loading, error, syncing, retry: doSync }
+  const retry = useCallback(() => {
+    syncAttempted.current = false
+    doSync(true)
+  }, [doSync])
+
+  return { anime: animeQuery.data, episodes, loading, error, syncing, retry }
 }
 
 function range(start, end) {
@@ -78,6 +92,7 @@ export default function WatchPage() {
 
   const [currentEp, setCurrentEp] = useState(Number(episodeNumber) || 1)
   const [embedUrl, setEmbedUrl] = useState('')
+  const [embedType, setEmbedType] = useState('iframe')
   const [embedLoading, setEmbedLoading] = useState(false)
   const [embedError, setEmbedError] = useState(null)
   const [epRangeIdx, setEpRangeIdx] = useState(0)
@@ -117,15 +132,15 @@ export default function WatchPage() {
     if (episodes.length === 0) { setEmbedUrl(''); return }
     const ep = episodes.find((e) => e.episodeNumber === currentEp) || episodes[0]
     if (!ep?.embedUrl) { setEmbedUrl(''); return }
-    if (!ep.embedUrl.startsWith('https://anineko.to/')) { setEmbedUrl(''); return }
     setEmbedLoading(true)
     setEmbedError(null)
     try {
-      const rawUrl = await getEpisodeEmbed(malId, ep.embedUrl)
+      const payload = await getEpisodeEmbed(malId, ep.embedUrl)
       if (!mountedRef.current) return
-      if (rawUrl) {
-        console.log('[WatchPage] Embed URL resolved:', rawUrl)
-        setEmbedUrl(rawUrl)
+      if (payload?.embedUrl) {
+        console.log('[WatchPage] Embed resolved:', payload)
+        setEmbedUrl(payload.embedUrl)
+        setEmbedType(payload.type || 'iframe')
       } else {
         setEmbedError('Could not retrieve stream URL.')
       }
@@ -260,6 +275,7 @@ export default function WatchPage() {
                 animeId={malId}
                 onRetry={loadEmbed}
                 onChangeSource={loadEmbed}
+                streamType={embedType}
               />
             )}
 
@@ -428,7 +444,7 @@ export default function WatchPage() {
               <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5">
                 <div className="flex gap-5">
                   <div className="w-24 h-36 rounded-xl overflow-hidden flex-shrink-0 ring-1 ring-white/10 hidden sm:block">
-                    <img src={anime.imageUrl} alt={anime.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                    <ImageWithFallback src={anime.imageUrl} alt={anime.title} className="w-full h-full object-cover" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <h1 className="text-white text-xl font-bold font-display">{anime.title}</h1>
@@ -488,7 +504,7 @@ export default function WatchPage() {
                   {recommended.map((rec) => (
                     <Link key={rec.malId || rec.id} to={`/watch/${rec.malId || rec.id}/1`} className="flex gap-3 group">
                       <div className="w-12 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-surface/50">
-                        <img src={rec.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                        <ImageWithFallback src={rec.imageUrl} alt="" className="w-full h-full object-cover" />
                       </div>
                       <div className="min-w-0 flex-1 py-0.5">
                         <p className="text-xs text-white font-medium truncate group-hover:text-primary transition-colors">{rec.title}</p>

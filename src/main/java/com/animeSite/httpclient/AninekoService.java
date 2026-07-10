@@ -17,6 +17,11 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+
 @Service
 public class AninekoService {
 
@@ -78,6 +83,41 @@ public class AninekoService {
         return new ArrayList<>(slugs);
     }
 
+    private String fetchWithLogging(String url, String context) {
+        long t = System.currentTimeMillis();
+        try {
+            ResponseEntity<String> resp = restTemplate.getForEntity(url, String.class);
+            HttpStatusCode status = resp.getStatusCode();
+            String body = resp.getBody();
+            long elapsed = System.currentTimeMillis() - t;
+            if (body != null) {
+                log.info("[ANINEKO] {} | url={} status={} bodyLength={} preview='{}' duration={}ms",
+                    context, url, status, body.length(),
+                    body.substring(0, Math.min(300, body.length())).replace('\n', ' ').replace('\r', ' '),
+                    elapsed);
+            } else {
+                log.warn("[ANINEKO] {} | url={} status={} body=null duration={}ms", context, url, status, elapsed);
+            }
+            return body;
+        } catch (HttpClientErrorException e) {
+            long elapsed = System.currentTimeMillis() - t;
+            String respBody = e.getResponseBodyAsString();
+            log.warn("[ANINEKO] {} FAILED | url={} status={} body='{}' duration={}ms",
+                context, url, e.getStatusCode(),
+                respBody != null ? respBody.substring(0, Math.min(200, respBody.length())).replace('\n', ' ').replace('\r', ' ') : "null",
+                elapsed);
+            return null;
+        } catch (HttpServerErrorException e) {
+            long elapsed = System.currentTimeMillis() - t;
+            log.warn("[ANINEKO] {} FAILED | url={} status={} duration={}ms", context, url, e.getStatusCode(), elapsed);
+            return null;
+        } catch (Exception e) {
+            long elapsed = System.currentTimeMillis() - t;
+            log.warn("[ANINEKO] {} FAILED | url={} error='{}' duration={}ms", context, url, e.getMessage(), elapsed);
+            return null;
+        }
+    }
+
     public List<Episode> fetchEpisodes(int malId, String title) {
         long start = System.currentTimeMillis();
         log.info("[ANINEKO] FETCH EPISODES | title='{}' malId={}", title, malId);
@@ -89,38 +129,35 @@ public class AninekoService {
             String url = BASE_URL + "/watch/" + slug;
             log.info("[ANINEKO] TRY SLUG | slug='{}' url={}", slug, url);
 
-            try {
-                String html = restTemplate.getForObject(url, String.class);
-                if (html == null) continue;
+            String html = fetchWithLogging(url, "SLUG=" + slug);
+            if (html == null) continue;
 
-                List<Episode> episodes = new ArrayList<>();
-                Set<Integer> seen = new LinkedHashSet<>();
+            List<Episode> episodes = new ArrayList<>();
+            Set<Integer> seen = new LinkedHashSet<>();
 
-                Pattern epPattern = Pattern.compile("/watch/" + Pattern.quote(slug) + "/ep-(\\d+)");
-                Matcher matcher = epPattern.matcher(html);
-                while (matcher.find()) {
-                    int epNum = Integer.parseInt(matcher.group(1));
-                    if (seen.add(epNum)) {
-                        Episode ep = new Episode();
-                        ep.setAnimeMalId(malId);
-                        ep.setEpisodeNumber(epNum);
-                        ep.setTitle("Episode " + epNum);
-                        ep.setEmbedUrl(BASE_URL + "/watch/" + slug + "/ep-" + epNum);
-                        episodes.add(ep);
-                    }
+            Pattern epPattern = Pattern.compile("/watch/" + Pattern.quote(slug) + "/ep-(\\d+)");
+            Matcher matcher = epPattern.matcher(html);
+            while (matcher.find()) {
+                int epNum = Integer.parseInt(matcher.group(1));
+                if (seen.add(epNum)) {
+                    Episode ep = new Episode();
+                    ep.setAnimeMalId(malId);
+                    ep.setEpisodeNumber(epNum);
+                    ep.setTitle("Episode " + epNum);
+                    ep.setEmbedUrl(BASE_URL + "/watch/" + slug + "/ep-" + epNum);
+                    episodes.add(ep);
                 }
-
-                if (!episodes.isEmpty()) {
-                    episodes.sort(Comparator.comparingInt(Episode::getEpisodeNumber));
-                    long elapsed = System.currentTimeMillis() - start;
-                    log.info("[ANINEKO] SUCCESS | slug='{}' count={} duration={}ms", slug, episodes.size(), elapsed);
-                    return episodes;
-                }
-
-                log.warn("[ANINEKO] EMPTY | slug='{}' matched no episodes", slug);
-            } catch (Exception e) {
-                log.warn("[ANINEKO] FAILED | slug='{}' error='{}'", slug, e.getMessage());
             }
+
+            if (!episodes.isEmpty()) {
+                episodes.sort(Comparator.comparingInt(Episode::getEpisodeNumber));
+                long elapsed = System.currentTimeMillis() - start;
+                log.info("[ANINEKO] SUCCESS | slug='{}' count={} duration={}ms", slug, episodes.size(), elapsed);
+                return episodes;
+            }
+
+            long epMatchCount = Pattern.compile("/watch/[a-z0-9-]+/ep-\\d+").matcher(html).results().count();
+            log.warn("[ANINEKO] EMPTY | slug='{}' matched no episodes (body had {} ep links)", slug, epMatchCount);
         }
 
         log.warn("[ANINEKO] ALL SLUGS FAILED | trying search-based slug discovery...");
@@ -154,7 +191,7 @@ public class AninekoService {
         try {
             Thread.sleep(500);
             String url = JIKAN_BASE + "/anime/" + malId;
-            String json = restTemplate.getForObject(url, String.class);
+            String json = fetchWithLogging(url, "JIKAN_FALLBACK");
             if (json == null) return List.of();
 
             JsonNode root = objectMapper.readTree(json);
@@ -193,31 +230,27 @@ public class AninekoService {
     private List<Episode> fetchEpisodesFromList(int malId, List<String> slugs) {
         for (String slug : slugs) {
             String url = BASE_URL + "/watch/" + slug;
-            try {
-                String html = restTemplate.getForObject(url, String.class);
-                if (html == null) continue;
+            String html = fetchWithLogging(url, "FALLBACK_SLUG=" + slug);
+            if (html == null) continue;
 
-                List<Episode> episodes = new ArrayList<>();
-                Set<Integer> seen = new LinkedHashSet<>();
-                Pattern epPattern = Pattern.compile("/watch/" + Pattern.quote(slug) + "/ep-(\\d+)");
-                Matcher matcher = epPattern.matcher(html);
-                while (matcher.find()) {
-                    int epNum = Integer.parseInt(matcher.group(1));
-                    if (seen.add(epNum)) {
-                        Episode ep = new Episode();
-                        ep.setAnimeMalId(malId);
-                        ep.setEpisodeNumber(epNum);
-                        ep.setTitle("Episode " + epNum);
-                        ep.setEmbedUrl(BASE_URL + "/watch/" + slug + "/ep-" + epNum);
-                        episodes.add(ep);
-                    }
+            List<Episode> episodes = new ArrayList<>();
+            Set<Integer> seen = new LinkedHashSet<>();
+            Pattern epPattern = Pattern.compile("/watch/" + Pattern.quote(slug) + "/ep-(\\d+)");
+            Matcher matcher = epPattern.matcher(html);
+            while (matcher.find()) {
+                int epNum = Integer.parseInt(matcher.group(1));
+                if (seen.add(epNum)) {
+                    Episode ep = new Episode();
+                    ep.setAnimeMalId(malId);
+                    ep.setEpisodeNumber(epNum);
+                    ep.setTitle("Episode " + epNum);
+                    ep.setEmbedUrl(BASE_URL + "/watch/" + slug + "/ep-" + epNum);
+                    episodes.add(ep);
                 }
-                if (!episodes.isEmpty()) {
-                    episodes.sort(Comparator.comparingInt(Episode::getEpisodeNumber));
-                    return episodes;
-                }
-            } catch (Exception e) {
-                log.warn("[ANINEKO] FALLBACK SLUG FAILED | slug='{}'", slug);
+            }
+            if (!episodes.isEmpty()) {
+                episodes.sort(Comparator.comparingInt(Episode::getEpisodeNumber));
+                return episodes;
             }
         }
         return List.of();
@@ -227,7 +260,8 @@ public class AninekoService {
         try {
             String keywords = title.toLowerCase().replaceAll("[^a-z0-9 ]", " ").trim().replaceAll("\\s+", "+");
             String searchUrl = BASE_URL + "/browse?keyword=" + keywords + "&page=1";
-            String html = restTemplate.getForObject(searchUrl, String.class);
+            log.info("[ANINEKO] SEARCH | url={}", searchUrl);
+            String html = fetchWithLogging(searchUrl, "SEARCH");
             if (html == null) return null;
 
             Set<String> candidates = new LinkedHashSet<>();
@@ -254,6 +288,7 @@ public class AninekoService {
                 }
             }
 
+            log.info("[ANINEKO] SEARCH RESULT | candidates={}", candidates);
             return candidates.isEmpty() ? null : candidates.iterator().next();
         } catch (Exception e) {
             log.warn("[ANINEKO] SEARCH FAILED | error='{}'", e.getMessage());
@@ -266,9 +301,9 @@ public class AninekoService {
         log.info("[ANINEKO] FETCH EMBED | url={}", episodePageUrl);
 
         try {
-            String html = restTemplate.getForObject(episodePageUrl, String.class);
+            String html = fetchWithLogging(episodePageUrl, "EMBED");
             if (html == null) {
-                log.error("[ANINEKO] EMBED FAILED | null response");
+                log.error("[ANINEKO] EMBED FAILED | null response after fetch");
                 return null;
             }
 
@@ -287,14 +322,47 @@ public class AninekoService {
                 return null;
             }
 
-            String embedUrl = embeds.get(0);
+            String embedPageUrl = embeds.get(0);
+            log.info("[ANINEKO] EMBED PAGE | url={}", embedPageUrl);
+
+            if (embedPageUrl.contains("vivibebe.site")) {
+                String directVideo = extractVivibebeDirectUrl(embedPageUrl);
+                if (directVideo != null) {
+                    long elapsed = System.currentTimeMillis() - start;
+                    log.info("[ANINEKO] DIRECT VIDEO FOUND | url={} duration={}ms", directVideo, elapsed);
+                    return directVideo;
+                }
+            }
+
             long elapsed = System.currentTimeMillis() - start;
-            log.info("[ANINEKO] EMBED SUCCESS | url={} duration={}ms", embedUrl, elapsed);
-            return embedUrl;
+            log.info("[ANINEKO] EMBED FALLBACK | returning embed page url={} duration={}ms", embedPageUrl, elapsed);
+            return embedPageUrl;
 
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - start;
             log.error("[ANINEKO] EMBED FAILED | error='{}' duration={}ms", e.getMessage(), elapsed);
+            return null;
+        }
+    }
+
+    private String extractVivibebeDirectUrl(String embedPageUrl) {
+        try {
+            log.info("[ANINEKO] EXTRACT VIVIBEBE | url={}", embedPageUrl);
+            String html = fetchWithLogging(embedPageUrl, "VIVIBEBE_EMBED");
+            if (html == null) return null;
+
+            Pattern srcPattern = Pattern.compile("const\\s+src\\s*=\\s*\"([^\"]+\\.m3u8[^\"]*)\"");
+            Matcher matcher = srcPattern.matcher(html);
+            if (matcher.find()) {
+                String directUrl = matcher.group(1);
+                log.info("[ANINEKO] VIVIBEBE DIRECT HLS | url={}", directUrl);
+                return directUrl;
+            }
+
+            log.warn("[ANINEKO] VIVIBEBE EXTRACT FAILED | no HLS source found");
+            return null;
+        } catch (Exception e) {
+            log.warn("[ANINEKO] VIVIBEBE EXTRACT ERROR | error='{}'", e.getMessage());
             return null;
         }
     }

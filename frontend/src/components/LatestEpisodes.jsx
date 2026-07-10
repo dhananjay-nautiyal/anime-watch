@@ -1,11 +1,8 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { proxyImage } from '../api/imageProxy'
 import { motion } from 'framer-motion'
+import ImageWithFallback from './ImageWithFallback'
 
 function EpisodeCard({ anime, index }) {
-  const [loaded, setLoaded] = useState(false)
-  const [error, setError] = useState(false)
 
   return (
     <motion.div
@@ -17,19 +14,12 @@ function EpisodeCard({ anime, index }) {
     >
       <Link to={`/watch/${anime.malId}/1`} className="block">
         <div className="relative rounded-xl overflow-hidden bg-surface/50" style={{ paddingBottom: '140%' }}>
-          {!loaded && !error && <div className="absolute inset-0 skeleton" />}
-          {error ? (
-            <div className="absolute inset-0 bg-surface flex items-center justify-center text-muted text-xs">No Img</div>
-          ) : (
-            <img
-              src={proxyImage(anime.imageUrl) || ''}
-              alt={anime.title}
-              className={`absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-              loading="lazy"
-              onLoad={() => setLoaded(true)}
-              onError={() => setError(true)}
-            />
-          )}
+          <ImageWithFallback
+            src={anime.imageUrl}
+            alt={anime.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            containerClass="absolute inset-0"
+          />
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300" />
           <div className="absolute top-2 left-2 flex gap-1 z-10">
             <span className="bg-primary/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">

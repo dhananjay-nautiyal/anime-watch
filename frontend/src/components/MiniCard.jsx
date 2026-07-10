@@ -1,18 +1,17 @@
 import { Link } from 'react-router-dom'
-import { proxyImage } from '../api/imageProxy'
+import ImageWithFallback from './ImageWithFallback'
 
 export default function MiniCard({ anime }) {
-  const imageUrl = proxyImage(anime.imageUrl)
 
   return (
     <div className="flex bg-card hover:bg-cardHover transition-colors" style={{ marginTop: '0.3rem' }}>
       <Link to={`/anime/${anime.malId}`} className="flex-shrink-0" style={{ width: '4.5rem' }}>
         <div className="aspect-[3/4] overflow-hidden">
-          {imageUrl ? (
-            <img src={imageUrl} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
-          ) : (
-            <div className="w-full h-full bg-secondary flex items-center justify-center text-muted text-xs">No Img</div>
-          )}
+          <ImageWithFallback
+            src={anime.imageUrl}
+            alt={anime.title}
+            className="w-full h-full object-cover"
+          />
         </div>
       </Link>
       <div className="flex-1 ml-3 py-1 overflow-hidden">

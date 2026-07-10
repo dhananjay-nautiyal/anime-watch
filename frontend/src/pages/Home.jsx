@@ -8,6 +8,7 @@ import SectionRow from '../components/SectionRow'
 import AnimeCard from '../components/AnimeCard'
 import { HeroSkeleton, CardSkeleton } from '../components/Skeleton'
 import { motion } from 'framer-motion'
+import ImageWithFallback from '../components/ImageWithFallback'
 import { isValidAnime } from '../utils/animeFilter'
 
 const SECTION_SIZES = {
@@ -174,12 +175,10 @@ export default function Home() {
                       {String(i + 1).padStart(2, '0')}
                     </span>
                     <div className="w-14 h-20 rounded-lg overflow-hidden flex-shrink-0">
-                      <img
+                      <ImageWithFallback
                         src={anime.imageUrl || anime.images?.jpg?.image_url}
                         alt=""
                         className="w-full h-full object-cover"
-                        loading="lazy"
-                        onError={(e) => { e.target.src = '/images/placeholder-anime.jpg' }}
                       />
                     </div>
                     <div className="flex-1 min-w-0">

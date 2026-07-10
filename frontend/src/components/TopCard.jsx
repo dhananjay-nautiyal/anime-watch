@@ -1,8 +1,7 @@
 import { Link } from 'react-router-dom'
-import { proxyImage } from '../api/imageProxy'
+import ImageWithFallback from './ImageWithFallback'
 
 export default function TopCard({ anime, rank }) {
-  const imageUrl = proxyImage(anime.imageUrl)
 
   return (
     <Link
@@ -24,11 +23,12 @@ export default function TopCard({ anime, rank }) {
         </div>
       </div>
       <div className="flex-shrink-0 w-14" style={{ width: '3.5rem' }}>
-        {imageUrl ? (
-          <img src={imageUrl} alt="" className="w-full aspect-[3/4] object-cover" loading="lazy" />
-        ) : (
-          <div className="w-full aspect-[3/4] bg-secondary" />
-        )}
+        <ImageWithFallback
+          src={anime.imageUrl}
+          alt=""
+          className="w-full aspect-[3/4] object-cover"
+          containerClass="w-full aspect-[3/4]"
+        />
       </div>
     </Link>
   )

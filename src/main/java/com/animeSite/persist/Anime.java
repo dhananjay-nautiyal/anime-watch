@@ -65,8 +65,33 @@ public class Anime extends Auditable implements Serializable {
     @Schema(description = "YouTube trailer embed URL", example = "https://www.youtube.com/embed/...")
     private String trailerEmbedUrl;
 
-    @Schema(description = "AnimePahe anime ID for episode streaming", example = "56")
-    private Integer animePaheId;
+    @Transient
+    @Schema(description = "Anime type (TV, Movie, OVA, etc.)", example = "TV")
+    private String type;
+
+    @Transient
+    @Schema(description = "Airing status", example = "Finished Airing")
+    private String status;
+
+    @Transient
+    @Schema(description = "Release year", example = "2022")
+    private Integer year;
+
+    @Transient
+    @Schema(description = "Episode duration", example = "24 min per ep")
+    private String duration;
+
+    @Transient
+    @Schema(description = "Aired date range string", example = "Apr 9, 2022 to Jun 25, 2022")
+    private String aired;
+
+    @Transient
+    @Schema(description = "List of genres")
+    private List<com.animeSite.model.JikanAnimeData.Genre> genres = new ArrayList<>();
+
+    @Transient
+    @Schema(description = "List of studios")
+    private List<com.animeSite.model.JikanAnimeData.Studio> studios = new ArrayList<>();
 
     @OneToMany(mappedBy = "anime", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JsonIgnore

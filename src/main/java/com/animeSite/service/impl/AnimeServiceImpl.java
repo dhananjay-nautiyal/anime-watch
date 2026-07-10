@@ -138,6 +138,7 @@ public class AnimeServiceImpl implements AnimeService {
                         ? data.getImages().getJpg().getLargeImageUrl()
                         : data.getImages().getJpg().getImageUrl()
                     : null);
+            populateTransientFields(anime, data);
             toSave.add(anime);
         }
         return animeRepository.saveAll(toSave);
@@ -201,7 +202,20 @@ public class AnimeServiceImpl implements AnimeService {
                     ? data.getImages().getJpg().getLargeImageUrl()
                     : data.getImages().getJpg().getImageUrl()
                 : null);
+        populateTransientFields(anime, data);
         return animeRepository.save(anime);
+    }
+
+    private void populateTransientFields(Anime anime, JikanAnimeData data) {
+        anime.setType(data.getType());
+        anime.setStatus(data.getStatus());
+        anime.setYear(data.getYear());
+        anime.setDuration(data.getDuration());
+        if (data.getAired() != null) {
+            anime.setAired(data.getAired().getAiredString());
+        }
+        anime.setGenres(data.getGenres() != null ? data.getGenres() : new java.util.ArrayList<>());
+        anime.setStudios(data.getStudios() != null ? data.getStudios() : new java.util.ArrayList<>());
     }
 
 }

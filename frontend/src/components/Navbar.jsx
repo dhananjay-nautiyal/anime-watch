@@ -5,6 +5,7 @@ import { logout as logoutApi } from '../api/auth'
 import { useSearchAnime } from '../hooks/useAnimeData'
 import { useDebounce } from '../hooks/useDebounce'
 import { motion, AnimatePresence } from 'framer-motion'
+import ImageWithFallback from './ImageWithFallback'
 
 const Navbar = memo(function Navbar() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -226,7 +227,7 @@ const Navbar = memo(function Navbar() {
                         className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors text-left"
                       >
                         <div className="w-8 h-11 rounded overflow-hidden flex-shrink-0 bg-white/5">
-                          <img src={anime.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                          <ImageWithFallback src={anime.imageUrl} alt="" className="w-full h-full object-cover" />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm text-white truncate">{anime.title}</p>

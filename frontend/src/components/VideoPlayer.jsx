@@ -1,18 +1,69 @@
 import { useState, useRef, useCallback, useEffect, memo } from 'react'
 import { Link } from 'react-router-dom'
+import Hls from 'hls.js'
 
-const VideoPlayer = memo(function VideoPlayer({ embedUrl, poster, animeTitle, episodeNumber, animeId, onRetry, onChangeSource }) {
+const VideoPlayer = memo(function VideoPlayer({ embedUrl, poster, animeTitle, episodeNumber, animeId, onRetry, onChangeSource, streamType }) {
   const [userClicked, setUserClicked] = useState(false)
   const [iframeLoading, setIframeLoading] = useState(false)
   const [error, setError] = useState(false)
   const [retryCount, setRetryCount] = useState(0)
   const iframeRef = useRef(null)
+  const videoRef = useRef(null)
+  const hlsRef = useRef(null)
 
   useEffect(() => {
     setIframeLoading(true)
     setError(false)
     setRetryCount(0)
   }, [embedUrl])
+
+  useEffect(() => {
+    if (!userClicked || !embedUrl || streamType !== 'hls' || !videoRef.current) return
+
+    if (hlsRef.current) {
+      hlsRef.current.destroy()
+      hlsRef.current = null
+    }
+
+    const video = videoRef.current
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({ enableWorker: false })
+      hlsRef.current = hls
+      hls.loadSource(embedUrl)
+      hls.attachMedia(video)
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setIframeLoading(false)
+        video.play().catch(() => {})
+      })
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          setError(true)
+          setIframeLoading(false)
+        }
+      })
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = embedUrl
+      video.addEventListener('loadedmetadata', () => {
+        setIframeLoading(false)
+        video.play().catch(() => {})
+      })
+      video.addEventListener('error', () => {
+        setError(true)
+        setIframeLoading(false)
+      })
+    } else {
+      setError(true)
+      setIframeLoading(false)
+    }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy()
+        hlsRef.current = null
+      }
+    }
+  }, [userClicked, embedUrl, streamType])
 
   const handleWatch = () => {
     setUserClicked(true)
@@ -72,7 +123,7 @@ const VideoPlayer = memo(function VideoPlayer({ embedUrl, poster, animeTitle, ep
           </div>
           <div>
             <p className="text-white text-sm font-medium mb-1">Could not load player.</p>
-            <p className="text-muted text-xs">The iframe may have been blocked or refused to load.</p>
+            <p className="text-muted text-xs">The stream may have been blocked or refused to load.</p>
           </div>
           <div className="flex items-center gap-3">
             <button onClick={handleRetry} className="bg-primary hover:bg-primary/90 text-white px-5 py-2 rounded-lg text-sm font-medium transition-all">Retry</button>
@@ -114,7 +165,17 @@ const VideoPlayer = memo(function VideoPlayer({ embedUrl, poster, animeTitle, ep
         </div>
       )}
 
-      {userClicked && embedUrl ? (
+      {userClicked && embedUrl && streamType === 'hls' ? (
+        <video
+          ref={videoRef}
+          key={`${embedUrl}-${retryCount}`}
+          className="w-full h-full"
+          controls
+          poster={poster}
+          playsInline
+          preload="metadata"
+        />
+      ) : userClicked && embedUrl && streamType === 'iframe' ? (
         <iframe
           ref={iframeRef}
           key={`${embedUrl}-${retryCount}`}
