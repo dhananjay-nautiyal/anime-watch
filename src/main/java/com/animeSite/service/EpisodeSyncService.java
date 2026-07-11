@@ -251,7 +251,6 @@ public class EpisodeSyncService {
     /**
      * Save episodes to database. Never throws.
      */
-    @Transactional
     protected SyncResult saveEpisodes(int malId, List<Episode> validEpisodes, String providerName) {
         if (validEpisodes == null || validEpisodes.isEmpty()) {
             return SyncResult.unavailable("NO_VALID_EPISODES", "No valid episodes to save", 0);
@@ -268,20 +267,27 @@ public class EpisodeSyncService {
 
             // Delete old episodes and save new ones
             episodeRepository.deleteByAnimeMalId(malId);
+            episodeRepository.flush();
             episodeRepository.saveAll(deduplicated);
+            episodeRepository.flush();
 
-            // Update cache
-            try {
-                cacheRepository.deleteByMalId(malId);
-                cacheRepository.save(AnimeProviderCache.success(malId, providerName, deduplicated.size()));
-            } catch (Exception e) {
-                log.warn("[SYNC_SERVICE] CACHE_UPDATE_FAILED | malId={} error='{}'", malId, e.getMessage());
-            }
+            // Update cache (independent transaction to avoid rollback on failure)
+            updateCacheIndependent(malId, providerName, deduplicated.size());
 
             return SyncResult.success(providerName, deduplicated.size(), deduplicated);
         } catch (Exception e) {
             log.error("[SYNC_SERVICE] SAVE_FAILED | malId={} error='{}'", malId, e.getMessage(), e);
             return SyncResult.temporaryFailure("Failed to save episodes: " + e.getMessage(), 0);
+        }
+    }
+
+    private void updateCacheIndependent(int malId, String providerName, int episodeCount) {
+        try {
+            cacheRepository.deleteByMalId(malId);
+            cacheRepository.flush();
+            cacheRepository.save(AnimeProviderCache.success(malId, providerName, episodeCount));
+        } catch (Exception e) {
+            log.warn("[SYNC_SERVICE] CACHE_UPDATE_FAILED | malId={} error='{}'", malId, e.getMessage());
         }
     }
 

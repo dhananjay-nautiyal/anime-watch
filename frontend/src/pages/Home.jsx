@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { filterAnime, getStreamableBatch } from '../api/anime'
+import { getContinueWatching } from '../api/watchHistory'
 
 import HeroSection from '../components/HeroSection'
 import ContinueWatching from '../components/ContinueWatching'
@@ -211,14 +212,20 @@ export default function Home() {
   const trending = trendingQuery.data || []
   const trendingLoading = trendingQuery.isLoading
 
+  const continueQuery = useQuery({
+    queryKey: ['continue-watching'],
+    queryFn: ({ signal }) => getContinueWatching(signal),
+    enabled: isAuthenticated,
+    staleTime: 60000,
+    retry: 0,
+  })
+
   return (
     <div className="pb-12">
       {trendingLoading ? <HeroSkeleton /> : <HeroSection items={trending.slice(0, 6)} />}
 
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 space-y-12 mt-8">
-        {isAuthenticated && (
-          <ContinueWatching items={trending.slice(0, 8)} isLoading={trendingLoading} />
-        )}
+        <ContinueWatching items={continueQuery.data || []} isLoading={continueQuery.isLoading} />
 
         <SectionRow
           title="Trending Now"

@@ -6,10 +6,15 @@ import com.animeSite.persist.Episode;
 import com.animeSite.pipeline.*;
 import com.animeSite.repo.AnimeRepository;
 import com.animeSite.repo.EpisodeRepository;
+import com.animeSite.persist.User;
+import com.animeSite.persist.WatchHistory;
+import com.animeSite.repo.UserRepository;
 import com.animeSite.service.EpisodeSyncService;
+import com.animeSite.service.WatchHistoryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.UnsupportedEncodingException;
@@ -30,16 +35,21 @@ public class EpisodeController {
     private final ValidationService validationService;
     private final ProviderHealthMonitor healthMonitor;
     private final EpisodeSyncService episodeSyncService;
+    private final WatchHistoryService watchHistoryService;
+    private final UserRepository userRepository;
 
     public EpisodeController(EpisodeRepository episodeRepository, AnimeRepository animeRepository,
                              ProviderResolver providerResolver, ValidationService validationService,
-                             ProviderHealthMonitor healthMonitor, EpisodeSyncService episodeSyncService) {
+                             ProviderHealthMonitor healthMonitor, EpisodeSyncService episodeSyncService,
+                             WatchHistoryService watchHistoryService, UserRepository userRepository) {
         this.episodeRepository = episodeRepository;
         this.animeRepository = animeRepository;
         this.providerResolver = providerResolver;
         this.validationService = validationService;
         this.healthMonitor = healthMonitor;
         this.episodeSyncService = episodeSyncService;
+        this.watchHistoryService = watchHistoryService;
+        this.userRepository = userRepository;
     }
 
     @GetMapping("/{malId}/episodes")
@@ -298,5 +308,86 @@ public class EpisodeController {
 
         log.info("[STREAMABLE] BATCH | requested={} returned={} duration={}ms", idArr.length, results.size(), System.currentTimeMillis() - start);
         return ResponseEntity.ok(ApiResponse.success(results));
+    }
+
+    // ========================================================================
+    // Resume Playback API
+    // ========================================================================
+
+    @GetMapping("/{malId}/resume")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getResume(@PathVariable int malId, Authentication auth) {
+        if (auth == null) {
+            return ResponseEntity.ok(ApiResponse.success(Map.of("available", false)));
+        }
+        String email = auth.getName();
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            return ResponseEntity.ok(ApiResponse.success(Map.of("available", false)));
+        }
+        Optional<WatchHistory> history = watchHistoryService.getProgress(user.getId(), malId);
+        if (history.isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.success(Map.of("available", false)));
+        }
+        WatchHistory h = history.get();
+        return ResponseEntity.ok(ApiResponse.success(Map.of(
+            "available", true,
+            "episodeNumber", h.getEpisodeNumber(),
+            "progressSeconds", h.getProgressSeconds(),
+            "durationSeconds", h.getDurationSeconds(),
+            "updatedAt", h.getUpdatedAt().toString()
+        )));
+    }
+
+    @PostMapping("/{malId}/resume")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> saveResume(
+            @PathVariable int malId,
+            @RequestBody Map<String, Object> body,
+            Authentication auth) {
+        if (auth == null) {
+            return ResponseEntity.ok(ApiResponse.error("AUTH_REQUIRED", "Login required to save progress"));
+        }
+        String email = auth.getName();
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            return ResponseEntity.ok(ApiResponse.error("USER_NOT_FOUND", "User not found"));
+        }
+
+        int episodeNumber = body.get("episodeNumber") instanceof Number n ? n.intValue() : 1;
+        double progressSeconds = body.get("progressSeconds") instanceof Number n ? n.doubleValue() : 0.0;
+        double durationSeconds = body.get("durationSeconds") instanceof Number n ? n.doubleValue() : 0.0;
+        String animeTitle = (String) body.getOrDefault("animeTitle", "");
+        String animeImage = (String) body.getOrDefault("animeImage", "");
+
+        watchHistoryService.saveProgress(user.getId(), malId, episodeNumber, progressSeconds, durationSeconds, animeTitle, animeImage);
+
+        log.info("[RESUME] Saved | userId={} malId={} episode={} progress={}s", user.getId(), malId, episodeNumber, Math.round(progressSeconds));
+        return ResponseEntity.ok(ApiResponse.success(Map.of("saved", true)));
+    }
+
+    @GetMapping("/continue-watching")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getContinueWatching(Authentication auth) {
+        if (auth == null) {
+            return ResponseEntity.ok(ApiResponse.success(List.of()));
+        }
+        String email = auth.getName();
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            return ResponseEntity.ok(ApiResponse.success(List.of()));
+        }
+
+        List<WatchHistory> history = watchHistoryService.getRecentHistory(user.getId(), 20);
+        List<Map<String, Object>> result = history.stream().map(h -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("malId", h.getMalId());
+            m.put("episodeNumber", h.getEpisodeNumber());
+            m.put("progressSeconds", h.getProgressSeconds());
+            m.put("durationSeconds", h.getDurationSeconds());
+            m.put("animeTitle", h.getAnimeTitle());
+            m.put("animeImage", h.getAnimeImage());
+            m.put("updatedAt", h.getUpdatedAt().toString());
+            return m;
+        }).collect(Collectors.toList());
+
+        return ResponseEntity.ok(ApiResponse.success(result));
     }
 }

@@ -35,10 +35,10 @@ def log(msg, level="INFO"):
     if VERBOSE or level in ("ERROR", "RESULT"):
         print(f"[{level}] {msg}", flush=True)
 
-def api_get(path, timeout=TIMEOUT):
+def api_get(path, timeout=TIMEOUT, params=None):
     url = urljoin(BASE_URL, path)
     try:
-        resp = requests.get(url, timeout=timeout)
+        resp = requests.get(url, params=params, timeout=timeout)
         return resp.status_code, resp.json() if resp.text else None
     except requests.Timeout:
         log(f"Timeout: {url}", "ERROR")
@@ -107,13 +107,13 @@ def test_anime(mal_id):
         return
 
     if not sync_data.get("success", False):
-        error_code = sync_data.get("errorCode", "UNKNOWN")
+        error_code = sync_data.get("errorCode") or sync_data.get("status", "UNKNOWN")
         error_msg = sync_data.get("message", "Unknown error")
         log(f"  Sync failed: [{error_code}] {error_msg}", "ERROR")
         record(mal_id, FAIL, error_code, f"Sync failed: {error_msg}")
         return
 
-    synced_eps = sync_data.get("data", [])
+    synced_eps = sync_data.get("episodes") or sync_data.get("data", [])
     ep_count = len(synced_eps)
     log(f"  Episodes synced: {ep_count} (in {sync_duration:.1f}s)", "RESULT")
 
