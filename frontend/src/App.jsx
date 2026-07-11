@@ -22,10 +22,12 @@ const NewsDetail = lazy(() => import('./pages/NewsDetail'))
 const AdminUsers = lazy(() => import('./pages/AdminUsers'))
 const AdminNews = lazy(() => import('./pages/AdminNews'))
 const AdminAnime = lazy(() => import('./pages/AdminAnime'))
+const ComingSoon = lazy(() => import('./pages/ComingSoon'))
 
 function AppRoutes() {
   const location = useLocation()
   const isWatchPage = location.pathname.startsWith('/watch')
+  const isComingSoonPage = location.pathname.startsWith('/coming-soon')
 
   const page = (
     <Suspense fallback={<Loading fullScreen />}>
@@ -50,12 +52,13 @@ function AppRoutes() {
         <Route path="/admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
         <Route path="/admin/news" element={<AdminRoute><AdminNews /></AdminRoute>} />
         <Route path="/admin/anime" element={<AdminRoute><AdminAnime /></AdminRoute>} />
+        <Route path="/coming-soon/:id" element={<ComingSoon />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
   )
 
-  if (isWatchPage) {
+  if (isWatchPage || isComingSoonPage) {
     return <Layout hideFooter>{page}</Layout>
   }
 

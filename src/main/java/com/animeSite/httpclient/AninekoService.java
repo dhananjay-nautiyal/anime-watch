@@ -1,266 +1,289 @@
 package com.animeSite.httpclient;
 
 import com.animeSite.persist.Episode;
+import com.animeSite.pipeline.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+import java.net.URI;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.springframework.http.HttpStatusCode;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.HttpServerErrorException;
-
 @Service
-public class AninekoService {
+public class AninekoService implements StreamProvider {
 
     private static final Logger log = LoggerFactory.getLogger(AninekoService.class);
     private static final String BASE_URL = "https://anineko.to";
-
     private static final String JIKAN_BASE = "https://api.jikan.moe/v4";
+    private static final int MAX_RETRIES = 3;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final RetryEngine retryEngine;
 
     public AninekoService(@Qualifier("aninekoRestTemplate") RestTemplate restTemplate, ObjectMapper objectMapper) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
+        this.retryEngine = RetryEngine.builder()
+            .maxRetries(MAX_RETRIES)
+            .baseDelayMs(1000)
+            .maxDelayMs(4000)
+            .jitterMs(200)
+            .circuitBreaker(new CircuitBreaker("Anineko", 5, java.time.Duration.ofSeconds(30)))
+            .build();
     }
 
-    public String buildSlug(String title) {
-        String slug = title.toLowerCase()
-                .replaceAll("[^a-z0-9 .-]", "")
-                .trim()
-                .replaceAll("[. ]+", "-");
-        slug = slug.replaceAll("-+", "-");
-        slug = slug.replaceAll("^-|-$", "");
-        return slug;
-    }
-
-    public List<String> buildSlugs(String title) {
-        Set<String> slugs = new LinkedHashSet<>();
-
-        String primary = buildSlug(title);
-        slugs.add(primary);
-
-        String hyphenated = title.replaceAll("[^a-zA-Z0-9 -]", "").toLowerCase().trim().replaceAll("\\s+", "-");
-        hyphenated = hyphenated.replaceAll("-+", "-").replaceAll("^-|-$", "");
-        if (!hyphenated.equals(primary)) slugs.add(hyphenated);
-
-        for (String sep : new String[]{":", ";", " - "}) {
-            int idx = title.indexOf(sep);
-            if (idx > 0) {
-                String before = buildSlug(title.substring(0, idx).trim());
-                slugs.add(before);
-                String after = title.substring(idx + sep.length()).trim();
-                int spaceIdx = after.indexOf(' ');
-                String firstWord = spaceIdx > 0 ? after.substring(0, spaceIdx) : after;
-                slugs.add(before + "-" + buildSlug(firstWord));
-            }
-        }
-
-        for (String sep : new String[]{":", ";", " - "}) {
-            int idx = title.indexOf(sep);
-            if (idx > 0) {
-                String before = title.substring(0, idx).trim();
-                String after = title.substring(idx + sep.length()).trim();
-                String combined = buildSlug(before + " " + after);
-                if (!combined.equals(primary) && !combined.equals(hyphenated)) slugs.add(combined);
-            }
-        }
-
-        return new ArrayList<>(slugs);
-    }
+    @Override
+    public String getName() { return "Anineko"; }
 
     private String fetchWithLogging(String url, String context) {
+        return fetchWithLogging(url, context, 0);
+    }
+
+    private String fetchWithLogging(String url, String context, int retryCount) {
         long t = System.currentTimeMillis();
+        ProviderDiagnostics diag = ProviderDiagnostics.fromRequest(getName(), url, "GET");
+        diag.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+        diag.addHeader("Referer", BASE_URL + "/");
+
         try {
-            ResponseEntity<String> resp = restTemplate.getForEntity(url, String.class);
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            headers.set("Referer", BASE_URL + "/");
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+            ResponseEntity<String> resp = restTemplate.exchange(URI.create(url), HttpMethod.GET, entity, String.class);
             HttpStatusCode status = resp.getStatusCode();
             String body = resp.getBody();
             long elapsed = System.currentTimeMillis() - t;
+
+            diag.withStatus(status.value(), elapsed);
             if (body != null) {
+                diag.withResponseBody(body);
                 log.info("[ANINEKO] {} | url={} status={} bodyLength={} preview='{}' duration={}ms",
                     context, url, status, body.length(),
-                    body.substring(0, Math.min(300, body.length())).replace('\n', ' ').replace('\r', ' '),
+                    body.substring(0, Math.min(200, body.length())).replace('\n', ' ').replace('\r', ' '),
                     elapsed);
             } else {
                 log.warn("[ANINEKO] {} | url={} status={} body=null duration={}ms", context, url, status, elapsed);
             }
+
+            if (body != null && (body.contains("Cloudflare") || body.contains("cf-browser-verification"))) {
+                diag.setRootCause("ANTI_BOT");
+                throw new ProviderException(getName(), "ANTI_BOT", "Cloudflare challenge detected", 403, diag, "FETCH");
+            }
+
             return body;
+
         } catch (HttpClientErrorException e) {
             long elapsed = System.currentTimeMillis() - t;
             String respBody = e.getResponseBodyAsString();
+            int statusCode = e.getStatusCode().value();
+            diag.withStatus(statusCode, elapsed);
+            diag.withResponseBody(respBody);
+            diag.withError(e.getMessage());
+
             log.warn("[ANINEKO] {} FAILED | url={} status={} body='{}' duration={}ms",
-                context, url, e.getStatusCode(),
+                context, url, statusCode,
                 respBody != null ? respBody.substring(0, Math.min(200, respBody.length())).replace('\n', ' ').replace('\r', ' ') : "null",
                 elapsed);
+
+            String rootCause = ProviderDiagnostics.detectRootCause(statusCode, respBody, url);
+            diag.setRootCause(rootCause);
+
+            if (statusCode == 400) {
+                log.warn("[ANINEKO] HTTP 400 DETECTED | url={} cause={} body='{}'", url, rootCause,
+                    respBody != null ? respBody.substring(0, Math.min(500, respBody.length())) : "null");
+                throw new ProviderException(getName(), "HTTP_400_" + rootCause,
+                    "HTTP 400 from Anineko: " + rootCause + " (" + (respBody != null ? respBody.substring(0, Math.min(100, respBody.length())) : "no body") + ")",
+                    statusCode, diag, "FETCH");
+            }
+
+            if ((statusCode == 429 || statusCode >= 500) && retryCount < MAX_RETRIES) {
+                long backoff = (long) Math.pow(2, retryCount) * 1000;
+                log.info("[ANINEKO] RETRY {}/{} after {}ms", retryCount + 1, MAX_RETRIES, backoff);
+                try { Thread.sleep(backoff); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                return fetchWithLogging(url, context, retryCount + 1);
+            }
+
+            if (statusCode == 429) {
+                throw new ProviderException(getName(), "RATE_LIMIT", "Rate limited by Anineko", statusCode, diag, "FETCH");
+            }
+
             return null;
+
         } catch (HttpServerErrorException e) {
             long elapsed = System.currentTimeMillis() - t;
-            log.warn("[ANINEKO] {} FAILED | url={} status={} duration={}ms", context, url, e.getStatusCode(), elapsed);
-            return null;
+            int statusCode = e.getStatusCode().value();
+            diag.withStatus(statusCode, elapsed);
+            diag.withError(e.getMessage());
+            diag.setRootCause("SERVER_ERROR");
+
+            log.warn("[ANINEKO] {} FAILED | url={} status={} duration={}ms", context, url, statusCode, elapsed);
+            if (retryCount < MAX_RETRIES) {
+                long backoff = (long) Math.pow(2, retryCount) * 1000;
+                log.info("[ANINEKO] RETRY {}/{} after {}ms", retryCount + 1, MAX_RETRIES, backoff);
+                try { Thread.sleep(backoff); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                return fetchWithLogging(url, context, retryCount + 1);
+            }
+            throw new ProviderException(getName(), "SERVER_ERROR", "Anineko server error: " + statusCode, statusCode, diag, "FETCH");
+
+        } catch (ProviderException e) {
+            throw e;
+
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - t;
+            diag.withStatus(0, elapsed);
+            diag.withError(e.getMessage());
+            diag.setRootCause("NETWORK_ERROR");
+
             log.warn("[ANINEKO] {} FAILED | url={} error='{}' duration={}ms", context, url, e.getMessage(), elapsed);
+            if (retryCount < MAX_RETRIES) {
+                long backoff = (long) Math.pow(2, retryCount) * 1000;
+                log.info("[ANINEKO] RETRY {}/{} after {}ms", retryCount + 1, MAX_RETRIES, backoff);
+                try { Thread.sleep(backoff); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                return fetchWithLogging(url, context, retryCount + 1);
+            }
             return null;
         }
     }
 
+    private JsonNode fetchJikanData(int malId) {
+        try {
+            Thread.sleep(400);
+            String url = JIKAN_BASE + "/anime/" + malId;
+            String json = fetchWithLogging(url, "JIKAN_LOOKUP");
+            if (json == null) return null;
+            return objectMapper.readTree(json).get("data");
+        } catch (Exception e) {
+            log.warn("[ANINEKO] JIKAN FETCH FAILED | malId={} error='{}'", malId, e.getMessage());
+            return null;
+        }
+    }
+
+    @Override
     public List<Episode> fetchEpisodes(int malId, String title) {
         long start = System.currentTimeMillis();
         log.info("[ANINEKO] FETCH EPISODES | title='{}' malId={}", title, malId);
 
-        List<String> slugs = buildSlugs(title);
-        log.info("[ANINEKO] SLUGS | '{}' → {}", title, slugs);
+        JsonNode jikanData = fetchJikanData(malId);
+        List<String> allSlugs = TitleNormalizer.collectAllSlugs(jikanData, title);
 
-        for (String slug : slugs) {
+        log.info("[ANINEKO] GENERATED SLUGS | count={} slugs={}", allSlugs.size(), allSlugs);
+
+        for (String slug : allSlugs) {
+            if (slug == null || slug.isBlank() || slug.length() < 2) continue;
             String url = BASE_URL + "/watch/" + slug;
             log.info("[ANINEKO] TRY SLUG | slug='{}' url={}", slug, url);
 
-            String html = fetchWithLogging(url, "SLUG=" + slug);
-            if (html == null) continue;
+            try {
+                String html = fetchWithLogging(url, "SLUG=" + slug);
+                if (html == null) continue;
 
-            List<Episode> episodes = new ArrayList<>();
-            Set<Integer> seen = new LinkedHashSet<>();
-
-            Pattern epPattern = Pattern.compile("/watch/" + Pattern.quote(slug) + "/ep-(\\d+)");
-            Matcher matcher = epPattern.matcher(html);
-            while (matcher.find()) {
-                int epNum = Integer.parseInt(matcher.group(1));
-                if (seen.add(epNum)) {
-                    Episode ep = new Episode();
-                    ep.setAnimeMalId(malId);
-                    ep.setEpisodeNumber(epNum);
-                    ep.setTitle("Episode " + epNum);
-                    ep.setEmbedUrl(BASE_URL + "/watch/" + slug + "/ep-" + epNum);
-                    episodes.add(ep);
+                if (html.contains("data-video=") || html.contains("/ep-")) {
+                    List<Episode> episodes = parseEpisodesFromHtml(html, slug, malId);
+                    if (!episodes.isEmpty()) {
+                        episodes.sort(Comparator.comparingInt(Episode::getEpisodeNumber));
+                        long elapsed = System.currentTimeMillis() - start;
+                        log.info("[ANINEKO] SUCCESS | slug='{}' count={} duration={}ms", slug, episodes.size(), elapsed);
+                        return episodes;
+                    }
                 }
-            }
-
-            if (!episodes.isEmpty()) {
-                episodes.sort(Comparator.comparingInt(Episode::getEpisodeNumber));
-                long elapsed = System.currentTimeMillis() - start;
-                log.info("[ANINEKO] SUCCESS | slug='{}' count={} duration={}ms", slug, episodes.size(), elapsed);
-                return episodes;
-            }
-
-            long epMatchCount = Pattern.compile("/watch/[a-z0-9-]+/ep-\\d+").matcher(html).results().count();
-            log.warn("[ANINEKO] EMPTY | slug='{}' matched no episodes (body had {} ep links)", slug, epMatchCount);
-        }
-
-        log.warn("[ANINEKO] ALL SLUGS FAILED | trying search-based slug discovery...");
-
-        String searchSlug = findSlugBySearch(title);
-        if (searchSlug != null) {
-            log.info("[ANINEKO] SEARCH FOUND SLUG | '{}' → '{}'", title, searchSlug);
-            List<Episode> searchResult = fetchEpisodesFromList(malId, List.of(searchSlug));
-            if (!searchResult.isEmpty()) {
-                long elapsed = System.currentTimeMillis() - start;
-                log.info("[ANINEKO] SEARCH SLUG SUCCESS | count={} duration={}ms", searchResult.size(), elapsed);
-                return searchResult;
+            } catch (ProviderException e) {
+                log.warn("[ANINEKO] SLUG FAILED | slug='{}' errorCode={} message='{}'", slug, e.getErrorCode(), e.getMessage());
+                if ("HTTP_400_INVALID_ID".equals(e.getErrorCode())) {
+                    log.warn("[ANINEKO] INVALID ID FOR SLUG | slug='{}' — skipping remaining slugs, trying search", slug);
+                    break;
+                }
+                continue;
             }
         }
 
-        log.warn("[ANINEKO] ALL SLUGS FAILED | trying Jikan API for English title...");
-
-        List<Episode> jikanResult = tryJikanEnglishTitle(malId, title);
-        if (!jikanResult.isEmpty()) {
+        log.warn("[ANINEKO] ALL SLUGS FAILED | trying search...");
+        List<Episode> searchResult = trySearch(malId, title, jikanData);
+        if (!searchResult.isEmpty()) {
             long elapsed = System.currentTimeMillis() - start;
-            log.info("[ANINEKO] JIKAN FALLBACK SUCCESS | count={} duration={}ms", jikanResult.size(), elapsed);
-            return jikanResult;
+            log.info("[ANINEKO] SEARCH SUCCESS | count={} duration={}ms", searchResult.size(), elapsed);
+            return searchResult;
         }
 
         long elapsed = System.currentTimeMillis() - start;
-        log.warn("[ANINEKO] ALL ATTEMPTS FAILED | duration={}ms", elapsed);
+        log.warn("[ANINEKO] ALL ATTEMPTS FAILED | title='{}' malId={} duration={}ms", title, malId, elapsed);
         return List.of();
     }
 
-    private List<Episode> tryJikanEnglishTitle(int malId, String title) {
-        try {
-            Thread.sleep(500);
-            String url = JIKAN_BASE + "/anime/" + malId;
-            String json = fetchWithLogging(url, "JIKAN_FALLBACK");
-            if (json == null) return List.of();
+    private List<Episode> parseEpisodesFromHtml(String html, String slug, int malId) {
+        List<Episode> episodes = new ArrayList<>();
+        Set<Integer> seen = new LinkedHashSet<>();
+        Pattern epPattern = Pattern.compile("/watch/" + Pattern.quote(slug) + "/ep-(\\d+)");
+        Matcher matcher = epPattern.matcher(html);
+        while (matcher.find()) {
+            int epNum = Integer.parseInt(matcher.group(1));
+            if (seen.add(epNum)) {
+                Episode ep = new Episode();
+                ep.setAnimeMalId(malId);
+                ep.setEpisodeNumber(epNum);
+                ep.setTitle("Episode " + epNum);
+                ep.setEmbedUrl(BASE_URL + "/watch/" + slug + "/ep-" + epNum);
+                episodes.add(ep);
+            }
+        }
+        return episodes;
+    }
 
-            JsonNode root = objectMapper.readTree(json);
-            JsonNode data = root.get("data");
-            if (data == null) return List.of();
-
-            if (data.has("title_english") && !data.get("title_english").isNull()) {
-                String englishTitle = data.get("title_english").asText("");
-                if (!englishTitle.isEmpty()) {
-                    log.info("[ANINEKO] JIKAN ENGLISH TITLE | '{}' → '{}'", title, englishTitle);
-                    return fetchEpisodesFromList(malId, buildSlugs(englishTitle));
+    private List<Episode> trySearch(int malId, String originalTitle, JsonNode jikanData) {
+        List<String> searchTerms = new ArrayList<>();
+        if (jikanData != null) {
+            for (String key : new String[]{"title", "title_english", "title_japanese"}) {
+                if (jikanData.has(key) && !jikanData.get(key).isNull()) {
+                    searchTerms.add(jikanData.get(key).asText());
                 }
             }
-
-            JsonNode titles = data.get("titles");
-            if (titles != null && titles.isArray()) {
+            JsonNode titles = jikanData.get("titles");
+            if (titles != null) {
                 for (JsonNode t : titles) {
-                    String type = t.has("type") ? t.get("type").asText("") : "";
-                    if ("English".equals(type)) {
-                        String enTitle = t.get("title").asText("");
-                        if (!enTitle.isEmpty()) {
-                            log.info("[ANINEKO] JIKAN ENGLISH TITLE (from titles) | '{}' → '{}'", title, enTitle);
-                            return fetchEpisodesFromList(malId, buildSlugs(enTitle));
-                        }
+                    String ti = t.has("title") ? t.get("title").asText("") : "";
+                    if (!ti.isEmpty()) searchTerms.add(ti);
+                }
+            }
+        }
+        searchTerms.add(originalTitle);
+        searchTerms.add(TitleNormalizer.normalize(originalTitle));
+
+        Set<String> tried = new LinkedHashSet<>();
+        for (String term : searchTerms) {
+            if (term == null || term.isBlank() || !tried.add(term.toLowerCase())) continue;
+            try {
+                String foundSlug = searchSingle(term);
+                if (foundSlug != null) {
+                    String url = BASE_URL + "/watch/" + foundSlug;
+                    String html = fetchWithLogging(url, "SEARCH_HIT=" + foundSlug);
+                    if (html != null) {
+                        List<Episode> episodes = parseEpisodesFromHtml(html, foundSlug, malId);
+                        if (!episodes.isEmpty()) return episodes;
                     }
                 }
-            }
-
-            return List.of();
-        } catch (Exception e) {
-            log.warn("[ANINEKO] JIKAN FALLBACK FAILED | error='{}'", e.getMessage());
-            return List.of();
-        }
-    }
-
-    private List<Episode> fetchEpisodesFromList(int malId, List<String> slugs) {
-        for (String slug : slugs) {
-            String url = BASE_URL + "/watch/" + slug;
-            String html = fetchWithLogging(url, "FALLBACK_SLUG=" + slug);
-            if (html == null) continue;
-
-            List<Episode> episodes = new ArrayList<>();
-            Set<Integer> seen = new LinkedHashSet<>();
-            Pattern epPattern = Pattern.compile("/watch/" + Pattern.quote(slug) + "/ep-(\\d+)");
-            Matcher matcher = epPattern.matcher(html);
-            while (matcher.find()) {
-                int epNum = Integer.parseInt(matcher.group(1));
-                if (seen.add(epNum)) {
-                    Episode ep = new Episode();
-                    ep.setAnimeMalId(malId);
-                    ep.setEpisodeNumber(epNum);
-                    ep.setTitle("Episode " + epNum);
-                    ep.setEmbedUrl(BASE_URL + "/watch/" + slug + "/ep-" + epNum);
-                    episodes.add(ep);
-                }
-            }
-            if (!episodes.isEmpty()) {
-                episodes.sort(Comparator.comparingInt(Episode::getEpisodeNumber));
-                return episodes;
+            } catch (ProviderException e) {
+                log.warn("[ANINEKO] SEARCH TERM FAILED | term='{}' error='{}'", term, e.getMessage());
             }
         }
         return List.of();
     }
 
-    private String findSlugBySearch(String title) {
+    private String searchSingle(String title) {
         try {
-            String keywords = title.toLowerCase().replaceAll("[^a-z0-9 ]", " ").trim().replaceAll("\\s+", "+");
+            String keywords = java.net.URLEncoder.encode(title, "UTF-8");
             String searchUrl = BASE_URL + "/browse?keyword=" + keywords + "&page=1";
-            log.info("[ANINEKO] SEARCH | url={}", searchUrl);
+            log.info("[ANINEKO] SEARCH | title='{}' url={}", title, searchUrl);
             String html = fetchWithLogging(searchUrl, "SEARCH");
             if (html == null) return null;
 
@@ -268,24 +291,15 @@ public class AninekoService {
             Pattern linkPattern = Pattern.compile("/watch/([a-z0-9-]+)");
             Matcher matcher = linkPattern.matcher(html);
 
-            String titleLower = title.toLowerCase();
-            String slugPrefix = buildSlug(titleLower);
-
             while (matcher.find()) {
                 String slug = matcher.group(1);
-                if (slug.startsWith(slugPrefix) && !slug.equals(slugPrefix)) {
-                    candidates.add(slug);
-                }
+                candidates.add(slug);
             }
 
-            if (candidates.isEmpty()) {
-                matcher.reset();
-                while (matcher.find()) {
-                    String slug = matcher.group(1);
-                    if (slug.startsWith(slugPrefix)) {
-                        candidates.add(slug);
-                    }
-                }
+            AnimeMatcher.ScoredMatch best = AnimeMatcher.findBestMatch(title, null, new ArrayList<>(candidates));
+            if (best != null && best.confidence >= 0.7) {
+                log.info("[ANINEKO] SEARCH BEST MATCH | slug='{}' confidence={}", best.slug, best.confidence);
+                return best.slug;
             }
 
             log.info("[ANINEKO] SEARCH RESULT | candidates={}", candidates);
@@ -296,73 +310,87 @@ public class AninekoService {
         }
     }
 
-    public String fetchEmbedUrl(String episodePageUrl) {
+    @Override
+    public StreamResult resolveStream(String episodePageUrl) {
         long start = System.currentTimeMillis();
-        log.info("[ANINEKO] FETCH EMBED | url={}", episodePageUrl);
+        log.info("[ANINEKO] RESOLVE STREAM | url={}", episodePageUrl);
 
         try {
-            String html = fetchWithLogging(episodePageUrl, "EMBED");
+            String html = fetchWithLogging(episodePageUrl, "STREAM");
             if (html == null) {
-                log.error("[ANINEKO] EMBED FAILED | null response after fetch");
-                return null;
+                return StreamResult.failure(getName(), "null response after fetch");
             }
 
+            List<StreamResult.ServerOption> servers = new ArrayList<>();
+            List<String> embedUrls = new ArrayList<>();
             Pattern pattern = Pattern.compile("data-video=\"([^\"]+)\"");
             Matcher matcher = pattern.matcher(html);
-            List<String> embeds = new ArrayList<>();
             while (matcher.find()) {
-                String videoUrl = matcher.group(1);
-                if (!embeds.contains(videoUrl)) {
-                    embeds.add(videoUrl);
+                String vu = matcher.group(1);
+                if (!embedUrls.contains(vu)) embedUrls.add(vu);
+            }
+
+            if (embedUrls.isEmpty()) {
+                log.warn("[ANINEKO] STREAM FAILED | no data-video found");
+                return StreamResult.failure(getName(), "No video sources found on episode page");
+            }
+
+            for (int i = 0; i < embedUrls.size(); i++) {
+                String embedPageUrl = embedUrls.get(i);
+                boolean isBackup = i > 0;
+                log.info("[ANINEKO] TRY EMBED SERVER {} | url={} | backup={}", i + 1, embedPageUrl, isBackup);
+
+                if (embedPageUrl.contains("vivibebe.site") || embedPageUrl.contains("otakuhg.site") || embedPageUrl.contains("otakuvid.online")) {
+                    try {
+                        String directVideo = extractDirectUrl(embedPageUrl);
+                        if (directVideo != null) {
+                            servers.add(new StreamResult.ServerOption(directVideo, "Server" + (i + 1) + "-HLS", isBackup));
+                        }
+                    } catch (ProviderException e) {
+                        log.warn("[ANINEKO] EMBED SERVER {} FAILED | url={} error='{}'", i + 1, embedPageUrl, e.getMessage());
+                    }
                 }
+                servers.add(new StreamResult.ServerOption(embedPageUrl, "Server" + (i + 1) + "-Embed", isBackup));
             }
 
-            if (embeds.isEmpty()) {
-                log.warn("[ANINEKO] EMBED FAILED | no data-video found");
-                return null;
+            if (servers.isEmpty()) {
+                return StreamResult.failure(getName(), "No stream servers found");
             }
 
-            String embedPageUrl = embeds.get(0);
-            log.info("[ANINEKO] EMBED PAGE | url={}", embedPageUrl);
+            String streamType = servers.get(0).url.contains(".m3u8") ? "hls" : "iframe";
+            log.info("[ANINEKO] STREAM RESOLVED | type={} servers={} duration={}ms",
+                streamType, servers.size(), System.currentTimeMillis() - start);
+            return StreamResult.success(getName(), streamType, servers);
 
-            if (embedPageUrl.contains("vivibebe.site")) {
-                String directVideo = extractVivibebeDirectUrl(embedPageUrl);
-                if (directVideo != null) {
-                    long elapsed = System.currentTimeMillis() - start;
-                    log.info("[ANINEKO] DIRECT VIDEO FOUND | url={} duration={}ms", directVideo, elapsed);
-                    return directVideo;
-                }
-            }
-
+        } catch (ProviderException e) {
             long elapsed = System.currentTimeMillis() - start;
-            log.info("[ANINEKO] EMBED FALLBACK | returning embed page url={} duration={}ms", embedPageUrl, elapsed);
-            return embedPageUrl;
-
+            log.error("[ANINEKO] STREAM FAILED | errorCode={} error='{}' duration={}ms", e.getErrorCode(), e.getMessage(), elapsed);
+            return StreamResult.failure(getName(), e.getErrorCode() + ": " + e.getMessage());
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - start;
-            log.error("[ANINEKO] EMBED FAILED | error='{}' duration={}ms", e.getMessage(), elapsed);
-            return null;
+            log.error("[ANINEKO] STREAM FAILED | error='{}' duration={}ms", e.getMessage(), elapsed);
+            return StreamResult.failure(getName(), e.getMessage());
         }
     }
 
-    private String extractVivibebeDirectUrl(String embedPageUrl) {
+    private String extractDirectUrl(String embedPageUrl) {
         try {
-            log.info("[ANINEKO] EXTRACT VIVIBEBE | url={}", embedPageUrl);
-            String html = fetchWithLogging(embedPageUrl, "VIVIBEBE_EMBED");
+            log.info("[ANINEKO] EXTRACT HLS DIRECT | url={}", embedPageUrl);
+            String html = fetchWithLogging(embedPageUrl, "HLS_EXTRACT");
             if (html == null) return null;
 
             Pattern srcPattern = Pattern.compile("const\\s+src\\s*=\\s*\"([^\"]+\\.m3u8[^\"]*)\"");
             Matcher matcher = srcPattern.matcher(html);
             if (matcher.find()) {
                 String directUrl = matcher.group(1);
-                log.info("[ANINEKO] VIVIBEBE DIRECT HLS | url={}", directUrl);
+                log.info("[ANINEKO] HLS FOUND | url={}", directUrl);
                 return directUrl;
             }
 
-            log.warn("[ANINEKO] VIVIBEBE EXTRACT FAILED | no HLS source found");
+            log.warn("[ANINEKO] HLS NOT FOUND in embed page");
             return null;
         } catch (Exception e) {
-            log.warn("[ANINEKO] VIVIBEBE EXTRACT ERROR | error='{}'", e.getMessage());
+            log.warn("[ANINEKO] HLS EXTRACT ERROR | error='{}'", e.getMessage());
             return null;
         }
     }

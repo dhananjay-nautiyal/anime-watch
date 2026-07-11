@@ -16,6 +16,12 @@ public class JikanAnimeData {
     @JsonProperty("title_english")
     private String titleEnglish;
 
+    @JsonProperty("title_japanese")
+    private String titleJapanese;
+
+    @JsonProperty("title_synonyms")
+    private List<String> titleSynonyms;
+
     private String type;
     private String status;
     private Integer year;

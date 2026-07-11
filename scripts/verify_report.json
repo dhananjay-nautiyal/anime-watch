@@ -1,0 +1,14 @@
+{
+  "duration": 7.9,
+  "pass": 0,
+  "fail": 1,
+  "skip": 0,
+  "results": [
+    {
+      "malId": 52991,
+      "status": "FAIL",
+      "code": "UNEXPECTED_ERROR",
+      "message": "Sync failed: An unexpected error occurred. Please try again."
+    }
+  ]
+}

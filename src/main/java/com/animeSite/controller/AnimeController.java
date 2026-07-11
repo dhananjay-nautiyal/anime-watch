@@ -1,11 +1,15 @@
 package com.animeSite.controller;
 
 import com.animeSite.core.model.ApiResponse;
+import com.animeSite.model.JikanAnimeData;
 import com.animeSite.model.ReviewRequest;
 import com.animeSite.persist.Anime;
 import com.animeSite.persist.Review;
 import com.animeSite.persist.User;
 import java.util.UUID;
+import com.animeSite.pipeline.AnimeMatcherV2;
+import com.animeSite.pipeline.AnimeState;
+import com.animeSite.pipeline.ReleaseDetector;
 import com.animeSite.repo.UserRepository;
 import com.animeSite.service.AnimeService;
 import com.animeSite.service.AnimeService.AnimePage;
@@ -19,7 +23,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
+import java.util.*;
 @RestController
 @RequestMapping("/api/anime")
 @Tag(name = "Anime", description = "Public anime endpoints")
@@ -28,12 +32,14 @@ public class AnimeController {
     private final AnimeService animeService;
     private final ReviewService reviewService;
     private final UserRepository userRepository;
+    private final ReleaseDetector releaseDetector;
 
     public AnimeController(AnimeService animeService, ReviewService reviewService,
-                           UserRepository userRepository) {
+                           UserRepository userRepository, ReleaseDetector releaseDetector) {
         this.animeService = animeService;
         this.reviewService = reviewService;
         this.userRepository = userRepository;
+        this.releaseDetector = releaseDetector;
     }
 
     @GetMapping("/trending")
@@ -111,5 +117,63 @@ public class AnimeController {
             @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size) {
         Page<Review> reviews = reviewService.getReviews(id, PageRequest.of(page, size));
         return ResponseEntity.ok(ApiResponse.success(reviews, reviews.getNumber(), reviews.getTotalPages()));
+    }
+
+    @GetMapping("/{id}/state")
+    @Operation(summary = "Get anime state", description = "Returns the current state of an anime (COMING_SOON, AIRING, FINISHED, etc.)")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getAnimeState(@PathVariable int id) {
+        ReleaseDetector.AnimeInfo info = releaseDetector.getAnimeInfo(id);
+        if (info == null) {
+            return ResponseEntity.ok(ApiResponse.success(Map.of(
+                "malId", id,
+                "state", AnimeState.UNKNOWN.name(),
+                "comingSoon", false,
+                "released", false
+            )));
+        }
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("malId", info.malId());
+        resp.put("state", info.state().name());
+        resp.put("title", info.title());
+        resp.put("titleEnglish", info.titleEnglish());
+        resp.put("comingSoon", info.state() == AnimeState.COMING_SOON || info.state() == AnimeState.NOT_RELEASED);
+        resp.put("released", info.state() == AnimeState.AIRING || info.state() == AnimeState.FINISHED || info.state() == AnimeState.AVAILABLE);
+        resp.put("releaseDate", info.releaseDate() != null ? info.releaseDate().toString() : null);
+        resp.put("synopsis", info.synopsis());
+        resp.put("score", info.score());
+        resp.put("episodes", info.episodes());
+        resp.put("status", info.status());
+        resp.put("type", info.type());
+        resp.put("year", info.year());
+        resp.put("trailerUrl", info.trailerUrl());
+        resp.put("trailerEmbedUrl", info.trailerEmbedUrl());
+        resp.put("largeImageUrl", info.largeImageUrl());
+        resp.put("imageUrl", info.imageUrl());
+        resp.put("genres", info.genres());
+        resp.put("studios", info.studios());
+        resp.put("duration", info.duration());
+        resp.put("aired", info.aired());
+        return ResponseEntity.ok(ApiResponse.success(resp));
+    }
+
+    @GetMapping("/states")
+    @Operation(summary = "Get states for multiple anime", description = "Returns states for multiple anime IDs at once")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAnimeStates(
+            @RequestParam String ids) {
+        String[] idArr = ids.split(",");
+        List<Map<String, Object>> results = new ArrayList<>();
+        for (String idStr : idArr) {
+            try {
+                int malId = Integer.parseInt(idStr.trim());
+                AnimeState state = releaseDetector.detectState(malId);
+                results.add(Map.of(
+                    "malId", malId,
+                    "state", state.name(),
+                    "comingSoon", state == AnimeState.COMING_SOON || state == AnimeState.NOT_RELEASED,
+                    "released", state == AnimeState.AIRING || state == AnimeState.FINISHED || state == AnimeState.AVAILABLE
+                ));
+            } catch (NumberFormatException ignored) {}
+        }
+        return ResponseEntity.ok(ApiResponse.success(results));
     }
 }

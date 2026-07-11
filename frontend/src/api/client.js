@@ -82,7 +82,20 @@ export function extractErrorMessage(err) {
   if (err.message?.includes('Network Error')) {
     return 'Network error. Check your connection.'
   }
+  if (err.response?.status === 400) {
+    return 'The service is temporarily unavailable. Please try again.'
+  }
+  if (err.response?.status === 429) {
+    return 'Too many requests. Please wait a moment and try again.'
+  }
+  if (err.response?.status >= 500) {
+    return 'Server error. Please try again later.'
+  }
   return 'Something went wrong. Please try again.'
+}
+
+export function extractErrorCode(err) {
+  return err.errorCode || err.response?.data?.errorCode || null
 }
 
 export default client

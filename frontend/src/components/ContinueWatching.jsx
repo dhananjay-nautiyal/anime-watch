@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import ImageWithFallback from './ImageWithFallback'
+import { useAuth } from '../context/AuthContext'
 
 const ContinueCard = memo(function ContinueCard({ anime, progress = 0.3 }) {
   return (
@@ -40,6 +41,8 @@ const ContinueCard = memo(function ContinueCard({ anime, progress = 0.3 }) {
 })
 
 const ContinueWatching = memo(function ContinueWatching({ items = [], isLoading }) {
+  const { isAuthenticated } = useAuth()
+  if (!isAuthenticated) return null
   if (isLoading) {
     return (
       <section>

@@ -1,301 +1,306 @@
 package com.animeSite.httpclient;
 
 import com.animeSite.persist.Episode;
+import com.animeSite.pipeline.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.Comparator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+import java.net.URI;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.springframework.http.HttpStatusCode;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.HttpServerErrorException;
-
 @Service
-public class AnimeGogoService {
+public class AnimeGogoService implements StreamProvider {
 
     private static final Logger log = LoggerFactory.getLogger(AnimeGogoService.class);
     private static final String BASE_URL = "https://gogoanime.live";
-    private static final String EPISODE_PATTERN_TEMPLATE = "/episode/%s-episode-(\\d+)";
     private static final String JIKAN_BASE = "https://api.jikan.moe/v4";
+    private static final int MAX_RETRIES = 3;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final RetryEngine retryEngine;
 
     public AnimeGogoService(@Qualifier("aninekoRestTemplate") RestTemplate restTemplate, ObjectMapper objectMapper) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
+        this.retryEngine = RetryEngine.builder()
+            .maxRetries(MAX_RETRIES)
+            .baseDelayMs(1000)
+            .maxDelayMs(4000)
+            .jitterMs(200)
+            .circuitBreaker(new CircuitBreaker("GoGoAnime", 5, java.time.Duration.ofSeconds(30)))
+            .build();
     }
 
-    public String buildSlug(String title) {
-        String slug = title.toLowerCase()
-                .replaceAll("[^a-z0-9 .-]", "")
-                .trim()
-                .replaceAll("[. ]+", "-");
-        slug = slug.replaceAll("-+", "-");
-        slug = slug.replaceAll("^-|-$", "");
-        return slug;
-    }
-
-    public List<String> buildSlugs(String title) {
-        Set<String> slugs = new LinkedHashSet<>();
-        String primary = buildSlug(title);
-        slugs.add(primary);
-
-        String hyphenated = title.replaceAll("[^a-zA-Z0-9 -]", "").toLowerCase().trim().replaceAll("\\s+", "-");
-        hyphenated = hyphenated.replaceAll("-+", "-").replaceAll("^-|-$", "");
-        if (!hyphenated.equals(primary)) slugs.add(hyphenated);
-
-        for (String sep : new String[]{":", ";", " - "}) {
-            int idx = title.indexOf(sep);
-            if (idx > 0) {
-                String before = buildSlug(title.substring(0, idx).trim());
-                slugs.add(before);
-                String after = title.substring(idx + sep.length()).trim();
-                int spaceIdx = after.indexOf(' ');
-                String firstWord = spaceIdx > 0 ? after.substring(0, spaceIdx) : after;
-                slugs.add(before + "-" + buildSlug(firstWord));
-            }
-        }
-
-        for (String sep : new String[]{":", ";", " - "}) {
-            int idx = title.indexOf(sep);
-            if (idx > 0) {
-                String before = title.substring(0, idx).trim();
-                String after = title.substring(idx + sep.length()).trim();
-                String combined = buildSlug(before + " " + after);
-                if (!combined.equals(primary) && !combined.equals(hyphenated)) slugs.add(combined);
-            }
-        }
-
-        return new ArrayList<>(slugs);
-    }
+    @Override
+    public String getName() { return "GoGoAnime"; }
 
     private String fetchWithLogging(String url, String context) {
+        return fetchWithLogging(url, context, 0);
+    }
+
+    private String fetchWithLogging(String url, String context, int retryCount) {
         long t = System.currentTimeMillis();
+        ProviderDiagnostics diag = ProviderDiagnostics.fromRequest(getName(), url, "GET");
+        diag.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+        diag.addHeader("Referer", BASE_URL + "/");
+
         try {
-            ResponseEntity<String> resp = restTemplate.getForEntity(url, String.class);
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            headers.set("Referer", BASE_URL + "/");
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+            ResponseEntity<String> resp = restTemplate.exchange(URI.create(url), HttpMethod.GET, entity, String.class);
             HttpStatusCode status = resp.getStatusCode();
             String body = resp.getBody();
             long elapsed = System.currentTimeMillis() - t;
+
+            diag.withStatus(status.value(), elapsed);
             if (body != null) {
+                diag.withResponseBody(body);
                 log.info("[GOGO] {} | url={} status={} bodyLength={} preview='{}' duration={}ms",
                     context, url, status, body.length(),
-                    body.substring(0, Math.min(300, body.length())).replace('\n', ' ').replace('\r', ' '),
+                    body.substring(0, Math.min(200, body.length())).replace('\n', ' ').replace('\r', ' '),
                     elapsed);
             } else {
                 log.warn("[GOGO] {} | url={} status={} body=null duration={}ms", context, url, status, elapsed);
             }
+
+            if (body != null && (body.contains("Cloudflare") || body.contains("cf-browser-verification"))) {
+                diag.setRootCause("ANTI_BOT");
+                throw new ProviderException(getName(), "ANTI_BOT", "Cloudflare challenge detected", 403, diag, "FETCH");
+            }
+
             return body;
+
         } catch (HttpClientErrorException e) {
             long elapsed = System.currentTimeMillis() - t;
             String respBody = e.getResponseBodyAsString();
+            int statusCode = e.getStatusCode().value();
+            diag.withStatus(statusCode, elapsed);
+            diag.withResponseBody(respBody);
+            diag.withError(e.getMessage());
+
             log.warn("[GOGO] {} FAILED | url={} status={} body='{}' duration={}ms",
-                context, url, e.getStatusCode(),
+                context, url, statusCode,
                 respBody != null ? respBody.substring(0, Math.min(200, respBody.length())).replace('\n', ' ').replace('\r', ' ') : "null",
                 elapsed);
+
+            String rootCause = ProviderDiagnostics.detectRootCause(statusCode, respBody, url);
+            diag.setRootCause(rootCause);
+
+            if (statusCode == 400) {
+                log.warn("[GOGO] HTTP 400 DETECTED | url={} cause={} body='{}'", url, rootCause,
+                    respBody != null ? respBody.substring(0, Math.min(500, respBody.length())) : "null");
+                throw new ProviderException(getName(), "HTTP_400_" + rootCause,
+                    "HTTP 400 from GoGoAnime: " + rootCause + " (" + (respBody != null ? respBody.substring(0, Math.min(100, respBody.length())) : "no body") + ")",
+                    statusCode, diag, "FETCH");
+            }
+
+            if ((statusCode == 429 || statusCode >= 500) && retryCount < MAX_RETRIES) {
+                long backoff = (long) Math.pow(2, retryCount) * 1000;
+                log.info("[GOGO] RETRY {}/{} after {}ms", retryCount + 1, MAX_RETRIES, backoff);
+                try { Thread.sleep(backoff); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                return fetchWithLogging(url, context, retryCount + 1);
+            }
+
+            if (statusCode == 429) {
+                throw new ProviderException(getName(), "RATE_LIMIT", "Rate limited by GoGoAnime", statusCode, diag, "FETCH");
+            }
+
             return null;
+
         } catch (HttpServerErrorException e) {
             long elapsed = System.currentTimeMillis() - t;
-            log.warn("[GOGO] {} FAILED | url={} status={} duration={}ms", context, url, e.getStatusCode(), elapsed);
-            return null;
+            int statusCode = e.getStatusCode().value();
+            diag.withStatus(statusCode, elapsed);
+            diag.withError(e.getMessage());
+            diag.setRootCause("SERVER_ERROR");
+
+            log.warn("[GOGO] {} FAILED | url={} status={} duration={}ms", context, url, statusCode, elapsed);
+            if (retryCount < MAX_RETRIES) {
+                long backoff = (long) Math.pow(2, retryCount) * 1000;
+                log.info("[GOGO] RETRY {}/{} after {}ms", retryCount + 1, MAX_RETRIES, backoff);
+                try { Thread.sleep(backoff); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                return fetchWithLogging(url, context, retryCount + 1);
+            }
+            throw new ProviderException(getName(), "SERVER_ERROR", "GoGoAnime server error: " + statusCode, statusCode, diag, "FETCH");
+
+        } catch (ProviderException e) {
+            throw e;
+
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - t;
+            diag.withStatus(0, elapsed);
+            diag.withError(e.getMessage());
+            diag.setRootCause("NETWORK_ERROR");
+
             log.warn("[GOGO] {} FAILED | url={} error='{}' duration={}ms", context, url, e.getMessage(), elapsed);
+            if (retryCount < MAX_RETRIES) {
+                long backoff = (long) Math.pow(2, retryCount) * 1000;
+                log.info("[GOGO] RETRY {}/{} after {}ms", retryCount + 1, MAX_RETRIES, backoff);
+                try { Thread.sleep(backoff); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                return fetchWithLogging(url, context, retryCount + 1);
+            }
             return null;
         }
     }
 
+    private JsonNode fetchJikanData(int malId) {
+        try {
+            Thread.sleep(400);
+            String url = JIKAN_BASE + "/anime/" + malId;
+            String json = fetchWithLogging(url, "JIKAN_LOOKUP");
+            if (json == null) return null;
+            return objectMapper.readTree(json).get("data");
+        } catch (Exception e) {
+            log.warn("[GOGO] JIKAN FETCH FAILED | malId={} error='{}'", malId, e.getMessage());
+            return null;
+        }
+    }
+
+    @Override
     public List<Episode> fetchEpisodes(int malId, String title) {
         long start = System.currentTimeMillis();
         log.info("[GOGO] FETCH EPISODES | title='{}' malId={}", title, malId);
 
-        List<String> slugs = buildSlugs(title);
-        log.info("[GOGO] SLUGS | '{}' → {}", title, slugs);
+        JsonNode jikanData = fetchJikanData(malId);
+        List<String> allSlugs = TitleNormalizer.collectAllSlugs(jikanData, title);
 
-        for (String slug : slugs) {
-            String url = BASE_URL + "/anime/" + slug;
+        log.info("[GOGO] GENERATED SLUGS | count={} slugs={}", allSlugs.size(), allSlugs);
+
+        for (String slug : allSlugs) {
+            if (slug == null || slug.isBlank() || slug.length() < 2) continue;
+            String url = BASE_URL + "/" + slug;
             log.info("[GOGO] TRY SLUG | slug='{}' url={}", slug, url);
 
-            String html = fetchWithLogging(url, "SLUG=" + slug);
-            if (html == null) continue;
+            try {
+                String html = fetchWithLogging(url, "SLUG=" + slug);
+                if (html == null) continue;
 
-            List<Episode> episodes = new ArrayList<>();
-            Set<Integer> seen = new LinkedHashSet<>();
-
-            Pattern epPattern = Pattern.compile(String.format(EPISODE_PATTERN_TEMPLATE, Pattern.quote(slug)));
-            Matcher matcher = epPattern.matcher(html);
-            while (matcher.find()) {
-                int epNum = Integer.parseInt(matcher.group(1));
-                if (seen.add(epNum)) {
-                    Episode ep = new Episode();
-                    ep.setAnimeMalId(malId);
-                    ep.setEpisodeNumber(epNum);
-                    ep.setTitle("Episode " + epNum);
-                    ep.setEmbedUrl(BASE_URL + "/episode/" + slug + "-episode-" + epNum);
-                    episodes.add(ep);
+                if (html.contains("anime-info")) {
+                    List<Episode> episodes = parseEpisodesFromHtml(html, slug, malId);
+                    if (!episodes.isEmpty()) {
+                        episodes.sort(Comparator.comparingInt(Episode::getEpisodeNumber));
+                        long elapsed = System.currentTimeMillis() - start;
+                        log.info("[GOGO] SUCCESS | slug='{}' count={} duration={}ms", slug, episodes.size(), elapsed);
+                        return episodes;
+                    }
                 }
-            }
-
-            if (!episodes.isEmpty()) {
-                episodes.sort(Comparator.comparingInt(Episode::getEpisodeNumber));
-                long elapsed = System.currentTimeMillis() - start;
-                log.info("[GOGO] SUCCESS | slug='{}' count={} duration={}ms", slug, episodes.size(), elapsed);
-                return episodes;
-            }
-
-            long epMatchCount = Pattern.compile("/episode/[a-z0-9-]+-episode-\\d+").matcher(html).results().count();
-            log.warn("[GOGO] EMPTY | slug='{}' matched no episodes (body had {} ep links)", slug, epMatchCount);
-        }
-
-        log.warn("[GOGO] ALL SLUGS FAILED | trying search-based slug discovery...");
-
-        String searchSlug = findSlugBySearch(title);
-        if (searchSlug != null) {
-            log.info("[GOGO] SEARCH FOUND SLUG | '{}' → '{}'", title, searchSlug);
-            List<Episode> searchResult = fetchEpisodesFromList(malId, List.of(searchSlug));
-            if (!searchResult.isEmpty()) {
-                long elapsed = System.currentTimeMillis() - start;
-                log.info("[GOGO] SEARCH SLUG SUCCESS | count={} duration={}ms", searchResult.size(), elapsed);
-                return searchResult;
+            } catch (ProviderException e) {
+                log.warn("[GOGO] SLUG FAILED | slug='{}' errorCode={} message='{}'", slug, e.getErrorCode(), e.getMessage());
+                if ("HTTP_400_INVALID_ID".equals(e.getErrorCode())) {
+                    log.warn("[GOGO] INVALID ID FOR SLUG | slug='{}' — skipping remaining slugs, trying search", slug);
+                    break;
+                }
+                continue;
             }
         }
 
-        log.warn("[GOGO] ALL SLUGS FAILED | trying Jikan API for English title...");
-
-        List<Episode> jikanResult = tryJikanEnglishTitle(malId, title);
-        if (!jikanResult.isEmpty()) {
+        log.warn("[GOGO] ALL SLUGS FAILED | trying search...");
+        List<Episode> searchResult = trySearch(malId, title, jikanData);
+        if (!searchResult.isEmpty()) {
             long elapsed = System.currentTimeMillis() - start;
-            log.info("[GOGO] JIKAN FALLBACK SUCCESS | count={} duration={}ms", jikanResult.size(), elapsed);
-            return jikanResult;
+            log.info("[GOGO] SEARCH SUCCESS | count={} duration={}ms", searchResult.size(), elapsed);
+            return searchResult;
         }
 
         long elapsed = System.currentTimeMillis() - start;
-        log.warn("[GOGO] ALL ATTEMPTS FAILED | duration={}ms", elapsed);
+        log.warn("[GOGO] ALL ATTEMPTS FAILED | title='{}' malId={} duration={}ms", title, malId, elapsed);
         return List.of();
     }
 
-    private List<Episode> tryJikanEnglishTitle(int malId, String title) {
-        try {
-            Thread.sleep(500);
-            String url = JIKAN_BASE + "/anime/" + malId;
-            String json = fetchWithLogging(url, "JIKAN_FALLBACK");
-            if (json == null) return List.of();
+    private List<Episode> parseEpisodesFromHtml(String html, String slug, int malId) {
+        List<Episode> episodes = new ArrayList<>();
+        Set<Integer> seen = new LinkedHashSet<>();
+        String slugLower = slug.toLowerCase();
+        Pattern epPattern = Pattern.compile("/" + Pattern.quote(slugLower) + "-episode-(\\d+)", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = epPattern.matcher(html);
+        while (matcher.find()) {
+            int epNum = Integer.parseInt(matcher.group(1));
+            if (seen.add(epNum)) {
+                Episode ep = new Episode();
+                ep.setAnimeMalId(malId);
+                ep.setEpisodeNumber(epNum);
+                ep.setTitle("Episode " + epNum);
+                ep.setEmbedUrl(BASE_URL + "/" + slugLower + "-episode-" + epNum);
+                episodes.add(ep);
+            }
+        }
+        return episodes;
+    }
 
-            JsonNode root = objectMapper.readTree(json);
-            JsonNode data = root.get("data");
-            if (data == null) return List.of();
-
-            if (data.has("title_english") && !data.get("title_english").isNull()) {
-                String englishTitle = data.get("title_english").asText("");
-                if (!englishTitle.isEmpty()) {
-                    log.info("[GOGO] JIKAN ENGLISH TITLE | '{}' → '{}'", title, englishTitle);
-                    return fetchEpisodesFromList(malId, buildSlugs(englishTitle));
+    private List<Episode> trySearch(int malId, String originalTitle, JsonNode jikanData) {
+        List<String> searchTerms = new ArrayList<>();
+        if (jikanData != null) {
+            for (String key : new String[]{"title", "title_english", "title_japanese"}) {
+                if (jikanData.has(key) && !jikanData.get(key).isNull()) {
+                    searchTerms.add(jikanData.get(key).asText());
                 }
             }
-
-            JsonNode titles = data.get("titles");
-            if (titles != null && titles.isArray()) {
+            JsonNode titles = jikanData.get("titles");
+            if (titles != null) {
                 for (JsonNode t : titles) {
-                    String type = t.has("type") ? t.get("type").asText("") : "";
-                    if ("English".equals(type)) {
-                        String enTitle = t.get("title").asText("");
-                        if (!enTitle.isEmpty()) {
-                            log.info("[GOGO] JIKAN ENGLISH TITLE (from titles) | '{}' → '{}'", title, enTitle);
-                            return fetchEpisodesFromList(malId, buildSlugs(enTitle));
-                        }
+                    String ti = t.has("title") ? t.get("title").asText("") : "";
+                    if (!ti.isEmpty()) searchTerms.add(ti);
+                }
+            }
+        }
+        searchTerms.add(originalTitle);
+        searchTerms.add(TitleNormalizer.normalize(originalTitle));
+
+        Set<String> tried = new LinkedHashSet<>();
+        for (String term : searchTerms) {
+            if (term == null || term.isBlank() || !tried.add(term.toLowerCase())) continue;
+            try {
+                String foundSlug = searchSingle(term);
+                if (foundSlug != null) {
+                    String url = BASE_URL + "/" + foundSlug;
+                    String html = fetchWithLogging(url, "SEARCH_HIT=" + foundSlug);
+                    if (html != null) {
+                        List<Episode> episodes = parseEpisodesFromHtml(html, foundSlug, malId);
+                        if (!episodes.isEmpty()) return episodes;
                     }
                 }
-            }
-
-            return List.of();
-        } catch (Exception e) {
-            log.warn("[GOGO] JIKAN FALLBACK FAILED | error='{}'", e.getMessage());
-            return List.of();
-        }
-    }
-
-    private List<Episode> fetchEpisodesFromList(int malId, List<String> slugs) {
-        for (String slug : slugs) {
-            String url = BASE_URL + "/anime/" + slug;
-            String html = fetchWithLogging(url, "FALLBACK_SLUG=" + slug);
-            if (html == null) continue;
-
-            List<Episode> episodes = new ArrayList<>();
-            Set<Integer> seen = new LinkedHashSet<>();
-            Pattern epPattern = Pattern.compile(String.format(EPISODE_PATTERN_TEMPLATE, Pattern.quote(slug)));
-            Matcher matcher = epPattern.matcher(html);
-            while (matcher.find()) {
-                int epNum = Integer.parseInt(matcher.group(1));
-                if (seen.add(epNum)) {
-                    Episode ep = new Episode();
-                    ep.setAnimeMalId(malId);
-                    ep.setEpisodeNumber(epNum);
-                    ep.setTitle("Episode " + epNum);
-                    ep.setEmbedUrl(BASE_URL + "/episode/" + slug + "-episode-" + epNum);
-                    episodes.add(ep);
-                }
-            }
-            if (!episodes.isEmpty()) {
-                episodes.sort(Comparator.comparingInt(Episode::getEpisodeNumber));
-                return episodes;
+            } catch (ProviderException e) {
+                log.warn("[GOGO] SEARCH TERM FAILED | term='{}' error='{}'", term, e.getMessage());
             }
         }
         return List.of();
     }
 
-    private String findSlugBySearch(String title) {
+    private String searchSingle(String title) {
         try {
-            String keywords = title.toLowerCase().replaceAll("[^a-z0-9 ]", " ").trim().replaceAll("\\s+", "+");
-            String searchUrl = BASE_URL + "/search?keyword=" + keywords + "&page=1";
-            log.info("[GOGO] SEARCH | url={}", searchUrl);
+            String keywords = java.net.URLEncoder.encode(title, "UTF-8");
+            String searchUrl = BASE_URL + "/search.html?keyword=" + keywords;
+            log.info("[GOGO] SEARCH | title='{}' url={}", title, searchUrl);
             String html = fetchWithLogging(searchUrl, "SEARCH");
             if (html == null) return null;
 
             Set<String> candidates = new LinkedHashSet<>();
-            Pattern linkPattern = Pattern.compile("/anime/([a-z0-9-]+)");
+            Pattern linkPattern = Pattern.compile("/category/([a-z0-9-]+)");
             Matcher matcher = linkPattern.matcher(html);
-
-            String titleLower = title.toLowerCase();
-            String slugPrefix = buildSlug(titleLower);
 
             while (matcher.find()) {
                 String slug = matcher.group(1);
-                if (slug.startsWith(slugPrefix) && !slug.equals(slugPrefix) && !slug.endsWith("-dub")) {
-                    candidates.add(slug);
-                }
+                candidates.add(slug);
             }
 
-            if (candidates.isEmpty()) {
-                matcher.reset();
-                while (matcher.find()) {
-                    String slug = matcher.group(1);
-                    if (slug.startsWith(slugPrefix) && !slug.endsWith("-dub")) {
-                        candidates.add(slug);
-                    }
-                }
-            }
-
-            if (candidates.isEmpty()) {
-                matcher.reset();
-                while (matcher.find()) {
-                    String slug = matcher.group(1);
-                    if (slug.startsWith(slugPrefix)) {
-                        candidates.add(slug);
-                    }
-                }
+            AnimeMatcher.ScoredMatch best = AnimeMatcher.findBestMatch(title, null, new ArrayList<>(candidates));
+            if (best != null && best.confidence >= 0.7) {
+                log.info("[GOGO] SEARCH BEST MATCH | slug='{}' confidence={}", best.slug, best.confidence);
+                return best.slug;
             }
 
             log.info("[GOGO] SEARCH RESULT | candidates={}", candidates);
@@ -306,79 +311,71 @@ public class AnimeGogoService {
         }
     }
 
-    public String fetchEmbedUrl(String episodePageUrl) {
+    @Override
+    public StreamResult resolveStream(String episodePageUrl) {
         long start = System.currentTimeMillis();
-        log.info("[GOGO] FETCH EMBED | url={}", episodePageUrl);
+        log.info("[GOGO] RESOLVE STREAM | url={}", episodePageUrl);
 
         try {
-            String html = fetchWithLogging(episodePageUrl, "EMBED");
+            String html = fetchWithLogging(episodePageUrl, "GOGO_STREAM");
             if (html == null) {
-                log.error("[GOGO] EMBED FAILED | null response after fetch");
-                return null;
+                return StreamResult.failure(getName(), "null response after fetch");
             }
 
-            Pattern pattern = Pattern.compile("data-video=\"([^\"]+)\"");
+            List<StreamResult.ServerOption> servers = new ArrayList<>();
+            Pattern pattern = Pattern.compile("data-video=\"([^\"&]+)\"");
             Matcher matcher = pattern.matcher(html);
-            List<String> embeds = new ArrayList<>();
             while (matcher.find()) {
-                String encoded = matcher.group(1);
-                if (!embeds.contains(encoded)) {
-                    embeds.add(encoded);
+                String videoUrl = new String(Base64.getDecoder().decode(matcher.group(1)));
+                if (videoUrl.contains("newplayer.php")) {
+                    String megaplayUrl = followNewPlayer(videoUrl);
+                    if (megaplayUrl != null) {
+                        servers.add(new StreamResult.ServerOption(megaplayUrl, "GoGo-Megaplay", false));
+                    } else {
+                        servers.add(new StreamResult.ServerOption(videoUrl, "GoGo-NewPlayer", false));
+                    }
+                } else {
+                    servers.add(new StreamResult.ServerOption(videoUrl, "GoGo-Direct", false));
                 }
             }
 
-            if (embeds.isEmpty()) {
-                log.warn("[GOGO] EMBED FAILED | no data-video found");
-                return null;
+            if (servers.isEmpty()) {
+                log.warn("[GOGO] STREAM FAILED | no data-video found");
+                return StreamResult.failure(getName(), "No video sources found on episode page");
             }
 
-            String firstEncoded = embeds.get(0);
-            String decodedUrl;
-            try {
-                decodedUrl = new String(Base64.getDecoder().decode(firstEncoded));
-            } catch (Exception e) {
-                log.warn("[GOGO] EMBED FAILED | base64 decode error: {}", e.getMessage());
-                return null;
-            }
+            log.info("[GOGO] STREAM RESOLVED | servers={} duration={}ms",
+                servers.size(), System.currentTimeMillis() - start);
+            return StreamResult.success(getName(), "iframe", servers);
 
-            log.info("[GOGO] DECODED PLAYER URL | url={}", decodedUrl);
-
-            String megaplayUrl = extractMegaplayIframeUrl(decodedUrl);
-            if (megaplayUrl != null) {
-                long elapsed = System.currentTimeMillis() - start;
-                log.info("[GOGO] MEGAPLAY URL | url={} duration={}ms", megaplayUrl, elapsed);
-                return megaplayUrl;
-            }
-
+        } catch (ProviderException e) {
             long elapsed = System.currentTimeMillis() - start;
-            log.info("[GOGO] EMBED FALLBACK | returning newplayer url={} duration={}ms", decodedUrl, elapsed);
-            return decodedUrl;
-
+            log.error("[GOGO] STREAM FAILED | errorCode={} error='{}' duration={}ms", e.getErrorCode(), e.getMessage(), elapsed);
+            return StreamResult.failure(getName(), e.getErrorCode() + ": " + e.getMessage());
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - start;
-            log.error("[GOGO] EMBED FAILED | error='{}' duration={}ms", e.getMessage(), elapsed);
-            return null;
+            log.error("[GOGO] STREAM FAILED | error='{}' duration={}ms", e.getMessage(), elapsed);
+            return StreamResult.failure(getName(), e.getMessage());
         }
     }
 
-    private String extractMegaplayIframeUrl(String playerPageUrl) {
+    private String followNewPlayer(String newPlayerUrl) {
         try {
-            log.info("[GOGO] EXTRACT MEGAPLAY | url={}", playerPageUrl);
-            String html = fetchWithLogging(playerPageUrl, "MEGAPLAY_IFRAME");
+            String html = fetchWithLogging(newPlayerUrl, "NEWPLAYER");
             if (html == null) return null;
 
-            Pattern iframePattern = Pattern.compile("<iframe\\s+[^>]*src=\"([^\"]+megaplay[^\"]+)\"");
-            Matcher matcher = iframePattern.matcher(html);
+            Pattern megaplayPattern = Pattern.compile("src=\"([^\"]*megaplay\\.buzz[^\"]*)\"");
+            Matcher matcher = megaplayPattern.matcher(html);
             if (matcher.find()) {
-                String iframeUrl = matcher.group(1);
-                log.info("[GOGO] MEGAPLAY IFRAME | url={}", iframeUrl);
-                return iframeUrl;
+                String megaplayUrl = matcher.group(1);
+                log.info("[GOGO] MEGAPLAY IFRAME | url={}", megaplayUrl);
+                return megaplayUrl;
             }
 
-            log.warn("[GOGO] MEGAPLAY EXTRACT FAILED | no megaplay iframe found");
+            log.warn("[GOGO] MEGAPLAY NOT FOUND in newplayer HTML");
             return null;
         } catch (Exception e) {
-            log.warn("[GOGO] MEGAPLAY EXTRACT ERROR | error='{}'", e.getMessage());
+            log.warn("[GOGO] NEWPLAYER FOLLOW FAILED | error='{}'", e.getMessage());
             return null;
         }
     }

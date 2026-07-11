@@ -1,21 +1,22 @@
 package com.animeSite.controller;
 
 import com.animeSite.core.model.ApiResponse;
-import com.animeSite.httpclient.AnimeGogoService;
-import com.animeSite.httpclient.AninekoService;
 import com.animeSite.persist.Anime;
 import com.animeSite.persist.Episode;
+import com.animeSite.pipeline.*;
 import com.animeSite.repo.AnimeRepository;
 import com.animeSite.repo.EpisodeRepository;
+import com.animeSite.service.EpisodeSyncService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import jakarta.transaction.Transactional;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.time.Instant;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/anime")
@@ -25,77 +26,57 @@ public class EpisodeController {
 
     private final EpisodeRepository episodeRepository;
     private final AnimeRepository animeRepository;
-    private final AninekoService aninekoService;
-    private final AnimeGogoService animeGogoService;
+    private final ProviderResolver providerResolver;
+    private final ValidationService validationService;
+    private final ProviderHealthMonitor healthMonitor;
+    private final EpisodeSyncService episodeSyncService;
 
     public EpisodeController(EpisodeRepository episodeRepository, AnimeRepository animeRepository,
-                             AninekoService aninekoService, AnimeGogoService animeGogoService) {
+                             ProviderResolver providerResolver, ValidationService validationService,
+                             ProviderHealthMonitor healthMonitor, EpisodeSyncService episodeSyncService) {
         this.episodeRepository = episodeRepository;
         this.animeRepository = animeRepository;
-        this.aninekoService = aninekoService;
-        this.animeGogoService = animeGogoService;
+        this.providerResolver = providerResolver;
+        this.validationService = validationService;
+        this.healthMonitor = healthMonitor;
+        this.episodeSyncService = episodeSyncService;
     }
 
     @GetMapping("/{malId}/episodes")
     public ResponseEntity<ApiResponse<List<Episode>>> getEpisodes(@PathVariable int malId) {
         long start = System.currentTimeMillis();
-        log.info("[EPISODES] GET START | malId={}", malId);
+        log.info("[EPISODES] GET | malId={}", malId);
         List<Episode> episodes = episodeRepository.findByAnimeMalIdOrderByEpisodeNumberAsc(malId);
         long elapsed = System.currentTimeMillis() - start;
-        log.info("[EPISODES] GET COMPLETE | malId={} count={} duration={}ms", malId, episodes.size(), elapsed);
+        log.info("[EPISODES] GET | malId={} count={} duration={}ms", malId, episodes.size(), elapsed);
         return ResponseEntity.ok(ApiResponse.success(episodes));
     }
 
     @PostMapping("/{malId}/episodes/sync")
-    @Transactional
-    public ResponseEntity<?> syncEpisodes(@PathVariable int malId) {
+    public ResponseEntity<Map<String, Object>> syncEpisodes(@PathVariable int malId) {
         long start = System.currentTimeMillis();
-        log.info("[SYNC] POST START | malId={}", malId);
+        log.info("[SYNC] START | malId={}", malId);
 
-        Anime anime = animeRepository.findByMalId(malId)
-                .orElseThrow(() -> {
-                    log.error("[SYNC] FAILED | anime not found with malId={}", malId);
-                    return new IllegalArgumentException("Anime not found with MAL ID: " + malId);
-                });
-
-        log.info("[SYNC] ANIME FOUND | title='{}' malId={}", anime.getTitle(), malId);
-
-        List<Episode> episodes = List.of();
-        String provider = "Anineko";
-
-        try {
-            episodes = aninekoService.fetchEpisodes(anime.getMalId(), anime.getTitle());
-        } catch (Exception e) {
-            long elapsed = System.currentTimeMillis() - start;
-            log.warn("[SYNC] ANINEKO ERROR | title='{}' error='{}' duration={}ms", anime.getTitle(), e.getMessage(), elapsed);
-        }
-
-        if (episodes.isEmpty()) {
-            log.info("[SYNC] ANINEKO EMPTY | falling back to GoGoAnime...");
-            provider = "GoGoAnime";
-            try {
-                episodes = animeGogoService.fetchEpisodes(anime.getMalId(), anime.getTitle());
-            } catch (Exception e) {
-                long elapsed = System.currentTimeMillis() - start;
-                log.error("[SYNC] BOTH PROVIDERS FAILED | title='{}' error='{}' duration={}ms", anime.getTitle(), e.getMessage(), elapsed);
-                return ResponseEntity.ok(ApiResponse.error("PROVIDER_ERROR",
-                    "Both streaming providers returned errors: " + e.getMessage()));
-            }
-        }
+        EpisodeSyncService.SyncResult result = episodeSyncService.syncEpisodes(malId);
 
         long elapsed = System.currentTimeMillis() - start;
 
-        if (episodes.isEmpty()) {
-            log.warn("[SYNC] NO EPISODES | title='{}' duration={}ms", anime.getTitle(), elapsed);
-            return ResponseEntity.ok(ApiResponse.error("PROVIDER_NOT_FOUND",
-                "No episodes available on streaming providers for \"" + anime.getTitle() + "\" (MAL ID: " + malId + ")."));
-        }
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", result.isSuccess() || result.isComingSoon());
+        response.put("status", result.status());
+        response.put("message", result.message());
+        response.put("durationMs", elapsed);
+        response.put("timestamp", Instant.now().toString());
 
-        episodeRepository.deleteByAnimeMalId(malId);
-        episodeRepository.saveAll(episodes);
-        log.info("[SYNC] COMPLETE | provider={} saved {} episodes for '{}' | duration={}ms", provider, episodes.size(), anime.getTitle(), elapsed);
+        if (result.provider() != null) response.put("provider", result.provider());
+        if (result.episodeCount() > 0) response.put("episodeCount", result.episodeCount());
+        if (result.episodes() != null && !result.episodes().isEmpty()) response.put("episodes", result.episodes());
+        if (result.providerFailures() != null) response.put("providerFailures", result.providerFailures());
 
-        return ResponseEntity.ok(ApiResponse.success("Episodes synced successfully", episodes));
+        log.info("[SYNC] COMPLETE | malId={} status={} provider={} count={} duration={}ms",
+            malId, result.status(), result.provider(), result.episodeCount(), elapsed);
+
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{malId}/episode/embed")
@@ -103,65 +84,121 @@ public class EpisodeController {
         long start = System.currentTimeMillis();
         log.info("[EMBED] GET | malId={} episodeUrl={}", malId, episodeUrl);
 
-        String embedUrl = null;
-        String provider;
-        String streamType;
-
-        if (episodeUrl.contains("gogoanime")) {
-            provider = "GoGoAnime";
-            embedUrl = animeGogoService.fetchEmbedUrl(episodeUrl);
-            streamType = "iframe";
-        } else {
-            provider = "Anineko";
-            embedUrl = aninekoService.fetchEmbedUrl(episodeUrl);
-            streamType = embedUrl != null && embedUrl.contains(".m3u8") ? "hls" : "iframe";
-        }
+        ProviderResolver.PipelineResult<StreamResult> result =
+            providerResolver.resolveStream(malId, episodeUrl);
 
         long elapsed = System.currentTimeMillis() - start;
 
-        if (embedUrl == null) {
-            log.warn("[EMBED] FAILED | malId={} provider={} url={} duration={}ms", malId, provider, episodeUrl, elapsed);
+        if (!result.success || result.data == null || !result.data.isSuccess()) {
+            String msg = result.data != null ? result.data.getError() : "All providers failed";
+            String code = result.errorCode != null ? result.errorCode : "STREAM_RESOLVE_FAILED";
+            String userMessage = "Stream source unavailable. All providers and servers were checked.";
+
+            log.warn("[EMBED] FAILED | malId={} code={} msg='{}' duration={}ms", malId, code, msg, elapsed);
             return ResponseEntity.ok(ApiResponse.builder()
                 .success(false)
-                .message("No stream source found for this episode.")
+                .message(userMessage)
+                .errorCode(code)
                 .data(Map.of(
-                    "provider", provider,
-                    "step", "Extract embed url",
-                    "reason", "No video source found on episode page",
-                    "durationMs", elapsed
+                    "provider", result.provider,
+                    "durationMs", elapsed,
+                    "detail", msg
                 ))
-                .timestamp(java.time.Instant.now())
+                .timestamp(Instant.now())
                 .build());
         }
 
-        log.info("[EMBED] SUCCESS | provider={} type={} embedUrl={} duration={}ms", provider, streamType, embedUrl, elapsed);
-        return ResponseEntity.ok(ApiResponse.builder()
-            .success(true)
-            .message("Stream source found")
-            .data(Map.of(
-                "embedUrl", embedUrl,
-                "provider", provider,
-                "type", streamType
-            ))
-            .timestamp(java.time.Instant.now())
-            .build());
+        StreamResult sr = result.data;
+        String providerBaseUrl = getProviderBaseUrl(sr.getProvider());
+
+        String validatedUrl = sr.getPrimaryUrl();
+        String streamType = sr.getType();
+        if (streamType.equals("hls") && validatedUrl != null) {
+            ValidationService.StreamValidation sv = validationService.validateStreamUrl(validatedUrl, "embed/malId=" + malId);
+            if (!sv.valid) {
+                log.warn("[EMBED] HLS_VALIDATION_FAILED | url={} error={} | trying backup servers", validatedUrl, sv.errorCode);
+                for (StreamResult.ServerOption backup : sr.getServers()) {
+                    if (backup.isBackup) {
+                        log.info("[EMBED] TRYING_BACKUP | url={}", backup.url);
+                        validatedUrl = backup.url;
+                        streamType = backup.url.contains(".m3u8") ? "hls" : "iframe";
+                        ValidationService.StreamValidation backupSv =
+                            validationService.validateStreamUrl(validatedUrl, "embed/backup/" + sr.getProvider());
+                        if (backupSv.valid) break;
+                    }
+                }
+            }
+        }
+
+        if (validatedUrl != null) {
+            validatedUrl = toProxyUrl(validatedUrl, providerBaseUrl);
+        }
+
+        streamType = "hls";
+
+        List<Map<String, Object>> serverList = sr.getServers().stream()
+            .map(s -> {
+                String proxyUrl = toProxyUrl(s.url, providerBaseUrl);
+                return Map.<String, Object>of(
+                    "url", proxyUrl,
+                    "label", s.label,
+                    "isBackup", s.isBackup
+                );
+            })
+            .collect(Collectors.toList());
+
+        log.info("[EMBED] SUCCESS | malId={} provider={} type={} servers={} duration={}ms",
+            malId, sr.getProvider(), streamType, serverList.size(), elapsed);
+        return ResponseEntity.ok()
+            .header("Cache-Control", "public, max-age=300")
+            .body(ApiResponse.builder()
+                .success(true)
+                .message("Stream source resolved from " + sr.getProvider())
+                .data(Map.of(
+                    "embedUrl", validatedUrl,
+                    "type", streamType,
+                    "provider", sr.getProvider(),
+                    "servers", serverList,
+                    "attempts", result.attempts,
+                    "providerFailover", result.attempts,
+                    "durationMs", elapsed
+                ))
+                .timestamp(Instant.now())
+                .build());
+    }
+
+    private String toProxyUrl(String url, String referer) {
+        try {
+            return "/api/stream/proxy?url=" + URLEncoder.encode(url, "UTF-8")
+                + "&referer=" + URLEncoder.encode(referer != null ? referer : "https://anineko.to/", "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            return url;
+        }
+    }
+
+    private String getProviderBaseUrl(String providerName) {
+        if (providerName == null) return "https://anineko.to/";
+        String lower = providerName.toLowerCase();
+        if (lower.contains("anineko")) return "https://anineko.to/";
+        if (lower.contains("gogo")) return "https://gogoanime.live/";
+        return "https://anineko.to/";
     }
 
     @PostMapping("/{malId}/episodes/clear")
     public ResponseEntity<ApiResponse<String>> clearEpisodes(@PathVariable int malId) {
         log.info("[CLEAR] clearing episodes for malId={}", malId);
         episodeRepository.deleteByAnimeMalId(malId);
-        log.info("[CLEAR] complete for malId={}", malId);
-        return ResponseEntity.ok(ApiResponse.success("Episodes cleared"));
+        providerResolver.invalidateCache(malId);
+        return ResponseEntity.ok(ApiResponse.success("Episodes and cache cleared"));
     }
 
     @PostMapping("/episodes/sync-all")
     public ResponseEntity<ApiResponse<Map<String, Object>>> syncAllEpisodes() {
         long start = System.currentTimeMillis();
-        log.info("[BULK SYNC] START | fetching all anime from DB");
+        log.info("[BULK SYNC] START");
 
         List<Anime> allAnime = animeRepository.findAll();
-        log.info("[BULK SYNC] total anime in DB: {}", allAnime.size());
+        log.info("[BULK SYNC] total anime: {}", allAnime.size());
 
         int success = 0;
         int skipped = 0;
@@ -170,46 +207,96 @@ public class EpisodeController {
 
         for (int i = 0; i < allAnime.size(); i++) {
             Anime anime = allAnime.get(i);
-            log.info("[BULK SYNC] [{}/{}] processing '{}' (malId={})", i + 1, allAnime.size(), anime.getTitle(), anime.getMalId());
+            log.info("[BULK SYNC] [{}/{}] '{}' (malId={})", i + 1, allAnime.size(), anime.getTitle(), anime.getMalId());
             try {
                 episodeRepository.deleteByAnimeMalId(anime.getMalId());
-                List<Episode> episodes = aninekoService.fetchEpisodes(anime.getMalId(), anime.getTitle());
-                if (episodes.isEmpty()) {
-                    episodes = animeGogoService.fetchEpisodes(anime.getMalId(), anime.getTitle());
-                }
-                if (episodes.isEmpty()) {
-                    skipped++;
-                    log.warn("[BULK SYNC] no episodes found for '{}'", anime.getTitle());
+
+                var result = providerResolver.resolveEpisodes(anime.getMalId(), anime.getTitle());
+
+                if (result.success && result.data != null && !result.data.isEmpty()) {
+                    List<Episode> valid = validationService.validateEpisodes(result.data, "bulk/" + anime.getMalId());
+                    if (!valid.isEmpty()) {
+                        episodeRepository.saveAll(valid);
+                        success++;
+                    } else {
+                        skipped++;
+                    }
                 } else {
-                    episodeRepository.saveAll(episodes);
-                    success++;
-                    log.info("[BULK SYNC] saved {} episodes for '{}'", episodes.size(), anime.getTitle());
+                    skipped++;
                 }
             } catch (Exception e) {
                 failed++;
-                String msg = String.format("'%s' (malId=%d): %s", anime.getTitle(), anime.getMalId(), e.getMessage());
-                errors.add(msg);
-                log.error("[BULK SYNC] failed for '{}': {}", anime.getTitle(), e.getMessage());
+                errors.add(String.format("'%s' (%d): %s", anime.getTitle(), anime.getMalId(), e.getMessage()));
             }
-            try {
-                Thread.sleep(1500);
-            } catch (InterruptedException ignored) {
-                Thread.currentThread().interrupt();
-                break;
-            }
+            try { Thread.sleep(1500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); break; }
         }
 
+        healthMonitor.logHealthReport();
+
         long elapsed = System.currentTimeMillis() - start;
-        Map<String, Object> result = Map.of(
+        return ResponseEntity.ok(ApiResponse.success(Map.of(
             "total", allAnime.size(),
             "success", success,
             "skipped", skipped,
             "failed", failed,
             "errors", errors,
             "durationMs", elapsed
-        );
-        log.info("[BULK SYNC] COMPLETE | total={} success={} skipped={} failed={} duration={}ms",
-            allAnime.size(), success, skipped, failed, elapsed);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        )));
+    }
+
+    @GetMapping("/episodes/health")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getHealth() {
+        List<String> healthy = healthMonitor.getHealthyProviders();
+        return ResponseEntity.ok(ApiResponse.success(Map.of(
+            "healthyProviders", healthy,
+            "report", "Check logs for full provider health report"
+        )));
+    }
+
+    @GetMapping("/{malId}/streamable")
+    public ResponseEntity<?> isStreamable(@PathVariable int malId) {
+        long start = System.currentTimeMillis();
+        String provider = providerResolver.getCachedProviderForAnime(malId);
+        boolean streamable = provider != null;
+
+        if (!streamable) {
+            Anime anime = animeRepository.findByMalId(malId).orElse(null);
+            if (anime != null) {
+                var result = providerResolver.resolveEpisodes(malId, anime.getTitle());
+                streamable = result.success && result.data != null && !result.data.isEmpty();
+                provider = result.provider;
+            }
+        }
+
+        return ResponseEntity.ok(ApiResponse.builder()
+            .success(true)
+            .message(streamable ? "Streamable" : "Not streamable")
+            .data(Map.of(
+                "malId", malId,
+                "streamable", streamable,
+                "provider", provider != null ? provider : "none",
+                "durationMs", System.currentTimeMillis() - start
+            ))
+            .timestamp(Instant.now())
+            .build());
+    }
+
+    @GetMapping("/streamable")
+    public ResponseEntity<?> getStreamable(@RequestParam String ids) {
+        long start = System.currentTimeMillis();
+        String[] idArr = ids.split(",");
+        List<Map<String, Object>> results = new ArrayList<>();
+
+        for (String idStr : idArr) {
+            try {
+                int malId = Integer.parseInt(idStr.trim());
+                String provider = providerResolver.getCachedProviderForAnime(malId);
+                boolean streamable = provider != null;
+                results.add(Map.of("malId", malId, "streamable", streamable, "provider", provider != null ? provider : "none"));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        log.info("[STREAMABLE] BATCH | requested={} returned={} duration={}ms", idArr.length, results.size(), System.currentTimeMillis() - start);
+        return ResponseEntity.ok(ApiResponse.success(results));
     }
 }

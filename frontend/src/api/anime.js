@@ -1,4 +1,4 @@
-import client from './client'
+import client, { extractErrorMessage, extractErrorCode } from './client'
 import { withCache } from './cache'
 
 const unwrapData = (res) => res.data?.data ?? res.data ?? []
@@ -54,12 +54,35 @@ export const syncEpisodes = (malId) => {
     const body = res.data
     if (!body?.success) {
       const err = new Error(body?.message || 'Sync failed')
-      err.errorCode = body?.errorCode
+      err.errorCode = body?.errorCode || extractErrorCode({ response: { data: body } })
       err.data = body?.data
       throw err
     }
     return body.data ?? []
+  }).catch((err) => {
+    if (err.errorCode || err.response?.data?.message) {
+      const enhanced = err.errorCode ? err : (() => {
+        const e = new Error(extractErrorMessage(err))
+        e.errorCode = extractErrorCode(err)
+        e.data = err.response?.data?.data
+        return e
+      })()
+      throw enhanced
+    }
+    throw err
   })
+}
+
+export const getStreamableBatch = async (malIds) => {
+  if (!malIds || malIds.length === 0) return []
+  try {
+    const ids = malIds.join(',')
+    const res = await client.get(`/api/anime/streamable?ids=${ids}`, { timeout: 10000 })
+    const items = res.data?.data ?? []
+    return items.filter(i => i.streamable).map(i => i.malId)
+  } catch {
+    return []
+  }
 }
 
 export const getEpisodeEmbed = (malId, episodeUrl, signal) =>
@@ -68,3 +91,28 @@ export const getEpisodeEmbed = (malId, episodeUrl, signal) =>
     if (!payload) return null
     return payload
   })
+
+export const getAnimeState = (id, signal) =>
+  withCache(`animeState:${id}`, () =>
+    client.get(`/api/anime/${id}/state`, { signal }).then((res) => res.data?.data ?? null), 60000)
+
+export const getAnimeStates = (ids, signal) => {
+  if (!ids || ids.length === 0) return []
+  const idStr = ids.join(',')
+  return client.get(`/api/anime/states?ids=${idStr}`, { signal }).then((res) => res.data?.data ?? [])
+}
+
+export const getComingSoonAnime = (page = 0, size = 25, signal) =>
+  withCache(`comingSoon:${page}:${size}`, () =>
+    client.get('/api/anime/filter', { params: { status: 'upcoming', page, size }, signal }).then(unwrapPaged), 60000)
+
+export const isComingSoon = async (malId) => {
+  try {
+    const state = await getAnimeState(malId)
+    return state?.comingSoon === true
+  } catch {
+    return false
+  }
+}
+
+

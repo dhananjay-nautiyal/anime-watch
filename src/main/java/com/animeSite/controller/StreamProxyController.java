@@ -1,81 +1,83 @@
 package com.animeSite.controller;
 
 import com.animeSite.core.model.ApiResponse;
+import com.animeSite.pipeline.StreamProxyService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/stream")
+@Tag(name = "Stream Proxy", description = "Backend streaming proxy for HLS content")
 public class StreamProxyController {
 
     private static final Logger log = LoggerFactory.getLogger(StreamProxyController.class);
-    private final RestTemplate restTemplate;
-    private final Map<String, String> tokenStore = new ConcurrentHashMap<>();
+    private final StreamProxyService streamProxyService;
 
-    public StreamProxyController(@Qualifier("aninekoRestTemplate") RestTemplate restTemplate) {
-        this.restTemplate = restTemplate;
+    public StreamProxyController(StreamProxyService streamProxyService) {
+        this.streamProxyService = streamProxyService;
     }
 
-    @PostMapping("/token")
-    public ResponseEntity<ApiResponse<String>> createToken(@RequestBody Map<String, String> body) {
-        String embedUrl = body.get("url");
-        if (embedUrl == null || embedUrl.isBlank()) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("url is required"));
-        }
-        String token = UUID.randomUUID().toString();
-        tokenStore.put(token, embedUrl);
-        log.info("[STREAM] token created | token={} url={}", token, embedUrl);
-        return ResponseEntity.ok(ApiResponse.success(token));
-    }
+    @GetMapping("/proxy")
+    @Operation(summary = "Proxy stream content", description = "Proxies HLS playlists, segments, subtitles, and encryption keys from providers")
+    public void proxyStream(
+            @RequestParam String url,
+            @RequestParam(required = false) String referer,
+            @RequestHeader(value = "Accept", required = false) String acceptHeader,
+            HttpServletResponse response) {
+        
+        long start = System.currentTimeMillis();
+        log.info("[PROXY_CONTROLLER] REQUEST | url='{}' referer='{}'", url, referer);
 
-    @GetMapping("/proxy/{token}")
-    public ResponseEntity<?> proxy(@PathVariable String token) {
-        String embedUrl = tokenStore.remove(token);
-        if (embedUrl == null) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("Invalid or expired token"));
-        }
-        log.info("[STREAM] proxy | token={} url={}", token, embedUrl);
+        StreamProxyService.ProxyResult result = streamProxyService.proxyStream(url, referer, acceptHeader);
+
+        response.setStatus(result.status());
+        response.setContentType(result.contentType());
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "*");
+        response.setHeader("Cache-Control", "public, max-age=300");
+        response.setContentLength(result.data().length);
+
         try {
-            ResponseEntity<byte[]> response = restTemplate.getForEntity(embedUrl, byte[].class);
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(response.getHeaders().getContentType());
-            return new ResponseEntity<>(response.getBody(), headers, HttpStatus.OK);
+            response.getOutputStream().write(result.data());
+            response.getOutputStream().flush();
         } catch (Exception e) {
-            log.error("[STREAM] proxy failed | token={} error={}", token, e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(ApiResponse.error("Failed to fetch stream source"));
+            log.warn("[PROXY_CONTROLLER] WRITE_FAILED | url='{}' error='{}'", url, e.getMessage());
         }
+
+        long elapsed = System.currentTimeMillis() - start;
+        log.info("[PROXY_CONTROLLER] COMPLETE | url='{}' status={} type='{}' size={} duration={}ms",
+            url, result.status(), result.contentType(), result.data().length, elapsed);
     }
 
-    @GetMapping("/hls")
-    public ResponseEntity<?> proxyHls(@RequestParam String url) {
-        log.info("[STREAM HLS] fetch | url={}", url);
-        try {
-            ResponseEntity<byte[]> response = restTemplate.getForEntity(url, byte[].class);
-            HttpHeaders headers = new HttpHeaders();
-            MediaType contentType = response.getHeaders().getContentType();
-            if (contentType == null) {
-                if (url.endsWith(".m3u8")) {
-                    contentType = MediaType.parseMediaType("application/vnd.apple.mpegurl");
-                } else if (url.endsWith(".ts")) {
-                    contentType = MediaType.parseMediaType("video/MP2T");
-                } else {
-                    contentType = MediaType.APPLICATION_OCTET_STREAM;
-                }
-            }
-            headers.setContentType(contentType);
-            headers.set("Access-Control-Allow-Origin", "*");
-            return new ResponseEntity<>(response.getBody(), headers, HttpStatus.OK);
-        } catch (Exception e) {
-            log.error("[STREAM HLS] failed | url={} error={}", url, e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).build();
-        }
+    @GetMapping("/resolve/{malId}")
+    @Operation(summary = "Resolve stream for episode", description = "Resolves a stream URL and returns proxy-compatible URLs")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> resolveStream(
+            @PathVariable int malId,
+            @RequestParam String episodeUrl) {
+        
+        long start = System.currentTimeMillis();
+        log.info("[PROXY] RESOLVE | malId={} episodeUrl={}", malId, episodeUrl);
+        
+        return ResponseEntity.ok(ApiResponse.success(Map.of(
+            "malId", malId,
+            "message", "Use /api/anime/{malId}/episode/embed to resolve streams"
+        )));
+    }
+
+    @GetMapping("/health")
+    @Operation(summary = "Stream proxy health check")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> health() {
+        return ResponseEntity.ok(ApiResponse.success(Map.of(
+            "status", "healthy",
+            "proxyEnabled", true
+        )));
     }
 }

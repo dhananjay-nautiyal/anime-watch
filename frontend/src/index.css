@@ -189,3 +189,313 @@ select option {
     aspect-ratio: 21 / 9;
   }
 }
+
+/* =============================
+   PRODUCTION-GRADE ENHANCEMENTS
+   ============================= */
+
+/* Glassmorphism variants */
+.glass-card {
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1rem;
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  background: rgba(15, 23, 42, 0.6);
+  border-color: rgba(139, 92, 246, 0.2);
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.1);
+}
+
+/* Gradient backgrounds */
+.gradient-hero {
+  background: linear-gradient(135deg, #050816 0%, #0f172a 50%, #050816 100%);
+}
+
+.gradient-overlay {
+  background: linear-gradient(to top, 
+    rgba(5, 8, 22, 0.98) 0%,
+    rgba(5, 8, 22, 0.6) 40%,
+    rgba(5, 8, 22, 0.2) 70%,
+    rgba(5, 8, 22, 0.8) 100%
+  );
+}
+
+.gradient-side {
+  background: linear-gradient(to right, #050816 0%, transparent 50%, #050816 100%);
+}
+
+/* Countdown timer styles */
+.countdown-number {
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  min-width: 4rem;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.countdown-number:hover {
+  border-color: rgba(139, 92, 246, 0.5);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
+  transform: translateY(-2px);
+}
+
+.countdown-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #94a3b8;
+  margin-top: 0.25rem;
+}
+
+/* Video player controls */
+.player-controls {
+  background: linear-gradient(to top, 
+    rgba(5, 8, 22, 0.9) 0%,
+    rgba(5, 8, 22, 0.4) 60%,
+    transparent 100%
+  );
+}
+
+.player-button {
+  @apply w-8 h-8 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-all;
+}
+
+.player-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  outline: none;
+  transition: height 0.2s;
+}
+
+.player-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #8B5CF6;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.player-slider:hover::-webkit-slider-thumb {
+  opacity: 1;
+}
+
+/* Progress bar */
+.progress-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: height 0.2s;
+}
+
+.progress-bar:hover {
+  height: 6px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #8B5CF6, #06B6D4);
+  position: relative;
+}
+
+.progress-bar-fill::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #8B5CF6;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.progress-bar:hover .progress-bar-fill::after {
+  opacity: 1;
+}
+
+/* Episode sidebar */
+.episode-sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
+
+.episode-sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.episode-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.episode-sidebar::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 2px;
+}
+
+.episode-sidebar::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* State badges */
+.state-badge {
+  @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold;
+}
+
+.state-badge-coming-soon {
+  background: rgba(6, 182, 212, 0.15);
+  color: #22d3ee;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.state-badge-airing {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.state-badge-finished {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.state-badge-unavailable {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.state-badge-not-released {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+/* Animation keyframes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(139, 92, 246, 0.4);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Shimmer loading enhancement */
+.skeleton-enhanced {
+  background: linear-gradient(90deg, 
+    #1e293b 0%, 
+    #334155 25%, 
+    #1e293b 50%, 
+    #334155 75%, 
+    #1e293b 100%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+/* Card enhancements */
+.card-hover {
+  transition: all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.card-hover:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(139, 92, 246, 0.15);
+}
+
+/* Text gradients */
+.text-gradient-primary {
+  background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-accent {
+  background: linear-gradient(135deg, #8B5CF6, #EC4899);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Countdown urgency colors */
+.countdown-urgent {
+  color: #f87171;
+}
+
+.countdown-soon {
+  color: #fbbf24;
+}
+
+.countdown-normal {
+  color: #4ade80;
+}
+
+/* Tooltip */
+.tooltip {
+  position: relative;
+}
+
+.tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) scale(0.8);
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.5rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.2s ease;
+}
+
+.tooltip:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
