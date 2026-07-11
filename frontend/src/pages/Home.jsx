@@ -98,7 +98,7 @@ const UpcomingCard = memo(function UpcomingCard({ anime, index }) {
       transition={{ duration: 0.4, delay: index * 0.05 }}
       className="flex-shrink-0 group"
     >
-      <Link to={`/anime/${anime.malId || anime.id}`} className="block">
+      <Link to={`/anime/${anime.slug || anime.malId || anime.id}`} className="block">
         <div className="relative rounded-xl overflow-hidden" style={{ width: '180px', height: '270px' }}>
           <ImageWithFallback
             src={anime.imageUrl || anime.images?.jpg?.image_url}

@@ -28,6 +28,10 @@ export const getAnimeById = (id, signal) =>
   withCache(`anime:${id}`, () =>
     client.get(`/api/anime/${id}`, { signal }).then((res) => res.data?.data ?? null), 120000)
 
+export const getAnimeBySlug = (slug, signal) =>
+  withCache(`animeSlug:${slug}`, () =>
+    client.get(`/api/anime/slug/${slug}`, { signal }).then((res) => res.data?.data ?? null), 120000)
+
 export const getSeasonal = (page = 0, size = 25, signal) =>
   withCache(`seasonal:${page}:${size}`, () =>
     client.get('/api/anime/seasonal', { params: { page, size }, signal }).then(unwrapPaged), 60000)
@@ -87,6 +91,13 @@ export const getStreamableBatch = async (malIds) => {
 
 export const getEpisodeEmbed = (malId, episodeUrl, signal) =>
   client.get(`/api/anime/${malId}/episode/embed`, { params: { episodeUrl }, timeout: 20000, signal }).then((res) => {
+    const payload = res.data?.data
+    if (!payload) return null
+    return payload
+  })
+
+export const getEpisodeStreams = (malId, episodeUrl, signal) =>
+  client.get(`/api/anime/${malId}/episode/streams`, { params: { episodeUrl }, timeout: 30000, signal }).then((res) => {
     const payload = res.data?.data
     if (!payload) return null
     return payload

@@ -10,7 +10,7 @@ function RatedCard({ anime, index }) {
       viewport={{ once: true }}
       transition={{ duration: 0.4, delay: index * 0.06 }}
     >
-      <Link to={`/anime/${anime.malId}`} className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/[0.03] transition-colors group">
+      <Link to={`/anime/${anime.slug || anime.malId}`} className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/[0.03] transition-colors group">
         <span className="text-2xl font-black font-display text-muted w-8 flex-shrink-0 group-hover:text-primary transition-colors">
           {String(index + 1).padStart(2, '0')}
         </span>

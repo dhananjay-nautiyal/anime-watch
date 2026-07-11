@@ -68,7 +68,7 @@ export default function Favorites() {
               animate={{ opacity: 1, scale: 1 }}
               className="group relative"
             >
-              <Link to={`/anime/${fav.anime?.malId || fav.anime?.id}`}>
+              <Link to={`/anime/${fav.anime?.slug || fav.anime?.malId || fav.anime?.id}`}>
                 <ImageWithFallback
                   src={fav.anime?.imageUrl}
                   alt={fav.anime?.title}

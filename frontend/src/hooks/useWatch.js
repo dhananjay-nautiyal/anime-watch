@@ -130,7 +130,7 @@ export function useEpisodeNavigation(malId, episodes) {
 
   const setCurrentEp = useCallback((ep) => {
     setCurrentEpState(ep)
-    window.history.replaceState(null, '', `/watch/${malId}/${ep}`)
+    window.history.replaceState(null, '', `/anime/${malId}/ep/${ep}`)
   }, [malId])
 
   const goNext = useCallback(() => {

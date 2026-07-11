@@ -38,6 +38,10 @@ public class Anime extends Auditable implements Serializable {
     @Schema(description = "MyAnimeList ID", example = "21")
     private Integer malId;
 
+    @Column(unique = true)
+    @Schema(description = "URL-friendly slug", example = "one-piece")
+    private String slug;
+
     @Column(nullable = false)
     @Schema(description = "Anime title", example = "One Piece")
     private String title;

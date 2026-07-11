@@ -12,6 +12,7 @@ import org.springframework.boot.web.servlet.context.ServletWebServerApplicationC
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
@@ -19,6 +20,7 @@ import java.util.List;
 @SpringBootApplication
 @EnableAsync
 @EnableCaching
+@EnableScheduling
 public class AnimeBackendApplication {
 
     public static void main(String[] args) {

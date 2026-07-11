@@ -14,7 +14,7 @@ const ContinueCard = memo(function ContinueCard({ item }) {
       transition={{ duration: 0.4 }}
       className="flex-shrink-0 group"
     >
-      <Link to={`/watch/${item.malId}/${item.episodeNumber}`} className="block">
+      <Link to={`/anime/${item.slug || item.malId}/ep/${item.episodeNumber}`} className="block">
         <div className="relative rounded-xl overflow-hidden" style={{ width: '260px', height: '146px' }}>
           <ImageWithFallback
             src={item.animeImage}

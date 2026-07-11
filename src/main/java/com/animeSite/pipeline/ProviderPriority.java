@@ -6,7 +6,9 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import org.springframework.stereotype.Component;
 
+@Component
 public class ProviderPriority {
 
     private static final Duration STALE_THRESHOLD = Duration.ofMinutes(5);
@@ -19,9 +21,9 @@ public class ProviderPriority {
     private final Map<String, ProviderScore> scores = new ConcurrentHashMap<>();
     private final List<String> defaultOrder;
 
-    public ProviderPriority(ProviderMetrics metrics, List<String> defaultOrder) {
+    public ProviderPriority(ProviderMetrics metrics, List<StreamProvider> providers) {
         this.metrics = metrics;
-        this.defaultOrder = List.copyOf(defaultOrder);
+        this.defaultOrder = providers.stream().map(StreamProvider::getName).collect(Collectors.toUnmodifiableList());
     }
 
     public List<String> getPrioritizedProviders() {

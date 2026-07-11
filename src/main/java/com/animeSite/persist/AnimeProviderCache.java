@@ -43,6 +43,15 @@ public class AnimeProviderCache {
     @Column(name = "validated")
     private boolean validated = false;
 
+    @Column(name = "preferred_provider", length = 50)
+    private String preferredProvider;
+
+    @Column(name = "last_success_time")
+    private Instant lastSuccessTime;
+
+    @Column(name = "failure_count")
+    private int failureCount;
+
     public boolean isExpired() {
         return Instant.now().isAfter(expiresAt);
     }
@@ -56,6 +65,9 @@ public class AnimeProviderCache {
         c.validated = true;
         c.createdAt = Instant.now();
         c.expiresAt = Instant.now().plusSeconds(86400);
+        c.preferredProvider = provider;
+        c.lastSuccessTime = Instant.now();
+        c.failureCount = 0;
         return c;
     }
 
@@ -68,6 +80,7 @@ public class AnimeProviderCache {
         c.validated = true;
         c.createdAt = Instant.now();
         c.expiresAt = Instant.now().plusSeconds(300);
+        c.failureCount = 1;
         return c;
     }
 
@@ -80,6 +93,9 @@ public class AnimeProviderCache {
         c.validated = false;
         c.createdAt = Instant.now();
         c.expiresAt = Instant.now().plusSeconds(300);
+        c.preferredProvider = provider;
+        c.lastSuccessTime = Instant.now();
+        c.failureCount = 0;
         return c;
     }
 }

@@ -11,7 +11,7 @@ function PopularCard({ anime, index }) {
       transition={{ duration: 0.5, delay: index * 0.08 }}
       className="flex-shrink-0 group perspective-[1000px]"
     >
-      <Link to={`/anime/${anime.malId}`} className="block">
+      <Link to={`/anime/${anime.slug || anime.malId}`} className="block">
         <div
           className="relative rounded-xl overflow-hidden transition-all duration-500 group-hover:shadow-glow group-hover:-translate-y-2"
           style={{ width: '200px', height: '300px' }}

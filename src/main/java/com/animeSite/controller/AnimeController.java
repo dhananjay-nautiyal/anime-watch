@@ -87,6 +87,16 @@ public class AnimeController {
         return ResponseEntity.ok(ApiResponse.success(anime));
     }
 
+    @GetMapping("/slug/{slug}")
+    @Operation(summary = "Get anime by slug", description = "Fetches anime detail by URL-friendly slug.")
+    public ResponseEntity<ApiResponse<Anime>> getAnimeBySlug(
+            @Parameter(description = "URL-friendly slug", required = true) @PathVariable String slug) {
+        Anime anime = animeService.getAnimeBySlug(slug);
+        return ResponseEntity.ok(ApiResponse.success(anime));
+    }
+
+
+
     @GetMapping("/seasonal")
     @Operation(summary = "Get current seasonal anime", description = "Fetches current season anime with pagination.")
     public ResponseEntity<ApiResponse<java.util.List<Anime>>> getSeasonal(

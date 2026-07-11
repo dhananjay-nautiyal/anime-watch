@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { getAnimeById, getReviews, addReview, getEpisodes } from '../api/anime'
+import { getAnimeById, getAnimeBySlug, getReviews, addReview, getEpisodes } from '../api/anime'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { addFavorite, removeFavorite, getFavorites } from '../api/favorite'
 import { addToWatchlist, getWatchlist, removeFromWatchlist, updateWatchlistStatus } from '../api/watchlist'
@@ -13,7 +13,7 @@ import { DetailSkeleton } from '../components/Skeleton'
 import ErrorState from '../components/ErrorState'
 
 export default function AnimeDetail() {
-  const { id: malId } = useParams()
+  const { slug } = useParams()
   const { isAuthenticated, user } = useAuth()
   const [anime, setAnime] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -31,11 +31,15 @@ export default function AnimeDetail() {
   const [reviewMsg, setReviewMsg] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  const isNumeric = /^\d+$/.test(slug)
+
   const fetchData = useCallback(async (signal) => {
     setLoading(true)
     setError(false)
     try {
-      const data = await getAnimeById(malId, signal)
+      const data = isNumeric
+        ? await getAnimeById(parseInt(slug), signal)
+        : await getAnimeBySlug(slug, signal)
       if (signal.aborted) return
       setAnime(data)
     } catch {
@@ -43,7 +47,7 @@ export default function AnimeDetail() {
     } finally {
       if (!signal.aborted) setLoading(false)
     }
-  }, [malId])
+  }, [slug, isNumeric])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -218,7 +222,7 @@ export default function AnimeDetail() {
 
             <div className="flex flex-wrap items-center gap-3 mb-6">
               <Link
-                to={`/watch/${anime.malId || anime.id}/1`}
+                to={`/anime/${anime.slug || anime.malId || anime.id}/ep/1`}
                 className="bg-primary hover:bg-primary/90 text-white px-7 py-2.5 rounded-xl text-sm font-semibold transition-all hover:shadow-glow hover:-translate-y-0.5 flex items-center gap-2"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -287,6 +291,7 @@ export default function AnimeDetail() {
                   key={ep.id || ep.episodeNumber}
                   episode={ep}
                   animeId={anime.malId || anime.id}
+                  animeSlug={anime.slug}
                 />
               ))}
             </div>

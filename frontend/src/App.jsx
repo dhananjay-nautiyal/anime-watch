@@ -22,11 +22,12 @@ const NewsDetail = lazy(() => import('./pages/NewsDetail'))
 const AdminUsers = lazy(() => import('./pages/AdminUsers'))
 const AdminNews = lazy(() => import('./pages/AdminNews'))
 const AdminAnime = lazy(() => import('./pages/AdminAnime'))
+const AdminProviders = lazy(() => import('./pages/AdminProviderDashboard'))
 const ComingSoon = lazy(() => import('./pages/ComingSoon'))
 
 function AppRoutes() {
   const location = useLocation()
-  const isWatchPage = location.pathname.startsWith('/watch')
+  const isWatchPage = location.pathname.startsWith('/watch') || location.pathname.match(/^\/anime\/.+\/ep\//)
   const isComingSoonPage = location.pathname.startsWith('/coming-soon')
 
   const page = (
@@ -41,7 +42,8 @@ function AppRoutes() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/trending" element={<Trending />} />
         <Route path="/seasonal" element={<Seasonal />} />
-        <Route path="/anime/:id" element={<AnimeDetail />} />
+        <Route path="/anime/:slug" element={<AnimeDetail />} />
+        <Route path="/anime/:slug/ep/:episode" element={<WatchPage />} />
         <Route path="/watch/:malId/:episodeNumber?" element={<WatchPage />} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="/favorites" element={<ProtectedRoute><Favorites /></ProtectedRoute>} />
@@ -52,6 +54,7 @@ function AppRoutes() {
         <Route path="/admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
         <Route path="/admin/news" element={<AdminRoute><AdminNews /></AdminRoute>} />
         <Route path="/admin/anime" element={<AdminRoute><AdminAnime /></AdminRoute>} />
+        <Route path="/admin/providers" element={<AdminRoute><AdminProviders /></AdminRoute>} />
         <Route path="/coming-soon/:id" element={<ComingSoon />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

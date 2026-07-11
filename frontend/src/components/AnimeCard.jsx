@@ -26,6 +26,16 @@ const STATE_BADGES = {
       </svg>
     ),
   },
+  READY: {
+    label: 'Ready',
+    color: 'bg-primary/20 text-primary border-primary/30',
+    icon: (
+      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
   NOT_RELEASED: {
     label: 'Not Released',
     color: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
@@ -104,7 +114,7 @@ export default function AnimeCard({ anime, index = 0, rank, state }) {
       className="group"
     >
       <Link
-        to={isComingSoon ? `/coming-soon/${malId}` : `/watch/${malId}/1`}
+        to={isComingSoon ? `/coming-soon/${malId}` : `/anime/${anime.slug || malId}/ep/1`}
         className="block"
       >
         <div className="relative rounded-xl overflow-hidden bg-surface/50 shadow-card border border-white/[0.03] transition-all duration-500 group-hover:shadow-glow group-hover:shadow-primary/20 group-hover:-translate-y-1 group-hover:scale-[1.02] group-hover:border-primary/20">

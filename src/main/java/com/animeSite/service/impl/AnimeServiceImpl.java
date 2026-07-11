@@ -8,6 +8,7 @@ import com.animeSite.model.JikanListResponse;
 import com.animeSite.persist.Anime;
 import com.animeSite.repo.AnimeRepository;
 import com.animeSite.service.AnimeService;
+import com.animeSite.service.SlugService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -25,10 +26,12 @@ public class AnimeServiceImpl implements AnimeService {
 
     private final JikanApiClient jikanApiClient;
     private final AnimeRepository animeRepository;
+    private final SlugService slugService;
 
-    public AnimeServiceImpl(JikanApiClient jikanApiClient, AnimeRepository animeRepository) {
+    public AnimeServiceImpl(JikanApiClient jikanApiClient, AnimeRepository animeRepository, SlugService slugService) {
         this.jikanApiClient = jikanApiClient;
         this.animeRepository = animeRepository;
+        this.slugService = slugService;
     }
 
     @Cacheable(value = "trending", key = "'page-'+#page", unless = "#result == null")
@@ -72,6 +75,12 @@ public class AnimeServiceImpl implements AnimeService {
         } catch (Exception ignored) {}
         return animeRepository.findByMalId(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with ID: " + id));
+    }
+
+    @Cacheable(value = "anime", key = "'slug-'+#slug", unless = "#result == null")
+    public Anime getAnimeBySlug(String slug) {
+        return animeRepository.findBySlug(slug)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with slug: " + slug));
     }
 
     @Cacheable(value = "seasonal", key = "'page-'+#page", unless = "#result == null")
@@ -125,7 +134,12 @@ public class AnimeServiceImpl implements AnimeService {
                 anime.setMalId(data.getMalId());
             }
             String englishTitle = data.getTitleEnglish();
-            anime.setTitle(englishTitle != null && !englishTitle.isBlank() ? englishTitle : data.getTitle());
+            String title = englishTitle != null && !englishTitle.isBlank() ? englishTitle : data.getTitle();
+            anime.setTitle(title);
+            if (anime.getSlug() == null) {
+                String rawSlug = slugService.generateSlug(title);
+                anime.setSlug(slugService.ensureUniqueSlug(rawSlug, data.getMalId()));
+            }
             anime.setSynopsis(data.getSynopsis());
             anime.setRating(data.getScore());
             anime.setEpisodes(data.getEpisodes());
@@ -189,7 +203,12 @@ public class AnimeServiceImpl implements AnimeService {
         Anime anime = existing.orElseGet(Anime::new);
         anime.setMalId(data.getMalId());
         String englishTitle = data.getTitleEnglish();
-        anime.setTitle(englishTitle != null && !englishTitle.isBlank() ? englishTitle : data.getTitle());
+        String title = englishTitle != null && !englishTitle.isBlank() ? englishTitle : data.getTitle();
+        anime.setTitle(title);
+        if (anime.getSlug() == null) {
+            String rawSlug = slugService.generateSlug(title);
+            anime.setSlug(slugService.ensureUniqueSlug(rawSlug, data.getMalId()));
+        }
         anime.setSynopsis(data.getSynopsis());
         anime.setRating(data.getScore());
         anime.setEpisodes(data.getEpisodes());

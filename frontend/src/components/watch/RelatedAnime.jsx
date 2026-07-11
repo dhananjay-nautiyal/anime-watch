@@ -25,7 +25,7 @@ function AnimeCard({ item, compact }) {
   if (compact) {
     return (
       <Link
-        to={`/watch/${id}/1`}
+        to={`/anime/${item.slug || id}/ep/1`}
         className="group flex-shrink-0 w-[140px]"
       >
         <div className="aspect-[3/4] rounded-lg overflow-hidden bg-black/40 ring-1 ring-white/5 group-hover:ring-primary/30 transition-all">
@@ -51,7 +51,7 @@ function AnimeCard({ item, compact }) {
 
   return (
     <Link
-      to={`/watch/${id}/1`}
+      to={`/anime/${item.slug || id}/ep/1`}
       className="group flex gap-3 flex-shrink-0 w-[260px] p-2.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-white/10 transition-all"
     >
       <div className="w-16 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-black/40">

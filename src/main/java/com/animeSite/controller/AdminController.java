@@ -4,8 +4,10 @@ import com.animeSite.core.model.ApiResponse;
 import com.animeSite.persist.Anime;
 import com.animeSite.persist.User;
 import com.animeSite.repo.UserRepository;
+import com.animeSite.repo.AnimeRepository;
 import com.animeSite.service.AnimeService;
 import com.animeSite.service.ReviewService;
+import com.animeSite.service.SlugService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,12 +27,17 @@ public class AdminController {
     private final AnimeService animeService;
     private final ReviewService reviewService;
     private final UserRepository userRepository;
+    private final AnimeRepository animeRepository;
+    private final SlugService slugService;
 
     public AdminController(AnimeService animeService, ReviewService reviewService,
-                           UserRepository userRepository) {
+                           UserRepository userRepository, AnimeRepository animeRepository,
+                           SlugService slugService) {
         this.animeService = animeService;
         this.reviewService = reviewService;
         this.userRepository = userRepository;
+        this.animeRepository = animeRepository;
+        this.slugService = slugService;
     }
 
     @PutMapping("/anime/{id}/affiliate")
@@ -107,5 +114,26 @@ public class AdminController {
             @Parameter(description = "User ID", required = true) @PathVariable UUID id) {
         userRepository.deleteById(id);
         return ResponseEntity.ok(ApiResponse.success("User deleted successfully"));
+    }
+
+    @PostMapping("/anime/migrate-slugs")
+    @Operation(summary = "Generate slugs for all anime without one", description = "One-time migration to populate slug field for existing anime (Admin only).")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> migrateSlugs() {
+        java.util.List<Anime> withoutSlug = animeRepository.findAll().stream()
+            .filter(a -> a.getSlug() == null || a.getSlug().isBlank())
+            .toList();
+
+        int count = 0;
+        for (Anime anime : withoutSlug) {
+            String rawSlug = slugService.generateSlug(anime.getTitle());
+            anime.setSlug(slugService.ensureUniqueSlug(rawSlug, anime.getMalId()));
+            animeRepository.save(anime);
+            count++;
+        }
+
+        return ResponseEntity.ok(ApiResponse.success(Map.of(
+            "total", withoutSlug.size(),
+            "migrated", count
+        )));
     }
 }

@@ -11,6 +11,7 @@ public interface AnimeService {
     AnimePage searchAnime(String query, int page);
     AnimePage filterAnime(String genres, String genresExclude, String type, String status, String orderBy, String sort, int page);
     Anime getAnimeById(int id);
+    Anime getAnimeBySlug(String slug);
     AnimePage getSeasonal(int page);
     Anime updateAffiliateUrl(UUID animeId, String affiliateUrl);
     void deleteAnime(UUID animeId);

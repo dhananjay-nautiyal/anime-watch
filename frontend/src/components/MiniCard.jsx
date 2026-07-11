@@ -5,7 +5,7 @@ export default function MiniCard({ anime }) {
 
   return (
     <div className="flex bg-card hover:bg-cardHover transition-colors" style={{ marginTop: '0.3rem' }}>
-      <Link to={`/anime/${anime.malId}`} className="flex-shrink-0" style={{ width: '4.5rem' }}>
+      <Link to={`/anime/${anime.slug || anime.malId}`} className="flex-shrink-0" style={{ width: '4.5rem' }}>
         <div className="aspect-[3/4] overflow-hidden">
           <ImageWithFallback
             src={anime.imageUrl}
@@ -15,7 +15,7 @@ export default function MiniCard({ anime }) {
         </div>
       </Link>
       <div className="flex-1 ml-3 py-1 overflow-hidden">
-        <Link to={`/anime/${anime.malId}`}>
+        <Link to={`/anime/${anime.slug || anime.malId}`}>
           <p className="text-link hover:text-textMajor transition-colors truncate text-sm">{anime.title}</p>
         </Link>
         <div className="flex items-center gap-2 mt-1 text-xs text-gray">

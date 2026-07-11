@@ -5,9 +5,12 @@ import Hls from 'hls.js'
 const STORAGE = {
   volume: 'aw_volume',
   speed: 'aw_speed',
+  quality: 'aw_quality',
+  theater: 'aw_theater',
 }
 const CONTROLS_HIDE_DELAY = 3000
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2]
+const SKIP_INTRO_DURATION = 90
 const SWIPE_THRESHOLD = 50
 
 function fmt(sec) {
@@ -18,24 +21,18 @@ function fmt(sec) {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`
 }
 
-function seekTooltipText(time, dur) {
-  return fmt(time) + ' / ' + fmt(dur)
-}
-
-function proxyUrl(url, ref) {
-  if (!url || url.startsWith('/api/stream/proxy')) return url
-  return `/api/stream/proxy?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(ref || 'https://anineko.to/')}`
-}
-
 export default function VideoPlayer({
   embedUrl, servers = [], poster, animeTitle, episodeNumber, animeId,
   onRetry, onChangeSource, streamType = 'hls', onEnded, onTimeUpdate, autoNext = true, autoPlay = true,
+  onSwipeUp, onSwipeDown,
+  provider, currentServer, currentLanguage, currentQuality,
 }) {
   const videoRef = useRef(null)
   const containerRef = useRef(null)
   const controlsTimer = useRef(null)
   const hlsRef = useRef(null)
   const seeking = useRef(false)
+
   const [state, setState] = useState({
     playing: false, currentTime: 0, duration: 0,
     volume: parseFloat(localStorage.getItem(STORAGE.volume) || '1'),
@@ -43,6 +40,9 @@ export default function VideoPlayer({
     fullscreen: false, pip: false, buffering: true,
     showControls: true, showSettings: false, showVol: false,
     hasPoster: !autoPlay,
+    qualities: [], currentQuality: -1, showQuality: false,
+    theater: localStorage.getItem(STORAGE.theater) === 'true',
+    subtitles: [], currentSubtitle: -1, showSubtitles: false,
   })
   const st = useCallback((partial) => setState(prev => ({ ...prev, ...partial })), [])
 
@@ -62,8 +62,17 @@ export default function VideoPlayer({
 
   const handleSpeedChange = useCallback((s) => {
     if (videoRef.current) videoRef.current.playbackRate = s
-    st({ speed: s, showSettings: false })
+    st({ speed: s, showSettings: false, showQuality: false })
     localStorage.setItem(STORAGE.speed, String(s))
+  }, [st])
+
+  const handleQualityChange = useCallback((level) => {
+    const hls = hlsRef.current
+    if (hls) {
+      hls.currentLevel = level
+      localStorage.setItem(STORAGE.quality, String(level))
+    }
+    st({ currentQuality: level, showQuality: false, showSettings: false })
   }, [st])
 
   const toggleFullscreen = useCallback(() => {
@@ -83,11 +92,42 @@ export default function VideoPlayer({
     } catch {}
   }, [])
 
+  const toggleTheater = useCallback(() => {
+    st(p => ({ theater: !p.theater, showSettings: false }))
+    localStorage.setItem(STORAGE.theater, String(!state.theater))
+  }, [st, state.theater])
+
+  const handleShare = useCallback(async () => {
+    try {
+      const url = window.location.href
+      if (navigator.share) {
+        await navigator.share({ title: animeTitle, url })
+      } else {
+        await navigator.clipboard.writeText(url)
+      }
+    } catch {}
+  }, [animeTitle])
+
+  const handleSubtitleChange = useCallback((idx) => {
+    const hls = hlsRef.current
+    if (hls && hls.subtitleTrack !== undefined) {
+      hls.subtitleTrack = idx
+    }
+    st({ currentSubtitle: idx, showSubtitles: false, showSettings: false })
+  }, [st])
+
   const seek = useCallback((dir) => {
     const v = videoRef.current
     if (!v) return
     v.currentTime = Math.max(0, Math.min(v.duration || 0, v.currentTime + dir * (dir > 100 ? 10 : 5)))
   }, [])
+
+  const skipIntro = useCallback(() => {
+    const v = videoRef.current
+    if (v) v.currentTime = Math.min(v.duration, SKIP_INTRO_DURATION + 5)
+  }, [])
+
+  const showSkipIntro = state.currentTime > 0 && state.currentTime < SKIP_INTRO_DURATION && state.duration > SKIP_INTRO_DURATION + 30
 
   useEffect(() => {
     const v = videoRef.current
@@ -143,7 +183,7 @@ export default function VideoPlayer({
       clearTimeout(controlsTimer.current)
       if (state.playing) {
         controlsTimer.current = setTimeout(() => {
-          st({ showControls: false, showSettings: false, showVol: false })
+          st({ showControls: false, showSettings: false, showVol: false, showQuality: false })
         }, CONTROLS_HIDE_DELAY)
       }
     }
@@ -167,15 +207,32 @@ export default function VideoPlayer({
         localStorage.removeItem(resumeKey)
       }
     }
-    st({ buffering: true, hasPoster: !autoPlay })
+    st({ buffering: true, hasPoster: !autoPlay, qualities: [], currentQuality: -1 })
 
     if (streamType === 'hls' && Hls.isSupported() && embedUrl.includes('.m3u8')) {
       const hls = new Hls({ enableWorker: true, lowLatencyMode: true, maxBufferLength: 30 })
       hlsRef.current = hls
-      hls.loadSource(proxyUrl(embedUrl))
+      hls.loadSource(embedUrl.startsWith('/api/stream/proxy') ? embedUrl : `/api/stream/proxy?url=${encodeURIComponent(embedUrl)}&referer=https://anineko.to/`)
       hls.attachMedia(v)
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        const qualities = hls.levels.map((l, i) => ({
+          index: i, height: l.height, width: l.width, bitrate: l.bitrate,
+          label: l.height ? `${l.height}p` : `Quality ${i}`,
+        }))
+        st({ qualities })
+        const saved = parseInt(localStorage.getItem(STORAGE.quality))
+        if (saved >= 0 && saved < hls.levels.length) {
+          hls.currentLevel = saved
+          st({ currentQuality: saved })
+        }
         if (autoPlay) v.play().catch(() => {})
+      })
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+        st({ currentQuality: data.level })
+      })
+      hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, (_, data) => {
+        const subtitles = data.subtitleTracks || []
+        st({ subtitles: subtitles.map((t, i) => ({ index: i, label: t.label, lang: t.lang })) })
       })
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) {
@@ -184,10 +241,10 @@ export default function VideoPlayer({
         }
       })
     } else {
-      v.src = proxyUrl(embedUrl, streamType === 'mp4' ? '' : undefined)
+      v.src = embedUrl.startsWith('/api/stream/proxy') ? embedUrl : `/api/stream/proxy?url=${encodeURIComponent(embedUrl)}`
       if (autoPlay) v.play().catch(() => {})
     }
-  }, [embedUrl, streamType, animeId, episodeNumber, autoPlay])
+  }, [embedUrl, streamType, animeId, episodeNumber, autoPlay, st])
 
   useEffect(() => {
     const handleKb = (e) => {
@@ -202,7 +259,9 @@ export default function VideoPlayer({
         case 'KeyP': e.preventDefault(); togglePip(); break
         case 'KeyM': e.preventDefault(); st(p => ({ muted: !p.muted })); break
         case 'KeyR': e.preventDefault(); onRetry?.(); break
-        case 'Escape': st({ showSettings: false }); break
+        case 'KeyT': e.preventDefault(); toggleTheater(); break
+        case 'KeyS': e.preventDefault(); handleShare(); break
+        case 'Escape': st({ showSettings: false, showQuality: false }); break
       }
     }
     window.addEventListener('keydown', handleKb)
@@ -232,7 +291,6 @@ export default function VideoPlayer({
     if (v?.duration) setHoverTime(pos * v.duration)
   }, [])
 
-  // Touch gesture handling
   const touchStartX = useRef(0)
   const touchStartY = useRef(0)
   const touchStartTime = useRef(0)
@@ -257,10 +315,13 @@ export default function VideoPlayer({
         setSwipeIndicator(seekAmount)
         setTimeout(() => setSwipeIndicator(null), 800)
       }
+    } else if (Math.abs(dy) > SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx) * 1.5 && dt < 500) {
+      if (dy < 0 && onSwipeUp) { onSwipeUp(); setSwipeIndicator(-30); setTimeout(() => setSwipeIndicator(null), 800) }
+      else if (dy > 0 && onSwipeDown) { onSwipeDown(); setSwipeIndicator(30); setTimeout(() => setSwipeIndicator(null), 800) }
     } else if (dt < 300 && Math.abs(dx) < 20 && Math.abs(dy) < 20) {
       togglePlay()
     }
-  }, [togglePlay])
+  }, [togglePlay, onSwipeUp, onSwipeDown])
 
   if (streamType === 'iframe') {
     return (
@@ -277,11 +338,20 @@ export default function VideoPlayer({
   }
 
   const volumeIcon = state.muted || state.volume === 0 ? 'Muted' : state.volume < 0.5 ? 'Low' : 'High'
+  const currentQualityLabel = state.currentQuality >= 0 && state.qualities[state.currentQuality]
+    ? state.qualities[state.currentQuality].label
+    : 'Auto'
+
+  const currentSubLabel = state.currentSubtitle >= 0 && state.subtitles[state.currentSubtitle]
+    ? state.subtitles[state.currentSubtitle].label
+    : 'Off'
 
   return (
-    <div
-      ref={containerRef}
-      className="w-full aspect-video bg-black rounded-xl overflow-hidden shadow-2xl relative group cursor-pointer touch-manipulation"
+    <>
+      <div
+        ref={containerRef}
+        className={`w-full aspect-video bg-black rounded-xl overflow-hidden shadow-2xl relative group cursor-pointer touch-manipulation ${state.theater ? 'rounded-none' : ''}`}
+        style={state.theater ? { maxWidth: '100%', maxHeight: '85vh' } : {}}
       onMouseMove={() => st({ showControls: true })}
       onMouseLeave={() => state.playing && st({ showControls: false })}
       onTouchStart={handleTouchStart}
@@ -314,8 +384,22 @@ export default function VideoPlayer({
       />
 
       {state.buffering && state.playing && !state.hasPoster && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/20 z-20 pointer-events-none">
-          <div className="w-10 h-10 border-[3px] border-primary/30 border-t-primary rounded-full animate-spin" />
+        <div className="absolute inset-x-0 bottom-0 z-20 pointer-events-none">
+          <div className="h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40 bg-[length:200%_100%] animate-gradient-x" />
+        </div>
+      )}
+
+      {showSkipIntro && (
+        <div className="absolute top-4 right-4 z-30">
+          <button
+            onClick={(e) => { e.stopPropagation(); skipIntro() }}
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-all border border-white/10 flex items-center gap-1.5"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+            </svg>
+            Skip Intro
+          </button>
         </div>
       )}
 
@@ -329,6 +413,43 @@ export default function VideoPlayer({
             className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent z-30 flex flex-col justify-end"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Episode title overlay with badges */}
+            <div className="px-4 pt-4 pb-2 flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-white/90 text-sm font-medium truncate drop-shadow-lg">
+                  {animeTitle}{episodeNumber ? ` - Episode ${episodeNumber}` : ''}
+                </p>
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  {provider && <span className="text-[9px] bg-white/10 backdrop-blur-sm text-white/80 px-1.5 py-0.5 rounded font-medium">{provider}</span>}
+                  {currentServer && <span className="text-[9px] bg-primary/20 backdrop-blur-sm text-primary px-1.5 py-0.5 rounded font-medium">{currentServer}</span>}
+                  {currentLanguage && <span className="text-[9px] bg-emerald-500/20 backdrop-blur-sm text-emerald-400 px-1.5 py-0.5 rounded font-medium">{currentLanguage}</span>}
+                  {currentQuality && <span className="text-[9px] bg-amber-500/20 backdrop-blur-sm text-amber-400 px-1.5 py-0.5 rounded font-medium">{currentQuality}</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleShare() }}
+                  className="text-white/60 hover:text-white bg-black/30 hover:bg-black/50 backdrop-blur-sm rounded-lg p-1.5 transition-all"
+                  aria-label="Share"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                </button>
+                {onRetry && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRetry() }}
+                    className="text-white/60 hover:text-white bg-black/30 hover:bg-black/50 backdrop-blur-sm rounded-lg p-1.5 transition-all"
+                    aria-label="Retry"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="px-4 pb-3 space-y-2">
               <div
                 className="relative h-1 bg-white/20 rounded-full cursor-pointer group/seek"
@@ -341,7 +462,7 @@ export default function VideoPlayer({
                 <div className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-primary rounded-full shadow-lg opacity-0 group-hover/seek:opacity-100 transition" style={{ left: `calc(${progress}% - 7px)` }} />
                 {hoverTime !== null && (
                   <div className="absolute -top-8 -translate-x-1/2 bg-black/90 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap" style={{ left: `${hoverPos * 100}%` }}>
-                    {seekTooltipText(hoverTime, state.duration)}
+                    {fmt(hoverTime)} / {fmt(state.duration)}
                   </div>
                 )}
               </div>
@@ -376,8 +497,65 @@ export default function VideoPlayer({
 
                 <div className="flex-1" />
 
+                {/* Quality selector */}
+                {state.qualities.length > 1 && (
+                  <div className="relative">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); st(p => ({ showQuality: !p.showQuality, showSettings: false })) }}
+                      className="text-white/80 hover:text-white transition-colors text-[11px] font-semibold"
+                      aria-label="Quality"
+                    >
+                      {currentQualityLabel}
+                    </button>
+                    <AnimatePresence>
+                      {state.showQuality && (
+                        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="absolute bottom-8 right-0 bg-black/95 border border-white/10 rounded-xl p-2 shadow-2xl min-w-[120px] z-40">
+                          <p className="text-white/50 text-[10px] font-semibold uppercase tracking-wider px-3 py-1">Quality</p>
+                          <button onClick={() => handleQualityChange(-1)} className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${state.currentQuality === -1 ? 'bg-primary/20 text-primary font-medium' : 'text-white/70 hover:text-white hover:bg-white/5'}`}>
+                            Auto
+                          </button>
+                          {state.qualities.map((q) => (
+                            <button key={q.index} onClick={() => handleQualityChange(q.index)} className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${state.currentQuality === q.index ? 'bg-primary/20 text-primary font-medium' : 'text-white/70 hover:text-white hover:bg-white/5'}`}>
+                              {q.label}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
+
+                {/* Subtitle selector */}
+                {state.subtitles.length > 0 && (
+                  <div className="relative">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); st(p => ({ showSubtitles: !p.showSubtitles, showSettings: false, showQuality: false })) }}
+                      className="text-white/80 hover:text-white transition-colors text-[11px] font-semibold"
+                      aria-label="Subtitles"
+                    >
+                      {currentSubLabel}
+                    </button>
+                    <AnimatePresence>
+                      {state.showSubtitles && (
+                        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="absolute bottom-8 right-0 bg-black/95 border border-white/10 rounded-xl p-2 shadow-2xl min-w-[120px] z-40">
+                          <p className="text-white/50 text-[10px] font-semibold uppercase tracking-wider px-3 py-1">Subtitles</p>
+                          <button onClick={() => handleSubtitleChange(-1)} className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${state.currentSubtitle === -1 ? 'bg-primary/20 text-primary font-medium' : 'text-white/70 hover:text-white hover:bg-white/5'}`}>
+                            Off
+                          </button>
+                          {state.subtitles.map((s) => (
+                            <button key={s.index} onClick={() => handleSubtitleChange(s.index)} className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${state.currentSubtitle === s.index ? 'bg-primary/20 text-primary font-medium' : 'text-white/70 hover:text-white hover:bg-white/5'}`}>
+                              {s.label}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
+
+                {/* Settings */}
                 <div className="relative">
-                  <button onClick={(e) => { e.stopPropagation(); st(p => ({ showSettings: !p.showSettings })) }} className="text-white/80 hover:text-white transition-colors" aria-label="Settings">
+                  <button onClick={(e) => { e.stopPropagation(); st(p => ({ showSettings: !p.showSettings, showQuality: false })) }} className="text-white/80 hover:text-white transition-colors" aria-label="Settings">
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.488.488 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81a.48.48 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.488.488 0 00-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.611 3.611 0 0112 15.6z"/></svg>
                   </button>
                   <AnimatePresence>
@@ -390,8 +568,16 @@ export default function VideoPlayer({
                           </button>
                         ))}
                         <div className="h-px bg-white/10 my-1" />
+                        <p className="text-white/50 text-[10px] font-semibold uppercase tracking-wider px-3 py-1">Audio</p>
+                        <button onClick={(e) => { e.stopPropagation() }} className="w-full text-left px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+                          Default Track
+                        </button>
+                        <div className="h-px bg-white/10 my-1" />
                         <button onClick={(e) => { e.stopPropagation(); togglePip() }} className="w-full text-left px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
                           Picture in Picture
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); toggleTheater() }} className="w-full text-left px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+                          {state.theater ? 'Exit Theater' : 'Theater Mode'}
                         </button>
                       </motion.div>
                     )}
@@ -411,13 +597,32 @@ export default function VideoPlayer({
         )}
       </AnimatePresence>
 
+      {state.theater && (
+        <button
+          onClick={(e) => { e.stopPropagation(); toggleTheater() }}
+          className="absolute top-3 right-3 z-40 bg-black/60 hover:bg-black/80 text-white/80 hover:text-white rounded-lg px-2 py-1 text-[10px] font-medium transition-all border border-white/10"
+          aria-label="Exit theater mode"
+        >
+          Exit Theater
+        </button>
+      )}
+
       {swipeIndicator && (
-        <div className={`absolute top-1/2 -translate-y-1/2 z-40 bg-black/60 backdrop-blur-sm rounded-full w-16 h-16 flex items-center justify-center shadow-2xl pointer-events-none ${swipeIndicator > 0 ? 'left-4' : 'right-4'}`}>
-          <svg className={`w-7 h-7 text-white ${swipeIndicator > 0 ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
-          </svg>
+        <div className={`absolute top-1/2 -translate-y-1/2 z-40 bg-black/60 backdrop-blur-sm rounded-full w-16 h-16 flex items-center justify-center shadow-2xl pointer-events-none ${
+          Math.abs(swipeIndicator) > 20 ? 'top-1/3' : Math.abs(swipeIndicator) === 30 ? 'top-1/10' : ''
+        } ${swipeIndicator > 0 ? 'left-4' : 'right-4'}`}>
+          {Math.abs(swipeIndicator) === 30 ? (
+            <svg className={`w-7 h-7 text-white ${swipeIndicator > 0 ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 13l-7 7-7-7m14-8l-7 7-7-7" />
+            </svg>
+          ) : (
+            <svg className={`w-7 h-7 text-white ${swipeIndicator > 0 ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
+            </svg>
+          )}
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }

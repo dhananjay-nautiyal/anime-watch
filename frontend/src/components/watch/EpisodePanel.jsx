@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import ImageWithFallback from '../ImageWithFallback'
 
 const PAGE_SIZE = 30
 
@@ -8,63 +7,39 @@ function fmtNum(n) {
   return String(n).padStart(3, '0')
 }
 
-function EpisodeCard({ episode, malId, isActive, progress, onSelect }) {
+function EpisodeGridCell({ episode, malId, isActive, isWatched, progress, onSelect }) {
+  const progressPct = progress > 0 ? Math.min(progress, 100) : 0
+
   return (
     <button
       onClick={() => onSelect(episode)}
-      className={`w-full text-left flex gap-3 p-2.5 rounded-xl transition-all duration-200 group ${
+      className={`relative flex flex-col items-center justify-center w-full aspect-square rounded-lg text-xs font-medium transition-all duration-200 group border ${
         isActive
-          ? 'bg-primary/10 border border-primary/20'
-          : 'hover:bg-white/[0.04] border border-transparent'
+          ? 'bg-primary/15 border-primary/40 text-primary shadow-lg shadow-primary/10 ring-1 ring-primary/30'
+          : isWatched
+            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/15 hover:border-emerald-500/40'
+            : 'bg-white/[0.04] border-white/10 text-white/70 hover:bg-white/[0.08] hover:border-white/20 hover:text-white'
       }`}
       aria-current={isActive ? 'true' : undefined}
+      aria-label={`Episode ${episode.episodeNumber}`}
     >
-      <div className="relative w-24 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-black/40">
-        {episode.thumbnail || episode.imageUrl ? (
-          <ImageWithFallback
-            src={episode.thumbnail || episode.imageUrl}
-            alt={`Episode ${episode.episodeNumber}`}
-            className="group-hover:scale-105 transition-transform duration-300"
-            containerClass="w-full h-full"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <svg className="w-5 h-5 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-        )}
-        {progress > 0 && (
-          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/20">
-            <div className="h-full bg-primary rounded-r transition-all" style={{ width: `${Math.min(progress, 100)}%` }} />
-          </div>
-        )}
-        {isActive && (
-          <div className="absolute inset-0 ring-2 ring-primary/50 rounded-lg" />
-        )}
-      </div>
-      <div className="flex-1 min-w-0 py-0.5">
-        <p className="text-[11px] text-muted font-medium">EP {episode.episodeNumber}</p>
-        <p className="text-sm text-white font-medium truncate">
-          {episode.title || `Episode ${episode.episodeNumber}`}
-        </p>
-        {(episode.duration || episode.airDate) && (
-          <p className="text-[11px] text-muted mt-0.5">
-            {episode.duration && <span>{episode.duration}</span>}
-            {episode.duration && episode.airDate && <span className="mx-1">·</span>}
-            {episode.airDate && <span>{episode.airDate}</span>}
-          </p>
-        )}
-        <div className="flex items-center gap-1.5 mt-1">
-          {episode.filler && (
-            <span className="text-[9px] bg-yellow-500/15 text-yellow-400 px-1.5 py-0.5 rounded font-medium">Filler</span>
-          )}
-          {episode.recap && (
-            <span className="text-[9px] bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded font-medium">Recap</span>
-          )}
+      {episode.filler && (
+        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-yellow-400 rounded-full z-10" title="Filler" />
+      )}
+      {episode.recap && (
+        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-blue-400 rounded-full z-10" title="Recap" />
+      )}
+      <span className={`font-bold ${isActive ? 'text-primary' : ''}`}>{fmtNum(episode.episodeNumber)}</span>
+      {progressPct > 0 && !isActive && (
+        <div className="absolute bottom-1 left-1 right-1 h-0.5 bg-white/10 rounded-full overflow-hidden">
+          <div className="h-full bg-emerald-400 rounded-full transition-all" style={{ width: `${progressPct}%` }} />
         </div>
-      </div>
+      )}
+      {isActive && (
+        <svg className="w-3.5 h-3.5 text-primary absolute -bottom-0.5" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+        </svg>
+      )}
     </button>
   )
 }
@@ -98,15 +73,15 @@ export default function EpisodePanel({
   }, [episodes, rangeIdx, ranges, search])
 
   const handleSelect = useCallback((ep) => {
+    if (!malId) return
+    navigate(`/anime/${malId}/ep/${ep.episodeNumber}`, { replace: true })
     onSelect(ep)
-  }, [onSelect])
+  }, [malId, navigate, onSelect])
 
   useEffect(() => {
     if (listRef.current) {
       const active = listRef.current.querySelector('[aria-current="true"]')
-      if (active) {
-        active.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-      }
+      if (active) active.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     }
   }, [currentEp])
 
@@ -142,12 +117,7 @@ export default function EpisodePanel({
               </svg>
             </div>
             <p className="text-muted text-xs mb-3 px-4">{error}</p>
-            <button
-              onClick={onRetry}
-              className="bg-primary/20 hover:bg-primary/30 text-primary text-xs font-medium px-4 py-2 rounded-lg transition-all"
-            >
-              Retry
-            </button>
+            <button onClick={onRetry} className="bg-primary/20 hover:bg-primary/30 text-primary text-xs font-medium px-4 py-2 rounded-lg transition-all">Retry</button>
           </div>
         )}
 
@@ -160,12 +130,7 @@ export default function EpisodePanel({
             </div>
             <p className="text-muted text-xs mb-1">No episodes available</p>
             <p className="text-muted/50 text-[10px] mb-3">This title may not be available yet</p>
-            <button
-              onClick={onRetry}
-              className="bg-primary/20 hover:bg-primary/30 text-primary text-xs font-medium px-4 py-2 rounded-lg transition-all"
-            >
-              Check again
-            </button>
+            <button onClick={onRetry} className="bg-primary/20 hover:bg-primary/30 text-primary text-xs font-medium px-4 py-2 rounded-lg transition-all">Check again</button>
           </div>
         )}
 
@@ -191,19 +156,11 @@ export default function EpisodePanel({
                 aria-label="Search episodes"
               />
               {search ? (
-                <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-white transition-colors"
-                  aria-label="Clear search"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-white transition-colors" aria-label="Clear search">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               ) : (
-                <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+                <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
               )}
             </div>
           </div>
@@ -211,25 +168,26 @@ export default function EpisodePanel({
       </div>
 
       {showList && (
-          <div ref={listRef} className="overflow-y-auto max-h-[480px] episode-sidebar" role="list" aria-label="Episode list">
-          <div className="p-2 space-y-0.5">
-            {filtered.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-muted text-xs">No episodes match your search</p>
-              </div>
-            ) : (
-              filtered.map((ep) => (
-                <EpisodeCard
+        <div ref={listRef} className="overflow-y-auto max-h-[480px] p-3 episode-sidebar" role="list" aria-label="Episode list">
+          {filtered.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted text-xs">No episodes match</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 gap-1.5">
+              {filtered.map((ep) => (
+                <EpisodeGridCell
                   key={ep.episodeNumber}
                   episode={ep}
                   malId={malId}
                   isActive={currentEp === ep.episodeNumber}
+                  isWatched={false}
                   progress={0}
                   onSelect={handleSelect}
                 />
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

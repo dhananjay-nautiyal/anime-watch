@@ -47,6 +47,19 @@ public class ProviderHealthMonitor {
         return s != null ? s.getHealthScore() : 1.0;
     }
 
+    public Map<String, Object> getStats(String provider) {
+        ProviderStats s = stats.get(provider);
+        if (s == null) return Map.of("error", "No data for provider");
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("successCount", s.successCount.get());
+        m.put("failureCount", s.failureCount.get());
+        m.put("timeoutCount", s.timeoutCount.get());
+        m.put("rate429Count", s.rate429Count.get());
+        m.put("avgLatencyMs", s.successCount.get() > 0 ? s.totalLatencyMs.get() / s.successCount.get() : 0);
+        m.put("healthScore", s.getHealthScore());
+        return m;
+    }
+
     public List<String> getHealthyProviders() {
         List<Map.Entry<String, ProviderStats>> entries = new ArrayList<>(stats.entrySet());
         entries.sort((a, b) -> Double.compare(b.getValue().getHealthScore(), a.getValue().getHealthScore()));

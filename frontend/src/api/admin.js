@@ -23,3 +23,12 @@ export const importTrendingAnime = (page = 0) =>
 
 export const importSeasonalAnime = (page = 0) =>
   client.post('/api/admin/anime/import/seasonal', null, { params: { page } })
+
+export const getProviderHealth = () =>
+  client.get('/api/admin/providers/health')
+
+export const getProviderMetrics = () =>
+  client.get('/api/admin/providers/metrics')
+
+export const getProviderCache = () =>
+  client.get('/api/admin/providers/cache')

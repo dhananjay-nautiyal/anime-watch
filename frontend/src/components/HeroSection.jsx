@@ -101,7 +101,7 @@ const HeroSection = memo(function HeroSection({ items }) {
 
             <motion.div className="flex items-center gap-3 flex-wrap">
               <Link
-                to={`/watch/${item.malId || item.id}/1`}
+                to={`/anime/${item.slug || item.malId || item.id}/ep/1`}
                 className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-semibold text-sm transition-all hover:shadow-glow hover:-translate-y-0.5 flex items-center gap-2"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -110,7 +110,7 @@ const HeroSection = memo(function HeroSection({ items }) {
                 Watch Now
               </Link>
               <Link
-                to={`/anime/${item.malId || item.id}`}
+                to={`/anime/${item.slug || item.malId || item.id}`}
                 className="glass text-link hover:text-white px-6 py-3 rounded-xl text-sm font-medium transition-all hover:bg-white/10 hover:-translate-y-0.5 backdrop-blur-md"
               >
                 More Info

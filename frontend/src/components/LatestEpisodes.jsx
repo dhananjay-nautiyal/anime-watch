@@ -12,7 +12,7 @@ function EpisodeCard({ anime, index }) {
       transition={{ duration: 0.4, delay: (index % 6) * 0.06 }}
       className="group"
     >
-      <Link to={`/watch/${anime.malId}/1`} className="block">
+      <Link to={`/anime/${anime.slug || anime.malId}/ep/1`} className="block">
         <div className="relative rounded-xl overflow-hidden bg-surface/50" style={{ paddingBottom: '140%' }}>
           <ImageWithFallback
             src={anime.imageUrl}

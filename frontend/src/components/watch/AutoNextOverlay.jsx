@@ -1,92 +1,71 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
-const COUNTDOWN = 5
-
-export default function AutoNextOverlay({ visible, onNext, onCancel, nextEpisode }) {
-  const [count, setCount] = useState(COUNTDOWN)
-  const timer = useRef(null)
-  const mounted = useRef(true)
+export default function AutoNextOverlay({ visible, nextEpisode, animeTitle, onPlay, onCancel, countdown = 10 }) {
+  const [counter, setCounter] = useState(countdown)
 
   useEffect(() => {
-    mounted.current = true
-    return () => { mounted.current = false }
-  }, [])
-
-  useEffect(() => {
-    if (!visible) {
-      setCount(COUNTDOWN)
-      clearTimeout(timer.current)
-      return
-    }
-
-    setCount(COUNTDOWN)
-    timer.current = setTimeout(() => {
-      if (mounted.current) onNext()
-    }, COUNTDOWN * 1000)
-
-    const interval = setInterval(() => {
-      if (mounted.current) setCount(p => {
-        if (p <= 1) {
-          clearInterval(interval)
-          return 0
-        }
-        return p - 1
+    if (!visible) { setCounter(countdown); return }
+    const timer = setInterval(() => {
+      setCounter(c => {
+        if (c <= 1) { clearInterval(timer); return 0 }
+        return c - 1
       })
     }, 1000)
+    return () => clearInterval(timer)
+  }, [visible, countdown])
 
-    return () => {
-      clearTimeout(timer.current)
-      clearInterval(interval)
-    }
-  }, [visible, onNext])
-
-  if (!visible || !nextEpisode) return null
+  useEffect(() => {
+    if (visible && counter === 0) onPlay()
+  }, [visible, counter, onPlay])
 
   return (
     <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 20 }}
-        className="bg-gradient-to-r from-black/90 to-black/70 backdrop-blur-sm border border-white/10 rounded-xl p-4 flex items-center gap-4"
-      >
-        <div className="relative w-12 h-12 flex-shrink-0">
-          <svg className="w-12 h-12 -rotate-90" viewBox="0 0 36 36">
-            <circle cx="18" cy="18" r="16" fill="none" stroke="white/10" strokeWidth="3" />
-            <circle
-              cx="18" cy="18" r="16" fill="none"
-              stroke="currentColor" strokeWidth="3"
-              strokeDasharray={`${(count / COUNTDOWN) * 100} 100`}
-              className="text-primary transition-all duration-1000"
-              strokeLinecap="round"
-            />
-          </svg>
-          <span className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold">{count}</span>
-        </div>
+      {visible && nextEpisode && (
+        <motion.div
+          initial={{ y: 80, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 80, opacity: 0 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          className="absolute bottom-20 right-4 z-40 w-72 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden shadow-2xl"
+        >
+          <div className="p-3 space-y-2">
+            <p className="text-white/50 text-[10px] font-semibold uppercase tracking-wider">Up Next</p>
+            <p className="text-white text-sm font-medium truncate leading-tight">
+              {nextEpisode.title || `Episode ${nextEpisode.episodeNumber}`}
+            </p>
 
-        <div className="flex-1 min-w-0">
-          <p className="text-white text-xs font-medium">Next episode starting soon</p>
-          <p className="text-muted text-[11px] truncate mt-0.5">
-            EP {nextEpisode.episodeNumber}{nextEpisode.title ? ` - ${nextEpisode.title}` : ''}
-          </p>
-        </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-primary rounded-full"
+                  initial={{ width: '100%' }}
+                  animate={{ width: '0%' }}
+                  transition={{ duration: countdown, ease: 'linear' }}
+                />
+              </div>
+              <span className="text-white/60 text-[10px] font-mono min-w-[16px] text-right">{counter}s</span>
+            </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onCancel}
-            className="text-xs text-muted hover:text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onNext}
-            className="text-xs text-white bg-primary hover:bg-primary/90 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap font-medium"
-          >
-            Play Now
-          </button>
-        </div>
-      </motion.div>
+            <p className="text-muted text-[10px]">Autoplay in {counter}s</p>
+          </div>
+
+          <div className="flex border-t border-white/10 divide-x divide-white/10">
+            <button
+              onClick={onCancel}
+              className="flex-1 py-2.5 text-xs text-white/60 hover:text-white hover:bg-white/5 transition-colors font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onPlay}
+              className="flex-1 py-2.5 text-xs text-primary font-semibold hover:bg-primary/10 transition-colors"
+            >
+              Play Now
+            </button>
+          </div>
+        </motion.div>
+      )}
     </AnimatePresence>
   )
 }

@@ -11,7 +11,9 @@ import java.util.UUID;
 @Repository
 public interface AnimeRepository extends JpaRepository<Anime, UUID> {
     Optional<Anime> findByMalId(Integer malId);
+    Optional<Anime> findBySlug(String slug);
     boolean existsByMalId(Integer malId);
+    boolean existsBySlug(String slug);
     java.util.List<Anime> findAllByMalIdIn(java.util.Collection<Integer> malIds);
     Page<Anime> findAllByOrderByRatingDesc(Pageable pageable);
     Page<Anime> findAllByOrderByCreatedAtDesc(Pageable pageable);

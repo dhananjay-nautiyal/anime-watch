@@ -92,7 +92,7 @@ export default function Watchlist() {
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-surface/30 backdrop-blur-sm border border-white/5 p-4 rounded-2xl flex items-center gap-4 hover:bg-surface/50 transition-colors"
               >
-                <Link to={`/anime/${entry.anime?.malId || entry.anime?.id}`} className="flex-shrink-0 w-16 h-20 rounded-lg overflow-hidden">
+                <Link to={`/anime/${entry.anime?.slug || entry.anime?.malId || entry.anime?.id}`} className="flex-shrink-0 w-16 h-20 rounded-lg overflow-hidden">
                   <ImageWithFallback
                     src={entry.anime?.imageUrl}
                     alt={entry.anime?.title}
@@ -102,7 +102,7 @@ export default function Watchlist() {
                   />
                 </Link>
                 <div className="flex-1 min-w-0">
-                  <Link to={`/anime/${entry.anime?.malId || entry.anime?.id}`} className="text-white font-semibold hover:text-primary transition block truncate">
+                  <Link to={`/anime/${entry.anime?.slug || entry.anime?.malId || entry.anime?.id}`} className="text-white font-semibold hover:text-primary transition block truncate">
                     {entry.anime?.title}
                   </Link>
                   <span className={`inline-block text-xs px-2.5 py-1 rounded-lg mt-1.5 ${config.bg} ${config.text} ${config.border} border`}>

@@ -5,7 +5,7 @@ export default function TopCard({ anime, rank }) {
 
   return (
     <Link
-      to={`/anime/${anime.malId}`}
+      to={`/anime/${anime.slug || anime.malId}`}
       className="top-card-item flex items-center gap-3 px-4 py-3 relative"
     >
       <div className="flex-shrink-0 w-9 h-9 bg-primary text-white font-medium flex items-center justify-center text-sm">

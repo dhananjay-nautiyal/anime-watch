@@ -37,11 +37,13 @@ public class EpisodeController {
     private final EpisodeSyncService episodeSyncService;
     private final WatchHistoryService watchHistoryService;
     private final UserRepository userRepository;
+    private final StreamVerificationService streamVerificationService;
 
     public EpisodeController(EpisodeRepository episodeRepository, AnimeRepository animeRepository,
                              ProviderResolver providerResolver, ValidationService validationService,
                              ProviderHealthMonitor healthMonitor, EpisodeSyncService episodeSyncService,
-                             WatchHistoryService watchHistoryService, UserRepository userRepository) {
+                             WatchHistoryService watchHistoryService, UserRepository userRepository,
+                             StreamVerificationService streamVerificationService) {
         this.episodeRepository = episodeRepository;
         this.animeRepository = animeRepository;
         this.providerResolver = providerResolver;
@@ -50,6 +52,7 @@ public class EpisodeController {
         this.episodeSyncService = episodeSyncService;
         this.watchHistoryService = watchHistoryService;
         this.userRepository = userRepository;
+        this.streamVerificationService = streamVerificationService;
     }
 
     @GetMapping("/{malId}/episodes")
@@ -175,6 +178,84 @@ public class EpisodeController {
                 ))
                 .timestamp(Instant.now())
                 .build());
+    }
+
+    @GetMapping("/{malId}/episode/streams")
+    public ResponseEntity<?> getEpisodeStreams(
+            @PathVariable int malId, @RequestParam String episodeUrl) {
+        long start = System.currentTimeMillis();
+        log.info("[STREAMS] GET | malId={} episodeUrl={}", malId, episodeUrl);
+
+        ProviderResolver.PipelineResult<StreamResult> result =
+            providerResolver.resolveStream(malId, episodeUrl);
+
+        if (!result.success || result.data == null || !result.data.isSuccess()) {
+            String msg = result.data != null ? result.data.getError() : "All providers failed";
+            log.warn("[STREAMS] FAILED | malId={} msg='{}'", malId, msg);
+            return ResponseEntity.ok(ApiResponse.error(
+                result.errorCode != null ? result.errorCode : "STREAM_RESOLVE_FAILED",
+                "No stream sources available"));
+        }
+
+        StreamResult sr = result.data;
+        String providerBaseUrl = getProviderBaseUrl(sr.getProvider());
+        String streamType = sr.getType();
+        if (streamType == null) streamType = "hls";
+
+        List<StreamsResponse.ServerInfo> verifiedServers = new ArrayList<>();
+        for (StreamResult.ServerOption server : sr.getServers()) {
+            long verifyStart = System.currentTimeMillis();
+            String proxyUrl = toProxyUrl(server.url, providerBaseUrl);
+            String status = "unknown";
+            boolean verified = false;
+            long latencyMs = 0;
+
+            try {
+                var verifResult = streamVerificationService.verify(
+                    StreamResult.success(sr.getProvider(), streamType, List.of(server)),
+                    providerBaseUrl);
+                latencyMs = System.currentTimeMillis() - verifyStart;
+                if (verifResult.valid()) {
+                    status = "online";
+                    verified = true;
+                } else {
+                    status = "offline";
+                }
+            } catch (Exception e) {
+                latencyMs = System.currentTimeMillis() - verifyStart;
+                status = "error";
+            }
+
+            verifiedServers.add(new StreamsResponse.ServerInfo(
+                server.label, server.url, proxyUrl,
+                List.of("1080p", "720p", "480p"),
+                List.of(),
+                List.of(),
+                status, latencyMs, verified
+            ));
+        }
+
+        verifiedServers.sort((a, b) -> {
+            if (a.isVerified() && !b.isVerified()) return -1;
+            if (!a.isVerified() && b.isVerified()) return 1;
+            return Long.compare(a.getLatencyMs(), b.getLatencyMs());
+        });
+
+        List<StreamsResponse.LanguageGroup> languages = List.of(
+            new StreamsResponse.LanguageGroup("SUB", verifiedServers)
+        );
+
+        StreamsResponse response = new StreamsResponse(
+            sr.getProvider(), streamType, languages);
+
+        log.info("[STREAMS] SUCCESS | malId={} provider={} servers={} verified={} duration={}ms",
+            malId, sr.getProvider(), verifiedServers.size(),
+            verifiedServers.stream().filter(StreamsResponse.ServerInfo::isVerified).count(),
+            System.currentTimeMillis() - start);
+
+        return ResponseEntity.ok()
+            .header("Cache-Control", "public, max-age=120")
+            .body(ApiResponse.success(response));
     }
 
     private String toProxyUrl(String url, String referer) {
@@ -379,6 +460,7 @@ public class EpisodeController {
         List<Map<String, Object>> result = history.stream().map(h -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("malId", h.getMalId());
+            m.put("slug", animeRepository.findByMalId(h.getMalId()).map(Anime::getSlug).orElse(null));
             m.put("episodeNumber", h.getEpisodeNumber());
             m.put("progressSeconds", h.getProgressSeconds());
             m.put("durationSeconds", h.getDurationSeconds());

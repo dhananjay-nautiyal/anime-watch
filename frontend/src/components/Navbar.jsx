@@ -222,7 +222,7 @@ const Navbar = memo(function Navbar() {
                           setSearchQuery('')
                           setShowSuggestions(false)
                           setSearchOpen(false)
-                          navigate(`/anime/${anime.malId || anime.id}`)
+                          navigate(`/anime/${anime.slug || anime.malId || anime.id}`)
                         }}
                         className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors text-left"
                       >

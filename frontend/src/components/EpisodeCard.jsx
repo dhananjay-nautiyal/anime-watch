@@ -2,8 +2,9 @@ import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import ImageWithFallback from './ImageWithFallback'
 
-export default function EpisodeCard({ episode, animeId, animeTitle, isActive, progress }) {
+export default function EpisodeCard({ episode, animeId, animeTitle, isActive, progress, animeSlug }) {
   const location = useLocation()
+  const slug = animeSlug || animeId
 
   return (
     <motion.div
@@ -12,7 +13,7 @@ export default function EpisodeCard({ episode, animeId, animeTitle, isActive, pr
       transition={{ duration: 0.3 }}
     >
       <Link
-        to={`/watch/${animeId}/${episode.episodeNumber}`}
+        to={`/anime/${slug}/ep/${episode.episodeNumber}`}
         className={`flex gap-3 p-2.5 rounded-xl transition-all duration-200 group ${
           isActive
             ? 'bg-primary/10 border border-primary/20'
@@ -50,10 +51,11 @@ export default function EpisodeCard({ episode, animeId, animeTitle, isActive, pr
   )
 }
 
-export function EpisodeGridCard({ episode, animeId, isActive }) {
+export function EpisodeGridCard({ episode, animeId, isActive, animeSlug }) {
+  const slug = animeSlug || animeId
   return (
     <Link
-      to={`/watch/${animeId}/${episode.episodeNumber}`}
+      to={`/anime/${slug}/ep/${episode.episodeNumber}`}
       className={`relative rounded-xl overflow-hidden group transition-all duration-200 ${
         isActive ? 'ring-2 ring-primary ring-offset-2 ring-offset-body' : ''
       }`}
