@@ -90,6 +90,24 @@ public class JikanAnimeData {
     }
 
     @Data
+    public static class Producer {
+        @JsonProperty("mal_id")
+        private int malId;
+        private String name;
+        private String type;
+        private String url;
+    }
+
+    @Data
+    public static class Licensor {
+        @JsonProperty("mal_id")
+        private int malId;
+        private String name;
+        private String type;
+        private String url;
+    }
+
+    @Data
     public static class Aired {
         private String from;
         private String to;

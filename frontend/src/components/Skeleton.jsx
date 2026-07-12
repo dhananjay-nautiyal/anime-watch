@@ -69,7 +69,7 @@ export function RowSkeleton() {
   return (
     <div className="flex gap-4 overflow-hidden">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="flex-shrink-0 skeleton w-[180px] aspect-[3/4] rounded-xl" />
+        <div key={i} className="flex-shrink-0 skeleton w-[190px] aspect-[3/4] rounded-[14px]" />
       ))}
     </div>
   )

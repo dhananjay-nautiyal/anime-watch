@@ -15,29 +15,53 @@ public class TitleNormalizer {
     private static final Logger log = LoggerFactory.getLogger(TitleNormalizer.class);
 
     private static final Pattern SUFFIX_PATTERN = Pattern.compile(
-        "(?i)\\s*(?:season|part|cour|movie|film|ova|ona|special|oav|edit|"
-        + "director'?s?\\s*cut|uncut|uncensored|Dub|Sub)\\s*[\\dIVX]*\\s*$"
+        "(?i)\\s*(?:uncut|uncensored|director'?s?\\s*cut)\\s*$"
     );
 
-    private static final Pattern PAREN_PATTERN = Pattern.compile("\\([^)]*\\)");
+    private static final Pattern YEAR_PAREN_PATTERN = Pattern.compile("\\((19[0-9]{2}|20[0-9]{2})\\)");
+    private static final Pattern NON_YEAR_PAREN_PATTERN = Pattern.compile("\\([^)]*\\)");
     private static final Pattern BRACKET_PATTERN = Pattern.compile("\\[[^)]*\\]");
-    private static final Pattern COLON_PATTERN = Pattern.compile("\\s*[:;]\\s*.*$");
+    private static final Pattern COLON_SUBTITLE_PATTERN = Pattern.compile("\\s*[:;]\\s+(?=\\S)");
     private static final Pattern ROMAN_NUMERAL_END = Pattern.compile("\\s+(I{1,3}|IV|VI{0,3})\\s*$");
     private static final Pattern MULTI_SPACE = Pattern.compile("\\s+");
     private static final Pattern PUNCTUATION = Pattern.compile("[^a-zA-Z0-9 ]");
     private static final Pattern LEADING_TRAILING_DASH = Pattern.compile("^-|-$");
 
+    private static final Pattern YEAR_PATTERN = Pattern.compile("(19[0-9]{2}|20[0-9]{2})");
+
     public static String normalize(String title) {
         if (title == null || title.isBlank()) return "";
         String t = title.trim();
-        t = PAREN_PATTERN.matcher(t).replaceAll(" ");
+        // Preserve year in parentheses, strip other parenthesized content
+        String yearPart = "";
+        java.util.regex.Matcher yearMatcher = YEAR_PAREN_PATTERN.matcher(t);
+        if (yearMatcher.find()) {
+            yearPart = " " + yearMatcher.group(1);
+        }
+        t = NON_YEAR_PAREN_PATTERN.matcher(t).replaceAll(" ");
         t = BRACKET_PATTERN.matcher(t).replaceAll(" ");
-        t = COLON_PATTERN.matcher(t).replaceAll("");
+        // Keep text after colon/semicolon (important for distinguishing subtitles)
+        t = COLON_SUBTITLE_PATTERN.matcher(t).replaceAll(" - ");
         t = SUFFIX_PATTERN.matcher(t).replaceAll("");
         t = ROMAN_NUMERAL_END.matcher(t).replaceAll("");
         t = PUNCTUATION.matcher(t).replaceAll(" ");
         t = MULTI_SPACE.matcher(t).replaceAll(" ").trim();
-        return t;
+        if (!yearPart.isEmpty() && !t.contains(yearPart.trim())) {
+            t = t + yearPart;
+        }
+        return t.trim();
+    }
+
+    public static String extractPageTitle(String html) {
+        if (html == null || html.isBlank()) return "";
+        java.util.regex.Matcher m = Pattern.compile("<title>([^<]+)</title>", Pattern.CASE_INSENSITIVE).matcher(html);
+        if (m.find()) {
+            String title = m.group(1).trim();
+            // Remove site name suffixes like " · Anineko", " - GoGoAnime", etc.
+            title = title.replaceAll("(?i)\\s*[·\\-|]\\s*(?:Anineko|GoGoAnime|Watch|Online|Free|English Sub|Dub|Sub|Dubbed|Anime).*$", "").trim();
+            return title;
+        }
+        return "";
     }
 
     public static String buildSlug(String title) {
@@ -46,6 +70,14 @@ public class TitleNormalizer {
                 .trim()
                 .replaceAll("[. ]+", "-");
         slug = slug.replaceAll("-+", "-");
+        slug = LEADING_TRAILING_DASH.matcher(slug).replaceAll("");
+        return slug;
+    }
+
+    public static String buildSlugRaw(String title) {
+        String slug = title.toLowerCase()
+                .replaceAll("[^a-z0-9-]", "")
+                .replaceAll("-+", "-");
         slug = LEADING_TRAILING_DASH.matcher(slug).replaceAll("");
         return slug;
     }
@@ -126,7 +158,20 @@ public class TitleNormalizer {
         for (String t : titles) {
             if (t == null || t.isBlank()) continue;
             if (!t.matches(".*[a-zA-Z].*")) continue;
-            allSlugs.addAll(buildSlugs(t));
+            List<String> slugs = buildSlugs(t);
+            allSlugs.addAll(slugs);
+            // Also generate year-appended slugs for disambiguation
+            if (jikanData != null) {
+                String year = null;
+                if (jikanData.has("year") && !jikanData.get("year").isNull()) {
+                    year = jikanData.get("year").asText();
+                }
+                if (year != null) {
+                    for (String slug : slugs) {
+                        allSlugs.add(slug + "-" + year);
+                    }
+                }
+            }
         }
 
         return new ArrayList<>(allSlugs);

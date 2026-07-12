@@ -68,28 +68,77 @@ public class EpisodeController {
     @PostMapping("/{malId}/episodes/sync")
     public ResponseEntity<Map<String, Object>> syncEpisodes(@PathVariable int malId) {
         long start = System.currentTimeMillis();
-        log.info("[SYNC] START | malId={}", malId);
+        log.info("[SYNC] STEP 1: Controller reached | malId={}", malId);
+        log.info("[SYNC] STEP 2: Security check passed | endpoint=/api/anime/{}/episodes/sync | CSRF=disabled | auth=permitAll", malId);
 
-        EpisodeSyncService.SyncResult result = episodeSyncService.syncEpisodes(malId);
+        try {
+            log.info("[SYNC] STEP 3: Calling EpisodeSyncService.syncEpisodes | malId={}", malId);
+            EpisodeSyncService.SyncResult result = episodeSyncService.syncEpisodes(malId);
+            log.info("[SYNC] STEP 4: SyncService returned | malId={} status={} provider={} count={}",
+                malId, result.status(), result.provider(), result.episodeCount());
+
+            long elapsed = System.currentTimeMillis() - start;
+
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("success", result.isSuccess() || result.isComingSoon());
+            response.put("status", result.status());
+            response.put("message", result.message());
+            response.put("durationMs", elapsed);
+            response.put("timestamp", Instant.now().toString());
+
+            if (result.provider() != null) response.put("provider", result.provider());
+            if (result.episodeCount() > 0) response.put("episodeCount", result.episodeCount());
+            if (result.episodes() != null && !result.episodes().isEmpty()) response.put("episodes", result.episodes());
+            if (result.providerFailures() != null) response.put("providerFailures", result.providerFailures());
+
+            log.info("[SYNC] STEP 5: Returning HTTP 200 | malId={} status={} provider={} count={} duration={}ms",
+                malId, result.status(), result.provider(), result.episodeCount(), elapsed);
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            long elapsed = System.currentTimeMillis() - start;
+            log.error("[SYNC] EXCEPTION | malId={} type='{}' message='{}' duration={}ms", malId, e.getClass().getName(), e.getMessage(), elapsed, e);
+            Map<String, Object> errorResponse = new LinkedHashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("status", "ERROR");
+            errorResponse.put("message", e.getMessage());
+            errorResponse.put("errorCode", e.getClass().getSimpleName());
+            errorResponse.put("durationMs", elapsed);
+            errorResponse.put("timestamp", Instant.now().toString());
+            return ResponseEntity.ok(errorResponse);
+        }
+    }
+
+    @GetMapping("/{malId}/episode/languages")
+    public ResponseEntity<?> getEpisodeLanguages(@PathVariable int malId, @RequestParam String episodeUrl) {
+        long start = System.currentTimeMillis();
+        log.info("[LANGUAGES] GET | malId={} episodeUrl={}", malId, episodeUrl);
+
+        ProviderResolver.PipelineResult<List<String>> result =
+            providerResolver.resolveLanguages(malId, episodeUrl);
 
         long elapsed = System.currentTimeMillis() - start;
 
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("success", result.isSuccess() || result.isComingSoon());
-        response.put("status", result.status());
-        response.put("message", result.message());
-        response.put("durationMs", elapsed);
-        response.put("timestamp", Instant.now().toString());
+        if (!result.success || result.data == null || result.data.isEmpty()) {
+            log.warn("[LANGUAGES] NONE_FOUND | malId={} duration={}ms", malId, elapsed);
+            return ResponseEntity.ok()
+                .header("Cache-Control", "no-cache")
+                .body(ApiResponse.success(Map.of(
+                    "languages", List.of("SUB"),
+                    "provider", "fallback",
+                    "durationMs", elapsed
+                )));
+        }
 
-        if (result.provider() != null) response.put("provider", result.provider());
-        if (result.episodeCount() > 0) response.put("episodeCount", result.episodeCount());
-        if (result.episodes() != null && !result.episodes().isEmpty()) response.put("episodes", result.episodes());
-        if (result.providerFailures() != null) response.put("providerFailures", result.providerFailures());
-
-        log.info("[SYNC] COMPLETE | malId={} status={} provider={} count={} duration={}ms",
-            malId, result.status(), result.provider(), result.episodeCount(), elapsed);
-
-        return ResponseEntity.ok(response);
+        log.info("[LANGUAGES] FOUND | malId={} languages={} provider={} duration={}ms",
+            malId, result.data, result.provider, elapsed);
+        return ResponseEntity.ok()
+            .header("Cache-Control", "public, max-age=120")
+            .body(ApiResponse.builder()
+                .success(true)
+                .data(Map.of("languages", result.data, "provider", result.provider, "durationMs", elapsed))
+                .timestamp(Instant.now())
+                .build());
     }
 
     @GetMapping("/{malId}/episode/embed")
@@ -105,7 +154,7 @@ public class EpisodeController {
         if (!result.success || result.data == null || !result.data.isSuccess()) {
             String msg = result.data != null ? result.data.getError() : "All providers failed";
             String code = result.errorCode != null ? result.errorCode : "STREAM_RESOLVE_FAILED";
-            String userMessage = "Stream source unavailable. All providers and servers were checked.";
+            String userMessage = "Stream is temporarily unavailable. Please try again later.";
 
             log.warn("[EMBED] FAILED | malId={} code={} msg='{}' duration={}ms", malId, code, msg, elapsed);
             return ResponseEntity.ok(ApiResponse.builder()
@@ -144,16 +193,21 @@ public class EpisodeController {
         }
 
         if (validatedUrl != null) {
-            validatedUrl = toProxyUrl(validatedUrl, providerBaseUrl);
+            validatedUrl = "iframe".equalsIgnoreCase(streamType)
+                ? validatedUrl
+                : toProxyUrl(validatedUrl, providerBaseUrl);
         }
 
-        streamType = "hls";
+        if (streamType == null) streamType = "hls";
+        final String finalStreamType = streamType;
 
         List<Map<String, Object>> serverList = sr.getServers().stream()
             .map(s -> {
-                String proxyUrl = toProxyUrl(s.url, providerBaseUrl);
+                String embedUrl = "iframe".equalsIgnoreCase(finalStreamType)
+                    ? s.url
+                    : toProxyUrl(s.url, providerBaseUrl);
                 return Map.<String, Object>of(
-                    "url", proxyUrl,
+                    "url", embedUrl,
                     "label", s.label,
                     "isBackup", s.isBackup
                 );
@@ -182,9 +236,11 @@ public class EpisodeController {
 
     @GetMapping("/{malId}/episode/streams")
     public ResponseEntity<?> getEpisodeStreams(
-            @PathVariable int malId, @RequestParam String episodeUrl) {
+            @PathVariable int malId,
+            @RequestParam String episodeUrl,
+            @RequestParam(required = false) String language) {
         long start = System.currentTimeMillis();
-        log.info("[STREAMS] GET | malId={} episodeUrl={}", malId, episodeUrl);
+        log.info("[STREAMS] GET | malId={} episodeUrl={} language={}", malId, episodeUrl, language);
 
         ProviderResolver.PipelineResult<StreamResult> result =
             providerResolver.resolveStream(malId, episodeUrl);
@@ -194,7 +250,7 @@ public class EpisodeController {
             log.warn("[STREAMS] FAILED | malId={} msg='{}'", malId, msg);
             return ResponseEntity.ok(ApiResponse.error(
                 result.errorCode != null ? result.errorCode : "STREAM_RESOLVE_FAILED",
-                "No stream sources available"));
+                "Stream is temporarily unavailable. Please try again later."));
         }
 
         StreamResult sr = result.data;
@@ -205,7 +261,9 @@ public class EpisodeController {
         List<StreamsResponse.ServerInfo> verifiedServers = new ArrayList<>();
         for (StreamResult.ServerOption server : sr.getServers()) {
             long verifyStart = System.currentTimeMillis();
-            String proxyUrl = toProxyUrl(server.url, providerBaseUrl);
+            String proxyUrl = "iframe".equalsIgnoreCase(streamType)
+                ? server.url
+                : toProxyUrl(server.url, providerBaseUrl);
             String status = "unknown";
             boolean verified = false;
             long latencyMs = 0;
@@ -241,16 +299,36 @@ public class EpisodeController {
             return Long.compare(a.getLatencyMs(), b.getLatencyMs());
         });
 
-        List<StreamsResponse.LanguageGroup> languages = List.of(
-            new StreamsResponse.LanguageGroup("SUB", verifiedServers)
-        );
+        // Dynamically split servers into SUB/DUB language groups based on labels
+        List<StreamsResponse.ServerInfo> subServers = new ArrayList<>();
+        List<StreamsResponse.ServerInfo> dubServers = new ArrayList<>();
+        for (StreamsResponse.ServerInfo server : verifiedServers) {
+            String label = server.getLabel() != null ? server.getLabel().toLowerCase() : "";
+            if (label.contains("dub") || label.contains("english")) {
+                dubServers.add(server);
+            } else {
+                subServers.add(server);
+            }
+        }
+        List<StreamsResponse.LanguageGroup> languages = new ArrayList<>();
+        if (!subServers.isEmpty() && (language == null || language.equalsIgnoreCase("SUB"))) {
+            languages.add(new StreamsResponse.LanguageGroup("SUB", subServers));
+        }
+        if (!dubServers.isEmpty() && (language == null || language.equalsIgnoreCase("DUB"))) {
+            languages.add(new StreamsResponse.LanguageGroup("DUB", dubServers));
+        }
+        // Fallback: if no language-specific split was possible, put all under SUB
+        if (languages.isEmpty() && !verifiedServers.isEmpty()) {
+            languages.add(new StreamsResponse.LanguageGroup("SUB", verifiedServers));
+        }
 
         StreamsResponse response = new StreamsResponse(
             sr.getProvider(), streamType, languages);
 
-        log.info("[STREAMS] SUCCESS | malId={} provider={} servers={} verified={} duration={}ms",
+        log.info("[STREAMS] SUCCESS | malId={} provider={} servers={} verified={} languages={} duration={}ms",
             malId, sr.getProvider(), verifiedServers.size(),
             verifiedServers.stream().filter(StreamsResponse.ServerInfo::isVerified).count(),
+            languages.stream().map(StreamsResponse.LanguageGroup::getLanguage).collect(Collectors.toList()),
             System.currentTimeMillis() - start);
 
         return ResponseEntity.ok()
@@ -272,6 +350,8 @@ public class EpisodeController {
         String lower = providerName.toLowerCase();
         if (lower.contains("anineko")) return "https://anineko.to/";
         if (lower.contains("gogo")) return "https://gogoanime.live/";
+        if (lower.contains("animesugecz")) return "https://animesuge.cz/";
+        if (lower.contains("animesuge") || lower.contains("anikoto")) return "https://megaplay.buzz/";
         return "https://anineko.to/";
     }
 

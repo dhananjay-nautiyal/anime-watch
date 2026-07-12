@@ -1,3 +1,6 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Pathway+Extreme:wght@100;200;300;400;500;600;700;800;900&display=swap");
 
 @tailwind base;
@@ -12,15 +15,20 @@ body {
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 15px;
   color: #94a3b8;
-  background: #050816;
+  background: #080A16;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-::-webkit-scrollbar { width: 8px; }
-::-webkit-scrollbar-track { background: #050816; }
-::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #334155; }
+::selection {
+  background: rgba(139, 92, 246, 0.3);
+  color: white;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #080A16; }
+::-webkit-scrollbar-thumb { background: #8B5CF6; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #7c3aed; }
 
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
@@ -45,21 +53,21 @@ body {
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background: linear-gradient(90deg, #141827 25%, #1c2033 50%, #141827 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: inherit;
 }
 
 .glass {
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(20, 24, 39, 0.6);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .glass-strong {
-  background: rgba(15, 23, 42, 0.8);
+  background: rgba(20, 24, 39, 0.8);
   backdrop-filter: blur(30px);
   -webkit-backdrop-filter: blur(30px);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -212,20 +220,20 @@ select option {
 
 /* Gradient backgrounds */
 .gradient-hero {
-  background: linear-gradient(135deg, #050816 0%, #0f172a 50%, #050816 100%);
+  background: linear-gradient(135deg, #080A16 0%, #0A0F1F 50%, #080A16 100%);
 }
 
 .gradient-overlay {
   background: linear-gradient(to top, 
-    rgba(5, 8, 22, 0.98) 0%,
-    rgba(5, 8, 22, 0.6) 40%,
-    rgba(5, 8, 22, 0.2) 70%,
-    rgba(5, 8, 22, 0.8) 100%
+    rgba(8, 10, 22, 0.98) 0%,
+    rgba(8, 10, 22, 0.6) 40%,
+    rgba(8, 10, 22, 0.2) 70%,
+    rgba(8, 10, 22, 0.8) 100%
   );
 }
 
 .gradient-side {
-  background: linear-gradient(to right, #050816 0%, transparent 50%, #050816 100%);
+  background: linear-gradient(to right, #080A16 0%, transparent 50%, #080A16 100%);
 }
 
 /* Countdown timer styles */
@@ -258,8 +266,8 @@ select option {
 /* Video player controls */
 .player-controls {
   background: linear-gradient(to top, 
-    rgba(5, 8, 22, 0.9) 0%,
-    rgba(5, 8, 22, 0.4) 60%,
+    rgba(8, 10, 22, 0.9) 0%,
+    rgba(8, 10, 22, 0.4) 60%,
     transparent 100%
   );
 }
@@ -441,6 +449,67 @@ select option {
 .card-hover:hover {
   transform: translateY(-4px) scale(1.02);
   box-shadow: 0 20px 40px rgba(139, 92, 246, 0.15);
+}
+
+/* Gradient border animation */
+@keyframes border-glow {
+  0%, 100% { border-color: rgba(139, 92, 246, 0.1); }
+  50% { border-color: rgba(139, 92, 246, 0.4); }
+}
+
+.animate-border-glow {
+  animation: border-glow 3s ease-in-out infinite;
+}
+
+/* Smooth gradient background animation */
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradient-bg {
+  background-size: 200% 200%;
+  animation: gradient-shift 8s ease infinite;
+}
+
+/* Card image zoom container */
+.img-zoom {
+  overflow: hidden;
+}
+
+.img-zoom img {
+  transition: transform 0.6s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.img-zoom:hover img {
+  transform: scale(1.08);
+}
+
+/* Section divider with gradient */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.2), transparent);
+}
+
+/* Scroll progress indicator for hero */
+.scroll-progress {
+  position: fixed;
+  top: 64px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 49;
+  background: linear-gradient(90deg, #8B5CF6, #06B6D4);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+/* Smooth fade overlay for modals */
+.fade-overlay {
+  background: rgba(8, 10, 22, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 /* Text gradients */

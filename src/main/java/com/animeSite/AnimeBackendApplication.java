@@ -107,12 +107,12 @@ public class AnimeBackendApplication {
         };
     }
 
-    private Anime createAnime(int malId, String title, String synopsis, double rating, Integer episodes, String imageUrl) {
+    private Anime createAnime(int malId, String title, String synopsis, double score, Integer episodes, String imageUrl) {
         Anime anime = new Anime();
         anime.setMalId(malId);
         anime.setTitle(title);
         anime.setSynopsis(synopsis);
-        anime.setRating(rating);
+        anime.setScore(score);
         anime.setEpisodes(episodes);
         anime.setImageUrl(imageUrl);
         return anime;

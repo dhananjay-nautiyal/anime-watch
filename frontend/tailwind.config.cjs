@@ -5,18 +5,18 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        body: '#050816',
-        surface: '#0f172a',
+        body: '#080A16',
+        surface: '#0A0F1F',
+        card: '#141827',
+        cardHover: '#1c2033',
         primary: '#8B5CF6',
         secondary: '#06B6D4',
         accent: '#EC4899',
         muted: '#94a3b8',
         link: '#D1D5DB',
-        card: 'rgba(15, 23, 42, 0.6)',
-        cardHover: '#1e293b',
         textMajor: '#ededed',
         dimWhite: '#cecece',
-        dimBlue: "rgba(124, 58, 237, 0.1)",
+        dimBlue: "rgba(139, 92, 246, 0.1)",
         badgeTv: '#359fed',
         badgeSub: '#2a2a2a',
         badgeTotal: '#232323',
@@ -25,15 +25,18 @@ module.exports = {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         display: ['Poppins', 'system-ui', 'sans-serif'],
+        outfit: ['Outfit', 'system-ui', 'sans-serif'],
         pathway: ['"Pathway Extreme"', 'sans-serif'],
       },
       borderRadius: {
-        xl: '20px',
+        xl: '16px',
+        '2xl': '18px',
       },
       boxShadow: {
         glass: '0 8px 32px rgba(0, 0, 0, 0.3)',
         glow: '0 0 20px rgba(139, 92, 246, 0.3)',
         card: '0 4px 20px rgba(0, 0, 0, 0.4)',
+        'glow-lg': '0 0 40px rgba(139, 92, 246, 0.2)',
       },
       backdropBlur: {
         xs: '2px',

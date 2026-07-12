@@ -1,8 +1,6 @@
 package com.animeSite.httpclient;
 
-import com.animeSite.model.JikanAnimeData;
-import com.animeSite.model.JikanListResponse;
-import com.animeSite.model.JikanSingleResponse;
+import com.animeSite.model.*;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -35,12 +33,40 @@ public class JikanApiClient {
         return callApi(url);
     }
 
+    public JikanListResponse fetchSeasonalAnime(int page) {
+        return callApi(BASE_URL + "/seasons/now?page={page}", page + 1);
+    }
+
     public JikanSingleResponse fetchAnimeById(int id) {
         return callApiSingle(BASE_URL + "/anime/{id}", id);
     }
 
-    public JikanListResponse fetchSeasonalAnime(int page) {
-        return callApi(BASE_URL + "/seasons/now?page={page}", page + 1);
+    public JikanFullAnimeResponse fetchAnimeFull(int id) {
+        return callApiFull(BASE_URL + "/anime/{id}/full", id);
+    }
+
+    public JikanCharactersResponse fetchAnimeCharacters(int id) {
+        return callApiCharacters(BASE_URL + "/anime/{id}/characters", id);
+    }
+
+    public JikanStaffResponse fetchAnimeStaff(int id) {
+        return callApiStaff(BASE_URL + "/anime/{id}/staff", id);
+    }
+
+    public JikanRecommendationsResponse fetchAnimeRecommendations(int id) {
+        return callApiRecommendations(BASE_URL + "/anime/{id}/recommendations", id);
+    }
+
+    public JikanExternalResponse fetchAnimeExternal(int id) {
+        return callApiExternal(BASE_URL + "/anime/{id}/external", id);
+    }
+
+    public JikanListResponse fetchAnimeBySeason(int year, String season, int page) {
+        return callApi(BASE_URL + "/seasons/{year}/{season}?page={page}", year, season, page + 1);
+    }
+
+    public JikanListResponse fetchAnimeByGenre(int genreId, int page) {
+        return callApi(BASE_URL + "/anime?genres={genreId}&page={page}", genreId, page + 1);
     }
 
     public String buildFilterUrl(String baseParams, String genres, String genresExclude, String type, String status,
@@ -67,5 +93,30 @@ public class JikanApiClient {
     private JikanSingleResponse callApiSingle(String url, Object... args) {
         rateLimit();
         return restTemplate.getForObject(url, JikanSingleResponse.class, args);
+    }
+
+    private JikanFullAnimeResponse callApiFull(String url, Object... args) {
+        rateLimit();
+        return restTemplate.getForObject(url, JikanFullAnimeResponse.class, args);
+    }
+
+    private JikanCharactersResponse callApiCharacters(String url, Object... args) {
+        rateLimit();
+        return restTemplate.getForObject(url, JikanCharactersResponse.class, args);
+    }
+
+    private JikanStaffResponse callApiStaff(String url, Object... args) {
+        rateLimit();
+        return restTemplate.getForObject(url, JikanStaffResponse.class, args);
+    }
+
+    private JikanRecommendationsResponse callApiRecommendations(String url, Object... args) {
+        rateLimit();
+        return restTemplate.getForObject(url, JikanRecommendationsResponse.class, args);
+    }
+
+    private JikanExternalResponse callApiExternal(String url, Object... args) {
+        rateLimit();
+        return restTemplate.getForObject(url, JikanExternalResponse.class, args);
     }
 }

@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import ServerGrid from './ServerGrid'
+
+const LANG_OPTIONS = ['SUB', 'DUB']
 
 export default function ServerSelector({
   languages = [], currentLanguage, onLanguageChange,
@@ -13,13 +15,19 @@ export default function ServerSelector({
     return []
   }, [languages, servers])
 
+  const hasLang = useMemo(() => {
+    const map = {}
+    for (const l of availableLanguages) map[l.language] = true
+    return map
+  }, [availableLanguages])
+
   const activeLang = currentLanguage || availableLanguages[0]?.language || 'SUB'
   const activeServers = availableLanguages.find(l => l.language === activeLang)?.servers || []
 
   return (
     <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden">
       <div className="p-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
@@ -36,27 +44,37 @@ export default function ServerSelector({
           )}
         </div>
 
-        {/* Language Tabs */}
-        {availableLanguages.length > 1 && (
-          <div className="flex gap-1 mb-3 bg-white/[0.03] rounded-lg p-0.5">
-            {availableLanguages.map((lang) => (
+        {/* Language Pills */}
+        <div className="flex gap-2 mb-4">
+          {LANG_OPTIONS.map((lang) => {
+            const available = !!hasLang[lang]
+            const active = activeLang === lang
+            return (
               <button
-                key={lang.language}
-                onClick={() => onLanguageChange?.(lang.language)}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                  activeLang === lang.language
-                    ? 'bg-primary/15 text-primary shadow-sm'
-                    : 'text-white/50 hover:text-white hover:bg-white/[0.04]'
-                }`}
+                key={lang}
+                onClick={() => available && onLanguageChange?.(lang)}
+                disabled={!available}
+                className={`
+                  relative px-5 py-2 text-xs font-bold rounded-full transition-all duration-200
+                  ${!available
+                    ? 'text-white/15 bg-white/[0.02] border border-white/[0.04] cursor-not-allowed'
+                    : active
+                      ? 'bg-primary/25 text-primary shadow-lg shadow-primary/10 border border-primary/30 scale-105'
+                      : 'text-white/60 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:text-white hover:border-white/20 hover:scale-105'
+                  }
+                `}
               >
-                {lang.language}
+                {lang}
+                {!available && (
+                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-white/20 rounded-full" />
+                )}
               </button>
-            ))}
-          </div>
-        )}
+            )
+          })}
+        </div>
 
         {/* Server loading state */}
-        {loading && servers.length === 0 && (
+        {loading && activeServers.length === 0 && (
           <div className="flex items-center gap-2 py-4">
             <div className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
             <span className="text-muted text-xs">Resolving servers...</span>

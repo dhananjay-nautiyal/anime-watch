@@ -1,5 +1,4 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 
 const PAGE_SIZE = 30
 
@@ -15,7 +14,7 @@ function EpisodeGridCell({ episode, malId, isActive, isWatched, progress, onSele
       onClick={() => onSelect(episode)}
       className={`relative flex flex-col items-center justify-center w-full aspect-square rounded-lg text-xs font-medium transition-all duration-200 group border ${
         isActive
-          ? 'bg-primary/15 border-primary/40 text-primary shadow-lg shadow-primary/10 ring-1 ring-primary/30'
+          ? 'bg-primary/15 border-primary/40 text-primary shadow-lg shadow-primary/10 ring-1 ring-primary/30 scale-105'
           : isWatched
             ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/15 hover:border-emerald-500/40'
             : 'bg-white/[0.04] border-white/10 text-white/70 hover:bg-white/[0.08] hover:border-white/20 hover:text-white'
@@ -29,14 +28,19 @@ function EpisodeGridCell({ episode, malId, isActive, isWatched, progress, onSele
       {episode.recap && (
         <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-blue-400 rounded-full z-10" title="Recap" />
       )}
-      <span className={`font-bold ${isActive ? 'text-primary' : ''}`}>{fmtNum(episode.episodeNumber)}</span>
+      <span className={`font-bold leading-none ${isActive ? 'text-primary' : ''}`}>{fmtNum(episode.episodeNumber)}</span>
       {progressPct > 0 && !isActive && (
         <div className="absolute bottom-1 left-1 right-1 h-0.5 bg-white/10 rounded-full overflow-hidden">
           <div className="h-full bg-emerald-400 rounded-full transition-all" style={{ width: `${progressPct}%` }} />
         </div>
       )}
       {isActive && (
-        <svg className="w-3.5 h-3.5 text-primary absolute -bottom-0.5" fill="currentColor" viewBox="0 0 20 20">
+        <svg className="w-3 h-3 text-primary absolute -bottom-0.5" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+        </svg>
+      )}
+      {isWatched && !isActive && (
+        <svg className="w-2.5 h-2.5 text-emerald-400 absolute -top-0.5 -left-0.5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
         </svg>
       )}
@@ -47,8 +51,11 @@ function EpisodeGridCell({ episode, malId, isActive, isWatched, progress, onSele
 export default function EpisodePanel({
   episodes = [], currentEp, onSelect, syncing, error, onRetry, malId,
 }) {
-  const navigate = useNavigate()
-  const [rangeIdx, setRangeIdx] = useState(0)
+  const [rangeIdx, setRangeIdx] = useState(() => {
+    if (!episodes.length || !currentEp) return 0
+    const idx = Math.floor((currentEp - 1) / PAGE_SIZE)
+    return Math.min(idx, Math.ceil(episodes.length / PAGE_SIZE) - 1)
+  })
   const [search, setSearch] = useState('')
   const listRef = useRef(null)
 
@@ -62,6 +69,15 @@ export default function EpisodePanel({
     return r
   }, [episodes])
 
+  useEffect(() => {
+    if (episodes.length && currentEp && !search) {
+      const idx = Math.floor((currentEp - 1) / PAGE_SIZE)
+      if (idx >= 0 && idx < ranges.length) {
+        setRangeIdx(idx)
+      }
+    }
+  }, [currentEp, episodes.length, ranges.length, search])
+
   const filtered = useMemo(() => {
     const range = ranges[rangeIdx]
     const inRange = range
@@ -73,10 +89,8 @@ export default function EpisodePanel({
   }, [episodes, rangeIdx, ranges, search])
 
   const handleSelect = useCallback((ep) => {
-    if (!malId) return
-    navigate(`/anime/${malId}/ep/${ep.episodeNumber}`, { replace: true })
     onSelect(ep)
-  }, [malId, navigate, onSelect])
+  }, [onSelect])
 
   useEffect(() => {
     if (listRef.current) {
@@ -84,6 +98,12 @@ export default function EpisodePanel({
       if (active) active.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     }
   }, [currentEp])
+
+  useEffect(() => {
+    if (search && listRef.current) {
+      listRef.current.scrollTop = 0
+    }
+  }, [search])
 
   const showList = !syncing && !error && episodes.length > 0
 
@@ -149,7 +169,7 @@ export default function EpisodePanel({
             <div className="relative flex-1">
               <input
                 type="text"
-                placeholder="Search..."
+                placeholder="Search episodes..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-lg pl-3 pr-8 py-1.5 text-xs text-white placeholder-muted outline-none focus:border-primary/50 transition"

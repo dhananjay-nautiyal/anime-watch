@@ -3,6 +3,8 @@ package com.animeSite.service.impl;
 import com.animeSite.core.exception.BusinessException;
 import com.animeSite.core.exception.ErrorCode;
 import com.animeSite.httpclient.JikanApiClient;
+import com.animeSite.importpipeline.JikanMetadataProvider;
+import com.animeSite.importpipeline.MetadataProvider;
 import com.animeSite.model.JikanAnimeData;
 import com.animeSite.model.JikanListResponse;
 import com.animeSite.persist.Anime;
@@ -27,11 +29,14 @@ public class AnimeServiceImpl implements AnimeService {
     private final JikanApiClient jikanApiClient;
     private final AnimeRepository animeRepository;
     private final SlugService slugService;
+    private final JikanMetadataProvider jikanMetadataProvider;
 
-    public AnimeServiceImpl(JikanApiClient jikanApiClient, AnimeRepository animeRepository, SlugService slugService) {
+    public AnimeServiceImpl(JikanApiClient jikanApiClient, AnimeRepository animeRepository,
+                             SlugService slugService, JikanMetadataProvider jikanMetadataProvider) {
         this.jikanApiClient = jikanApiClient;
         this.animeRepository = animeRepository;
         this.slugService = slugService;
+        this.jikanMetadataProvider = jikanMetadataProvider;
     }
 
     @Cacheable(value = "trending", key = "'page-'+#page", unless = "#result == null")
@@ -140,9 +145,21 @@ public class AnimeServiceImpl implements AnimeService {
                 String rawSlug = slugService.generateSlug(title);
                 anime.setSlug(slugService.ensureUniqueSlug(rawSlug, data.getMalId()));
             }
+            anime.setTitleEnglish(data.getTitleEnglish());
+            anime.setTitleJapanese(data.getTitleJapanese());
+            if (data.getTitleSynonyms() != null && !data.getTitleSynonyms().isEmpty()) {
+                anime.setTitleSynonyms(String.join(", ", data.getTitleSynonyms()));
+            }
             anime.setSynopsis(data.getSynopsis());
-            anime.setRating(data.getScore());
+            anime.setScore(data.getScore());
             anime.setEpisodes(data.getEpisodes());
+            anime.setType(data.getType());
+            anime.setStatus(data.getStatus());
+            anime.setYear(data.getYear());
+            anime.setDuration(data.getDuration());
+            if (data.getAired() != null) {
+                anime.setAired(data.getAired().getAiredString());
+            }
             if (data.getTrailer() != null) {
                 anime.setTrailerUrl(data.getTrailer().getUrl());
                 anime.setTrailerEmbedUrl(data.getTrailer().getEmbedUrl());
@@ -152,7 +169,7 @@ public class AnimeServiceImpl implements AnimeService {
                         ? data.getImages().getJpg().getLargeImageUrl()
                         : data.getImages().getJpg().getImageUrl()
                     : null);
-            populateTransientFields(anime, data);
+            anime.setImportedAt(java.time.LocalDateTime.now());
             toSave.add(anime);
         }
         return animeRepository.saveAll(toSave);
@@ -209,9 +226,21 @@ public class AnimeServiceImpl implements AnimeService {
             String rawSlug = slugService.generateSlug(title);
             anime.setSlug(slugService.ensureUniqueSlug(rawSlug, data.getMalId()));
         }
+        anime.setTitleEnglish(data.getTitleEnglish());
+        anime.setTitleJapanese(data.getTitleJapanese());
+        if (data.getTitleSynonyms() != null && !data.getTitleSynonyms().isEmpty()) {
+            anime.setTitleSynonyms(String.join(", ", data.getTitleSynonyms()));
+        }
         anime.setSynopsis(data.getSynopsis());
-        anime.setRating(data.getScore());
+        anime.setScore(data.getScore());
         anime.setEpisodes(data.getEpisodes());
+        anime.setType(data.getType());
+        anime.setStatus(data.getStatus());
+        anime.setYear(data.getYear());
+        anime.setDuration(data.getDuration());
+        if (data.getAired() != null) {
+            anime.setAired(data.getAired().getAiredString());
+        }
         if (data.getTrailer() != null) {
             anime.setTrailerUrl(data.getTrailer().getUrl());
             anime.setTrailerEmbedUrl(data.getTrailer().getEmbedUrl());
@@ -221,20 +250,7 @@ public class AnimeServiceImpl implements AnimeService {
                     ? data.getImages().getJpg().getLargeImageUrl()
                     : data.getImages().getJpg().getImageUrl()
                 : null);
-        populateTransientFields(anime, data);
+        anime.setImportedAt(java.time.LocalDateTime.now());
         return animeRepository.save(anime);
     }
-
-    private void populateTransientFields(Anime anime, JikanAnimeData data) {
-        anime.setType(data.getType());
-        anime.setStatus(data.getStatus());
-        anime.setYear(data.getYear());
-        anime.setDuration(data.getDuration());
-        if (data.getAired() != null) {
-            anime.setAired(data.getAired().getAiredString());
-        }
-        anime.setGenres(data.getGenres() != null ? data.getGenres() : new java.util.ArrayList<>());
-        anime.setStudios(data.getStudios() != null ? data.getStudios() : new java.util.ArrayList<>());
-    }
-
 }

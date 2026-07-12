@@ -131,8 +131,19 @@ public class EpisodeSyncService {
             log.warn("[SYNC_SERVICE] COMPLETE_UNAVAILABLE | malId={} title='{}' duration={}ms", malId, anime.getTitle(), elapsed);
 
             try {
-                cacheRepository.deleteByMalId(malId);
-                cacheRepository.save(AnimeProviderCache.failure(malId));
+                Optional<AnimeProviderCache> existing = cacheRepository.findByMalId(malId);
+                if (existing.isPresent()) {
+                    AnimeProviderCache cache = existing.get();
+                    cache.setStreamable(false);
+                    cache.setValidated(true);
+                    cache.setFailureCount(cache.getFailureCount() + 1);
+                    cache.setExpiresAt(Instant.now().plusSeconds(300));
+                    cache.setProvider("");
+                    cache.setEpisodeCount(0);
+                } else {
+                    cacheRepository.save(AnimeProviderCache.failure(malId));
+                }
+                log.info("[SYNC_SERVICE] CACHE_FAILURE_RECORDED | malId={}", malId);
             } catch (Exception e) {
                 log.warn("[SYNC_SERVICE] CACHE_FAILED | malId={} error='{}'", malId, e.getMessage());
             }
@@ -146,7 +157,7 @@ public class EpisodeSyncService {
 
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - start;
-            log.error("[SYNC_SERVICE] CATASTROPHIC_FAILURE | malId={} error='{}'", malId, e.getMessage(), e);
+            log.error("[SYNC_SERVICE] CATASTROPHIC_FAILURE | malId={} error='{}' type='{}'", malId, e.getMessage(), e.getClass().getName(), e);
             return SyncResult.temporaryFailure("Unexpected error during sync: " + e.getMessage(), elapsed);
         }
     }
@@ -304,14 +315,15 @@ public class EpisodeSyncService {
 
     protected SyncResult saveEpisodes(int malId, List<Episode> validEpisodes, String providerName, JikanAnimeData jikanData) {
         if (validEpisodes == null || validEpisodes.isEmpty()) {
+            log.warn("[SYNC_SERVICE] SAVE: no valid episodes | malId={}", malId);
             return SyncResult.unavailable("NO_VALID_EPISODES", "No valid episodes to save", 0);
         }
         try {
+            log.info("[SYNC_SERVICE] SAVE: deduplicating {} episodes | malId={}", validEpisodes.size(), malId);
             List<Episode> deduplicated = new ArrayList<>();
             Set<Integer> seen = new LinkedHashSet<>();
             for (Episode ep : validEpisodes) {
                 if (ep.getEpisodeNumber() != null && seen.add(ep.getEpisodeNumber())) {
-                    // Fill in episode titles from Jikan data if available
                     if (jikanData != null && (ep.getTitle() == null || ep.getTitle().startsWith("Episode "))) {
                         String episodeTitle = lookupEpisodeTitle(jikanData, ep.getEpisodeNumber());
                         if (episodeTitle != null) {
@@ -321,19 +333,25 @@ public class EpisodeSyncService {
                     deduplicated.add(ep);
                 }
             }
+            log.info("[SYNC_SERVICE] SAVE: deduplicated {} -> {} | malId={}", validEpisodes.size(), deduplicated.size(), malId);
 
             deduplicated.sort(Comparator.comparingInt(Episode::getEpisodeNumber));
+            log.info("[SYNC_SERVICE] SAVE: deleting old episodes | malId={}", malId);
 
             episodeRepository.deleteByAnimeMalId(malId);
             episodeRepository.flush();
+            log.info("[SYNC_SERVICE] SAVE: old episodes deleted, saving {} new episodes | malId={}", deduplicated.size(), malId);
+
             episodeRepository.saveAll(deduplicated);
             episodeRepository.flush();
+            log.info("[SYNC_SERVICE] SAVE: saved {} episodes | malId={}", deduplicated.size(), malId);
 
             updateCacheIndependent(malId, providerName, deduplicated.size());
+            log.info("[SYNC_SERVICE] SAVE: cache updated | malId={}", malId);
 
             return SyncResult.success(providerName, deduplicated.size(), deduplicated);
         } catch (Exception e) {
-            log.error("[SYNC_SERVICE] SAVE_FAILED | malId={} error='{}'", malId, e.getMessage(), e);
+            log.error("[SYNC_SERVICE] SAVE_FAILED | malId={} error='{}' type='{}'", malId, e.getMessage(), e.getClass().getName(), e);
             return SyncResult.temporaryFailure("Failed to save episodes: " + e.getMessage(), 0);
         }
     }
@@ -350,13 +368,28 @@ public class EpisodeSyncService {
 
     private void updateCacheIndependent(int malId, String providerName, int episodeCount) {
         try {
-            cacheRepository.deleteByMalId(malId);
-            AnimeProviderCache cache = AnimeProviderCache.success(malId, providerName, episodeCount);
-            cache.setLastSuccessTime(Instant.now());
-            cache.setPreferredProvider(providerName);
-            cacheRepository.save(cache);
+            Optional<AnimeProviderCache> existing = cacheRepository.findByMalId(malId);
+            if (existing.isPresent()) {
+                AnimeProviderCache cache = existing.get();
+                cache.setProvider(providerName);
+                cache.setEpisodeCount(episodeCount);
+                cache.setStreamable(true);
+                cache.setValidated(true);
+                cache.setPreferredProvider(providerName);
+                cache.setLastSuccessTime(Instant.now());
+                cache.setCreatedAt(Instant.now());
+                cache.setExpiresAt(Instant.now().plusSeconds(86400));
+                cache.setFailureCount(0);
+                log.info("[SYNC_SERVICE] CACHE_UPDATED | malId={} provider={} count={}", malId, providerName, episodeCount);
+            } else {
+                AnimeProviderCache cache = AnimeProviderCache.success(malId, providerName, episodeCount);
+                cache.setLastSuccessTime(Instant.now());
+                cache.setPreferredProvider(providerName);
+                cacheRepository.save(cache);
+                log.info("[SYNC_SERVICE] CACHE_CREATED | malId={} provider={} count={}", malId, providerName, episodeCount);
+            }
         } catch (Exception e) {
-            log.warn("[SYNC_SERVICE] CACHE_UPDATE_FAILED | malId={} error='{}'", malId, e.getMessage());
+            log.error("[SYNC_SERVICE] CACHE_UPDATE_FAILED | malId={} error='{}'", malId, e.getMessage(), e);
         }
     }
 

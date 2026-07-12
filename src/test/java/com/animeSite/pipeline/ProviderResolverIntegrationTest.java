@@ -30,6 +30,8 @@ class ProviderResolverIntegrationTest {
     @Mock(lenient = true)
     private ValidationService validationService;
     @Mock(lenient = true)
+    private StreamVerificationService streamVerificationService;
+    @Mock(lenient = true)
     private ProviderHealthMonitor healthMonitor;
     @Mock(lenient = true)
     private AnimeProviderCacheRepository cacheRepository;
@@ -37,6 +39,8 @@ class ProviderResolverIntegrationTest {
     private AnimeRepository animeRepository;
     @Mock(lenient = true)
     private JikanApiClient jikanApiClient;
+    @Mock(lenient = true)
+    private ProviderPriorityManager priorityManager;
 
     @Captor
     private ArgumentCaptor<AnimeProviderCache> cacheCaptor;
@@ -49,12 +53,14 @@ class ProviderResolverIntegrationTest {
         lenient().when(aninekoProvider.getName()).thenReturn("Anineko");
         lenient().when(gogoProvider.getName()).thenReturn("GoGoAnime");
         providers = List.of(aninekoProvider, gogoProvider);
+        lenient().when(priorityManager.getActiveProviders()).thenReturn(providers);
 
         RecoveryEngine recoveryEngine = new RecoveryEngine(
             providers, cacheRepository, validationService, animeRepository);
 
         resolver = new ProviderResolver(
-            providers, validationService, healthMonitor, cacheRepository, recoveryEngine, jikanApiClient);
+            priorityManager, validationService, streamVerificationService,
+            healthMonitor, cacheRepository, recoveryEngine, jikanApiClient);
     }
 
     private Episode createEpisode(int num, String url, int malId) {

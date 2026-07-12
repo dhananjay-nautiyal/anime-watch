@@ -7,10 +7,10 @@ const STORAGE = {
   speed: 'aw_speed',
   quality: 'aw_quality',
   theater: 'aw_theater',
+  autoQuality: 'aw_auto_quality',
 }
 const CONTROLS_HIDE_DELAY = 3000
-const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2]
-const SKIP_INTRO_DURATION = 90
+const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
 const SWIPE_THRESHOLD = 50
 
 function fmt(sec) {
@@ -21,17 +21,29 @@ function fmt(sec) {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`
 }
 
+const KB_SHORTCUTS = [
+  { key: 'Space', action: 'Play/Pause' },
+  { key: '\u2190', action: 'Rewind 5s' },
+  { key: '\u2192', action: 'Forward 5s' },
+  { key: '\u2191', action: 'Volume Up' },
+  { key: '\u2193', action: 'Volume Down' },
+  { key: 'F', action: 'Fullscreen' },
+  { key: 'T', action: 'Theater' },
+  { key: 'M', action: 'Mute' },
+]
+
 export default function VideoPlayer({
-  embedUrl, servers = [], poster, animeTitle, episodeNumber, animeId,
-  onRetry, onChangeSource, streamType = 'hls', onEnded, onTimeUpdate, autoNext = true, autoPlay = true,
+  embedUrl, poster, animeTitle, episodeNumber, animeId,
+  onRetry, streamType = 'hls', onEnded, onTimeUpdate, autoNext = true, autoPlay = true,
   onSwipeUp, onSwipeDown,
-  provider, currentServer, currentLanguage, currentQuality,
+  currentLanguage, onReady, onError, streamKey,
 }) {
   const videoRef = useRef(null)
   const containerRef = useRef(null)
   const controlsTimer = useRef(null)
   const hlsRef = useRef(null)
   const seeking = useRef(false)
+  const readyFired = useRef(false)
 
   const [state, setState] = useState({
     playing: false, currentTime: 0, duration: 0,
@@ -40,9 +52,11 @@ export default function VideoPlayer({
     fullscreen: false, pip: false, buffering: true,
     showControls: true, showSettings: false, showVol: false,
     hasPoster: !autoPlay,
-    qualities: [], currentQuality: -1, showQuality: false,
+    qualities: [], currentQuality: -1,
+    autoQuality: localStorage.getItem(STORAGE.autoQuality) !== 'false',
     theater: localStorage.getItem(STORAGE.theater) === 'true',
-    subtitles: [], currentSubtitle: -1, showSubtitles: false,
+    subtitles: [], currentSubtitle: -1,
+    showShortcuts: false,
   })
   const st = useCallback((partial) => setState(prev => ({ ...prev, ...partial })), [])
 
@@ -62,7 +76,7 @@ export default function VideoPlayer({
 
   const handleSpeedChange = useCallback((s) => {
     if (videoRef.current) videoRef.current.playbackRate = s
-    st({ speed: s, showSettings: false, showQuality: false })
+    st({ speed: s })
     localStorage.setItem(STORAGE.speed, String(s))
   }, [st])
 
@@ -70,9 +84,25 @@ export default function VideoPlayer({
     const hls = hlsRef.current
     if (hls) {
       hls.currentLevel = level
-      localStorage.setItem(STORAGE.quality, String(level))
+      if (level === -1) {
+        localStorage.removeItem(STORAGE.quality)
+      } else {
+        localStorage.setItem(STORAGE.quality, String(level))
+      }
     }
-    st({ currentQuality: level, showQuality: false, showSettings: false })
+    st({ currentQuality: level })
+  }, [st])
+
+  const handleAutoQualityToggle = useCallback(() => {
+    st(p => {
+      const next = !p.autoQuality
+      localStorage.setItem(STORAGE.autoQuality, String(next))
+      const hls = hlsRef.current
+      if (hls) {
+        hls.currentLevel = next ? -1 : (p.currentQuality >= 0 ? p.currentQuality : 0)
+      }
+      return { autoQuality: next }
+    })
   }, [st])
 
   const toggleFullscreen = useCallback(() => {
@@ -93,7 +123,7 @@ export default function VideoPlayer({
   }, [])
 
   const toggleTheater = useCallback(() => {
-    st(p => ({ theater: !p.theater, showSettings: false }))
+    st(p => ({ theater: !p.theater }))
     localStorage.setItem(STORAGE.theater, String(!state.theater))
   }, [st, state.theater])
 
@@ -113,26 +143,36 @@ export default function VideoPlayer({
     if (hls && hls.subtitleTrack !== undefined) {
       hls.subtitleTrack = idx
     }
-    st({ currentSubtitle: idx, showSubtitles: false, showSettings: false })
+    st({ currentSubtitle: idx })
   }, [st])
 
   const seek = useCallback((dir) => {
     const v = videoRef.current
     if (!v) return
-    v.currentTime = Math.max(0, Math.min(v.duration || 0, v.currentTime + dir * (dir > 100 ? 10 : 5)))
+    v.currentTime = Math.max(0, Math.min(v.duration || 0, v.currentTime + dir))
   }, [])
 
   const skipIntro = useCallback(() => {
     const v = videoRef.current
-    if (v) v.currentTime = Math.min(v.duration, SKIP_INTRO_DURATION + 5)
+    if (v) v.currentTime = Math.min(v.duration, 95)
   }, [])
 
-  const showSkipIntro = state.currentTime > 0 && state.currentTime < SKIP_INTRO_DURATION && state.duration > SKIP_INTRO_DURATION + 30
+  const showSkipIntro = state.currentTime > 0 && state.currentTime < 90 && state.duration > 120
+
+  useEffect(() => {
+    readyFired.current = false
+  }, [embedUrl, streamKey])
 
   useEffect(() => {
     const v = videoRef.current
     if (!v) return
-    const onP = () => st({ playing: true, buffering: false, hasPoster: false })
+    const onP = () => {
+      st({ playing: true, buffering: false, hasPoster: false })
+      if (!readyFired.current) {
+        readyFired.current = true
+        onReady?.()
+      }
+    }
     const onPa = () => st({ playing: false })
     const onT = () => {
       st({ currentTime: v.currentTime, duration: v.duration || 0 })
@@ -147,6 +187,12 @@ export default function VideoPlayer({
     v.addEventListener('waiting', onW)
     v.addEventListener('canplay', onC)
     v.addEventListener('ended', onE)
+    v.addEventListener('error', () => {
+      const medErr = v.error
+      if (medErr) {
+        onError?.(medErr.message || `Media error code ${medErr.code}`)
+      }
+    })
     return () => {
       v.removeEventListener('play', onP)
       v.removeEventListener('pause', onPa)
@@ -155,7 +201,7 @@ export default function VideoPlayer({
       v.removeEventListener('canplay', onC)
       v.removeEventListener('ended', onE)
     }
-  }, [autoNext, onEnded, onTimeUpdate, st])
+  }, [autoNext, onEnded, onTimeUpdate, st, onReady, onError])
 
   useEffect(() => {
     const v = videoRef.current
@@ -183,7 +229,7 @@ export default function VideoPlayer({
       clearTimeout(controlsTimer.current)
       if (state.playing) {
         controlsTimer.current = setTimeout(() => {
-          st({ showControls: false, showSettings: false, showVol: false, showQuality: false })
+          st({ showControls: false, showSettings: false, showVol: false })
         }, CONTROLS_HIDE_DELAY)
       }
     }
@@ -194,10 +240,14 @@ export default function VideoPlayer({
 
   useEffect(() => {
     const v = videoRef.current
-    if (!v || !embedUrl) return
+    if (!v || !embedUrl) {
+      return
+    }
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
     v.removeAttribute('src')
-    if (streamType === 'iframe') return
+    if (streamType === 'iframe') {
+      return
+    }
 
     const resumeKey = `aw_resume_${animeId}_${episodeNumber}`
     if (autoPlay) {
@@ -210,9 +260,10 @@ export default function VideoPlayer({
     st({ buffering: true, hasPoster: !autoPlay, qualities: [], currentQuality: -1 })
 
     if (streamType === 'hls' && Hls.isSupported() && embedUrl.includes('.m3u8')) {
+      const hlsUrl = embedUrl.startsWith('/api/stream/proxy') ? embedUrl : `/api/stream/proxy?url=${encodeURIComponent(embedUrl)}&referer=https://anineko.to/`
       const hls = new Hls({ enableWorker: true, lowLatencyMode: true, maxBufferLength: 30 })
       hlsRef.current = hls
-      hls.loadSource(embedUrl.startsWith('/api/stream/proxy') ? embedUrl : `/api/stream/proxy?url=${encodeURIComponent(embedUrl)}&referer=https://anineko.to/`)
+      hls.loadSource(hlsUrl)
       hls.attachMedia(v)
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         const qualities = hls.levels.map((l, i) => ({
@@ -220,10 +271,16 @@ export default function VideoPlayer({
           label: l.height ? `${l.height}p` : `Quality ${i}`,
         }))
         st({ qualities })
-        const saved = parseInt(localStorage.getItem(STORAGE.quality))
-        if (saved >= 0 && saved < hls.levels.length) {
-          hls.currentLevel = saved
-          st({ currentQuality: saved })
+        const savedAuto = localStorage.getItem(STORAGE.autoQuality) !== 'false'
+        if (savedAuto) {
+          hls.currentLevel = -1
+          st({ currentQuality: -1, autoQuality: true })
+        } else {
+          const saved = parseInt(localStorage.getItem(STORAGE.quality))
+          if (saved >= 0 && saved < hls.levels.length) {
+            hls.currentLevel = saved
+            st({ currentQuality: saved, autoQuality: false })
+          }
         }
         if (autoPlay) v.play().catch(() => {})
       })
@@ -231,28 +288,31 @@ export default function VideoPlayer({
         st({ currentQuality: data.level })
       })
       hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, (_, data) => {
-        const subtitles = data.subtitleTracks || []
-        st({ subtitles: subtitles.map((t, i) => ({ index: i, label: t.label, lang: t.lang })) })
+        const subtitleTracks = data.subtitleTracks || []
+        st({ subtitles: subtitleTracks.map((t, i) => ({ index: i, label: t.label, lang: t.lang })) })
       })
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) {
+          st({ buffering: false })
+          onError?.(`HLS error: ${data.type} - ${data.details}`)
           hls.destroy()
           hlsRef.current = null
         }
       })
     } else {
-      v.src = embedUrl.startsWith('/api/stream/proxy') ? embedUrl : `/api/stream/proxy?url=${encodeURIComponent(embedUrl)}`
+      const directSrc = embedUrl.startsWith('/api/stream/proxy') ? embedUrl : `/api/stream/proxy?url=${encodeURIComponent(embedUrl)}`
+      v.src = directSrc
       if (autoPlay) v.play().catch(() => {})
     }
-  }, [embedUrl, streamType, animeId, episodeNumber, autoPlay, st])
+  }, [embedUrl, streamType, animeId, episodeNumber, autoPlay, st, streamKey, onError])
 
   useEffect(() => {
     const handleKb = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
       switch (e.code) {
         case 'Space': e.preventDefault(); togglePlay(); break
-        case 'ArrowLeft': e.preventDefault(); seek(-1); break
-        case 'ArrowRight': e.preventDefault(); seek(1); break
+        case 'ArrowLeft': e.preventDefault(); seek(-5); break
+        case 'ArrowRight': e.preventDefault(); seek(5); break
         case 'ArrowUp': e.preventDefault(); st({ volume: Math.min(1, state.volume + 0.1) }); break
         case 'ArrowDown': e.preventDefault(); st({ volume: Math.max(0, state.volume - 0.1) }); break
         case 'KeyF': e.preventDefault(); toggleFullscreen(); break
@@ -261,7 +321,8 @@ export default function VideoPlayer({
         case 'KeyR': e.preventDefault(); onRetry?.(); break
         case 'KeyT': e.preventDefault(); toggleTheater(); break
         case 'KeyS': e.preventDefault(); handleShare(); break
-        case 'Escape': st({ showSettings: false, showQuality: false }); break
+        case 'Slash': e.preventDefault(); st(p => ({ showShortcuts: !p.showShortcuts })); break
+        case 'Escape': st({ showSettings: false, showShortcuts: false }); break
       }
     }
     window.addEventListener('keydown', handleKb)
@@ -332,19 +393,59 @@ export default function VideoPlayer({
           allowFullScreen
           allow="autoplay; fullscreen"
           title={animeTitle}
+          onLoad={() => onReady?.()}
         />
       </div>
     )
   }
 
   const volumeIcon = state.muted || state.volume === 0 ? 'Muted' : state.volume < 0.5 ? 'Low' : 'High'
-  const currentQualityLabel = state.currentQuality >= 0 && state.qualities[state.currentQuality]
-    ? state.qualities[state.currentQuality].label
-    : 'Auto'
 
-  const currentSubLabel = state.currentSubtitle >= 0 && state.subtitles[state.currentSubtitle]
-    ? state.subtitles[state.currentSubtitle].label
-    : 'Off'
+  const settingsSections = useMemo(() => {
+    const sections = []
+
+    // Quality section
+    const qualityOptions = [{ label: 'Auto', value: -1 }]
+    if (state.qualities.length > 0) {
+      state.qualities.forEach(q => {
+        qualityOptions.push({ label: q.label, value: q.index })
+      })
+    }
+    sections.push({
+      title: 'Video Quality',
+      options: qualityOptions,
+      current: state.currentQuality,
+      onChange: handleQualityChange,
+    })
+
+    // Caption section
+    const captionOptions = [{ label: 'Off', value: -1 }]
+    if (state.subtitles.length > 0) {
+      state.subtitles.forEach(s => {
+        captionOptions.push({ label: `${s.label} (${s.lang || 'unknown'})`, value: s.index })
+      })
+    }
+    sections.push({
+      title: 'Caption',
+      options: captionOptions,
+      current: state.currentSubtitle,
+      onChange: handleSubtitleChange,
+    })
+
+    // Speed section
+    const speedOptions = SPEEDS.map(s => ({
+      label: `${s}x${s === 1 ? ' (Normal)' : ''}`,
+      value: s,
+    }))
+    sections.push({
+      title: 'Playback Speed',
+      options: speedOptions,
+      current: state.speed,
+      onChange: handleSpeedChange,
+    })
+
+    return sections
+  }, [state.qualities, state.subtitles, state.currentQuality, state.currentSubtitle, state.speed, handleQualityChange, handleSubtitleChange, handleSpeedChange])
 
   return (
     <>
@@ -367,9 +468,14 @@ export default function VideoPlayer({
             className="absolute inset-0 flex items-center justify-center"
             aria-label="Play"
           >
-            <div className="w-20 h-20 rounded-full bg-primary/90 hover:bg-primary flex items-center justify-center transition-all hover:scale-110 shadow-2xl">
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className="w-20 h-20 rounded-full bg-primary/90 hover:bg-primary flex items-center justify-center transition-all hover:scale-110 shadow-2xl"
+            >
               <svg className="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-            </div>
+            </motion.div>
           </button>
         </div>
       )}
@@ -386,6 +492,15 @@ export default function VideoPlayer({
       {state.buffering && state.playing && !state.hasPoster && (
         <div className="absolute inset-x-0 bottom-0 z-20 pointer-events-none">
           <div className="h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40 bg-[length:200%_100%] animate-gradient-x" />
+        </div>
+      )}
+
+      {state.buffering && !state.playing && !state.hasPoster && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none bg-black/20">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-14 h-14 border-[3px] border-primary/30 border-t-primary rounded-full animate-spin" />
+            <p className="text-white/60 text-xs font-medium">Buffering...</p>
+          </div>
         </div>
       )}
 
@@ -413,20 +528,26 @@ export default function VideoPlayer({
             className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent z-30 flex flex-col justify-end"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Episode title overlay with badges */}
             <div className="px-4 pt-4 pb-2 flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-white/90 text-sm font-medium truncate drop-shadow-lg">
                   {animeTitle}{episodeNumber ? ` - Episode ${episodeNumber}` : ''}
                 </p>
                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                  {provider && <span className="text-[9px] bg-white/10 backdrop-blur-sm text-white/80 px-1.5 py-0.5 rounded font-medium">{provider}</span>}
-                  {currentServer && <span className="text-[9px] bg-primary/20 backdrop-blur-sm text-primary px-1.5 py-0.5 rounded font-medium">{currentServer}</span>}
                   {currentLanguage && <span className="text-[9px] bg-emerald-500/20 backdrop-blur-sm text-emerald-400 px-1.5 py-0.5 rounded font-medium">{currentLanguage}</span>}
-                  {currentQuality && <span className="text-[9px] bg-amber-500/20 backdrop-blur-sm text-amber-400 px-1.5 py-0.5 rounded font-medium">{currentQuality}</span>}
                 </div>
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button
+                  onClick={(e) => { e.stopPropagation(); st(p => ({ showShortcuts: !p.showShortcuts })) }}
+                  className="text-white/60 hover:text-white bg-black/30 hover:bg-black/50 backdrop-blur-sm rounded-lg p-1.5 transition-all"
+                  aria-label="Keyboard shortcuts"
+                  title="Keyboard shortcuts"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                  </svg>
+                </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); handleShare() }}
                   className="text-white/60 hover:text-white bg-black/30 hover:bg-black/50 backdrop-blur-sm rounded-lg p-1.5 transition-all"
@@ -476,6 +597,21 @@ export default function VideoPlayer({
                   )}
                 </button>
 
+                {!state.theater && (
+                  <button onClick={(e) => { e.stopPropagation(); seek(-10) }} className="text-white/60 hover:text-white transition-colors" aria-label="Rewind 10 seconds">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
+                    </svg>
+                  </button>
+                )}
+                {!state.theater && (
+                  <button onClick={(e) => { e.stopPropagation(); seek(10) }} className="text-white/60 hover:text-white transition-colors" aria-label="Forward 10 seconds">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z" />
+                    </svg>
+                  </button>
+                )}
+
                 <div className="relative flex items-center">
                   <button onClick={(e) => { e.stopPropagation(); st(p => ({ showVol: !p.showVol })) }} className="text-white/80 hover:text-white transition-colors" aria-label="Volume">
                     {volumeIcon === 'Muted' ? (
@@ -497,98 +633,85 @@ export default function VideoPlayer({
 
                 <div className="flex-1" />
 
-                {/* Quality selector */}
-                {state.qualities.length > 1 && (
-                  <div className="relative">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); st(p => ({ showQuality: !p.showQuality, showSettings: false })) }}
-                      className="text-white/80 hover:text-white transition-colors text-[11px] font-semibold"
-                      aria-label="Quality"
-                    >
-                      {currentQualityLabel}
-                    </button>
-                    <AnimatePresence>
-                      {state.showQuality && (
-                        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="absolute bottom-8 right-0 bg-black/95 border border-white/10 rounded-xl p-2 shadow-2xl min-w-[120px] z-40">
-                          <p className="text-white/50 text-[10px] font-semibold uppercase tracking-wider px-3 py-1">Quality</p>
-                          <button onClick={() => handleQualityChange(-1)} className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${state.currentQuality === -1 ? 'bg-primary/20 text-primary font-medium' : 'text-white/70 hover:text-white hover:bg-white/5'}`}>
-                            Auto
-                          </button>
-                          {state.qualities.map((q) => (
-                            <button key={q.index} onClick={() => handleQualityChange(q.index)} className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${state.currentQuality === q.index ? 'bg-primary/20 text-primary font-medium' : 'text-white/70 hover:text-white hover:bg-white/5'}`}>
-                              {q.label}
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                )}
-
-                {/* Subtitle selector */}
-                {state.subtitles.length > 0 && (
-                  <div className="relative">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); st(p => ({ showSubtitles: !p.showSubtitles, showSettings: false, showQuality: false })) }}
-                      className="text-white/80 hover:text-white transition-colors text-[11px] font-semibold"
-                      aria-label="Subtitles"
-                    >
-                      {currentSubLabel}
-                    </button>
-                    <AnimatePresence>
-                      {state.showSubtitles && (
-                        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="absolute bottom-8 right-0 bg-black/95 border border-white/10 rounded-xl p-2 shadow-2xl min-w-[120px] z-40">
-                          <p className="text-white/50 text-[10px] font-semibold uppercase tracking-wider px-3 py-1">Subtitles</p>
-                          <button onClick={() => handleSubtitleChange(-1)} className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${state.currentSubtitle === -1 ? 'bg-primary/20 text-primary font-medium' : 'text-white/70 hover:text-white hover:bg-white/5'}`}>
-                            Off
-                          </button>
-                          {state.subtitles.map((s) => (
-                            <button key={s.index} onClick={() => handleSubtitleChange(s.index)} className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${state.currentSubtitle === s.index ? 'bg-primary/20 text-primary font-medium' : 'text-white/70 hover:text-white hover:bg-white/5'}`}>
-                              {s.label}
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                )}
-
-                {/* Settings */}
+                {/* Settings button — opens unified popup */}
                 <div className="relative">
-                  <button onClick={(e) => { e.stopPropagation(); st(p => ({ showSettings: !p.showSettings, showQuality: false })) }} className="text-white/80 hover:text-white transition-colors" aria-label="Settings">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); st(p => ({ showSettings: !p.showSettings })) }}
+                    className="text-white/80 hover:text-white transition-colors bg-white/10 hover:bg-white/20 p-1.5 rounded-lg"
+                    aria-label="Settings"
+                  >
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.488.488 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81a.48.48 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.488.488 0 00-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.611 3.611 0 0112 15.6z"/></svg>
                   </button>
                   <AnimatePresence>
                     {state.showSettings && (
-                      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="absolute bottom-8 right-0 bg-black/95 border border-white/10 rounded-xl p-2 shadow-2xl min-w-[140px] z-40">
-                        <p className="text-white/50 text-[10px] font-semibold uppercase tracking-wider px-3 py-1">Speed</p>
-                        {SPEEDS.map(s => (
-                          <button key={s} onClick={() => handleSpeedChange(s)} className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${state.speed === s ? 'bg-primary/20 text-primary font-medium' : 'text-white/70 hover:text-white hover:bg-white/5'}`}>
-                            {s}x{s === 1 ? ' (Normal)' : ''}
-                          </button>
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 8 }}
+                        className="absolute bottom-8 right-0 bg-black/95 border border-white/10 rounded-xl p-2 shadow-2xl min-w-[200px] z-40 max-h-[60vh] overflow-y-auto"
+                      >
+                        {settingsSections.map((section, si) => (
+                          <div key={section.title}>
+                            {si > 0 && <div className="h-px bg-white/10 my-1" />}
+                            <p className="text-white/50 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5">{section.title}</p>
+                            {section.options.map(opt => (
+                              <button
+                                key={opt.value}
+                                onClick={() => { section.onChange(opt.value); st({ showSettings: false }) }}
+                                className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                                  section.current === opt.value
+                                    ? 'bg-primary/20 text-primary font-medium'
+                                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
                         ))}
                         <div className="h-px bg-white/10 my-1" />
-                        <p className="text-white/50 text-[10px] font-semibold uppercase tracking-wider px-3 py-1">Audio</p>
-                        <button onClick={(e) => { e.stopPropagation() }} className="w-full text-left px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
-                          Default Track
-                        </button>
-                        <div className="h-px bg-white/10 my-1" />
-                        <button onClick={(e) => { e.stopPropagation(); togglePip() }} className="w-full text-left px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+                        <p className="text-white/50 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5">Display</p>
+                        <button
+                          onClick={() => { togglePip(); st({ showSettings: false }) }}
+                          className="w-full text-left px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-colors flex items-center gap-2"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" />
+                          </svg>
                           Picture in Picture
                         </button>
-                        <button onClick={(e) => { e.stopPropagation(); toggleTheater() }} className="w-full text-left px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+                        <button
+                          onClick={() => { toggleTheater(); st({ showSettings: false }) }}
+                          className="w-full text-left px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-colors flex items-center gap-2"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                          </svg>
                           {state.theater ? 'Exit Theater' : 'Theater Mode'}
+                        </button>
+                        {/* Auto Quality toggle */}
+                        <div className="h-px bg-white/10 my-1" />
+                        <p className="text-white/50 text-[10px] font-semibold uppercase tracking-wider px-3 py-1.5">Auto Quality</p>
+                        <button
+                          onClick={handleAutoQualityToggle}
+                          className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                            state.autoQuality
+                              ? 'bg-primary/20 text-primary font-medium'
+                              : 'text-white/70 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          {state.autoQuality ? 'On' : 'Off'}
                         </button>
                       </motion.div>
                     )}
                   </AnimatePresence>
                 </div>
 
-                <button onClick={(e) => { e.stopPropagation(); toggleFullscreen() }} className="text-white/80 hover:text-white transition-colors" aria-label="Fullscreen">
+                <button onClick={(e) => { e.stopPropagation(); toggleFullscreen() }} className="text-white/80 hover:text-white transition-colors bg-white/10 hover:bg-white/20 p-1.5 rounded-lg" aria-label="Fullscreen">
                   {state.fullscreen ? (
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>
                   ) : (
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
                   )}
                 </button>
               </div>
@@ -606,6 +729,39 @@ export default function VideoPlayer({
           Exit Theater
         </button>
       )}
+
+      <AnimatePresence>
+        {state.showShortcuts && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="absolute inset-0 z-40 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+            onClick={(e) => { e.stopPropagation(); st({ showShortcuts: false }) }}
+          >
+            <div className="bg-surface/95 border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white text-sm font-bold">Keyboard Shortcuts</h3>
+                <button onClick={() => st({ showShortcuts: false })} className="text-muted hover:text-white transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="space-y-2">
+                {KB_SHORTCUTS.map(({ key, action }) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <span className="text-xs text-muted">{action}</span>
+                    <kbd className="px-2 py-0.5 text-[10px] font-mono bg-white/10 text-white rounded border border-white/10 min-w-[24px] text-center">
+                      {key}
+                    </kbd>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {swipeIndicator && (
         <div className={`absolute top-1/2 -translate-y-1/2 z-40 bg-black/60 backdrop-blur-sm rounded-full w-16 h-16 flex items-center justify-center shadow-2xl pointer-events-none ${

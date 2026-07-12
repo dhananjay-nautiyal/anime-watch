@@ -1,26 +1,18 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getAnimeById, getAnimeBySlug, getEpisodes, syncEpisodes, getEpisodeEmbed, getEpisodeStreams, getTrending } from '../api/anime'
+import { getAnimeById, getAnimeBySlug, getEpisodes, syncEpisodes, getEpisodeLanguages, getEpisodeStreams, getTrending } from '../api/anime'
 import { extractErrorMessage } from '../api/client'
 import { getResume, saveResume } from '../api/watchHistory'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import VideoPlayer from '../components/watch/VideoPlayer'
-import ServerSelector from '../components/watch/ServerSelector'
 import EpisodePanel from '../components/watch/EpisodePanel'
 import AnimeInfo from '../components/watch/AnimeInfo'
 import AutoNextOverlay from '../components/watch/AutoNextOverlay'
 import RelatedAnime from '../components/watch/RelatedAnime'
-import ImageWithFallback from '../components/ImageWithFallback'
 import { useAuth } from '../context/AuthContext'
 
-const PROXY_BASE = '/api/stream/proxy'
-
-function wrapProxy(url, referer) {
-  if (!url) return ''
-  if (url.startsWith(PROXY_BASE)) return url
-  return `${PROXY_BASE}?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer || 'https://anineko.to/')}`
-}
+const LANG_KEY = 'aw_language'
 
 function useAnimeQuery(malId, slug) {
   return useQuery({
@@ -86,18 +78,18 @@ function useSync(malId, episodes, isLoading) {
 
 function LoadingSkeleton() {
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 animate-pulse space-y-6">
-      <div className="w-full aspect-video bg-white/5 rounded-xl" />
-      <div className="flex gap-6">
+    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+      <div className="flex flex-col lg:flex-row gap-4">
         <div className="flex-1 space-y-4">
-          <div className="h-8 bg-white/5 rounded-lg w-3/4" />
-          <div className="h-4 bg-white/5 rounded-lg w-1/2" />
-          <div className="h-32 bg-white/5 rounded-xl" />
+          <div className="w-full aspect-video bg-white/5 rounded-xl animate-pulse" />
+          <div className="h-8 bg-white/5 rounded-lg w-3/4 animate-pulse" />
+          <div className="h-4 bg-white/5 rounded-lg w-1/2 animate-pulse" />
+          <div className="h-32 bg-white/5 rounded-xl animate-pulse" />
         </div>
-        <div className="w-80 space-y-3">
-          <div className="h-10 bg-white/5 rounded-lg" />
+        <div className="w-full lg:w-80 space-y-3">
+          <div className="h-10 bg-white/5 rounded-lg animate-pulse" />
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="h-8 bg-white/5 rounded-lg" />
+            <div key={i} className="h-8 bg-white/5 rounded-lg animate-pulse" />
           ))}
         </div>
       </div>
@@ -141,19 +133,24 @@ export default function WatchPage() {
   const [currentEp, setCurrentEp] = useState(initialEp)
   const [embedUrl, setEmbedUrl] = useState('')
   const [embedType, setEmbedType] = useState('hls')
-  const [embedLoading, setEmbedLoading] = useState(true)
+  const [embedLoading, setEmbedLoading] = useState(false)
   const [embedErr, setEmbedErr] = useState(null)
-  const [provider, setProvider] = useState('')
-  const [streamsData, setStreamsData] = useState(null)
-  const [currentLanguage, setCurrentLanguage] = useState('SUB')
-  const [currentServer, setCurrentServer] = useState(null)
-  const [currentServerUrl, setCurrentServerUrl] = useState('')
-  const [failoverActive, setFailoverActive] = useState(false)
-  const [failoverAttempts, setFailoverAttempts] = useState(0)
+  const [selectedLanguage, setSelectedLanguage] = useState(null)
   const [autoNextVisible, setAutoNextVisible] = useState(false)
+  const [showComments, setShowComments] = useState(false)
+  const [streamKey, setStreamKey] = useState(0)
+  const streamsCache = useRef(null)
+  const serverFailoverIdx = useRef(0)
+  const retryCount = useRef(0)
   const progressRef = useRef({ currentTime: 0, duration: 0 })
-  const embedAbortRef = useRef(null)
-  const failoverTimerRef = useRef(null)
+  const streamReqId = useRef(0)
+  const abortRef = useRef(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   const animeQ = useAnimeQuery(malId, slug)
   const anime = animeQ.data
@@ -161,16 +158,16 @@ export default function WatchPage() {
 
   const episodesQ = useEpisodesQuery(resolvedMalId)
   const { syncing, syncErr, retry: retrySync } = useSync(resolvedMalId, episodesQ.data, episodesQ.isLoading)
-
   const episodes = episodesQ.data ?? []
   const loading = animeQ.isLoading
-
   const resolvedSlug = anime?.slug || slug
 
   const currentEpisode = useMemo(() =>
     episodes.find(e => e.episodeNumber === currentEp), [episodes, currentEp])
   const nextEpisode = useMemo(() =>
     episodes.find(e => e.episodeNumber === currentEp + 1), [episodes, currentEp])
+  const prevEpisode = useMemo(() =>
+    episodes.find(e => e.episodeNumber === currentEp - 1), [episodes, currentEp])
 
   useDocumentTitle(anime ? `${anime.title} - Episode ${currentEp}` : 'Loading...')
 
@@ -185,106 +182,192 @@ export default function WatchPage() {
     }
   }, [anime, resolvedMalId, navigate])
 
-  const loadEmbed = useCallback(async (ep) => {
-    if (!ep?.embedUrl || !resolvedMalId) return
-    embedAbortRef.current?.abort()
+  // ---- Phase 1: Discover available languages ----
+  const languagesQ = useQuery({
+    queryKey: ['languages', resolvedMalId, currentEpisode?.embedUrl],
+    queryFn: ({ signal }) => getEpisodeLanguages(resolvedMalId, currentEpisode.embedUrl, signal),
+    enabled: !!resolvedMalId && !!currentEpisode?.embedUrl,
+    staleTime: 120000,
+    retry: 1,
+  })
+
+  const availableLanguages = languagesQ.data || []
+  const hasSub = availableLanguages.includes('SUB')
+  const hasDub = availableLanguages.includes('DUB')
+  const languagesLoaded = languagesQ.isSuccess && availableLanguages.length > 0
+
+  // Auto-select language when languages arrive or when known deterministic
+  useEffect(() => {
+    if (!availableLanguages.length) return
+    const saved = localStorage.getItem(LANG_KEY)
+    if (saved && availableLanguages.includes(saved)) {
+      setSelectedLanguage(saved)
+    } else if (hasDub && !hasSub) {
+      setSelectedLanguage('DUB')
+    } else {
+      setSelectedLanguage('SUB')
+    }
+  }, [availableLanguages, hasSub, hasDub])
+
+  // ---- Phase 2: Load stream once language is confirmed ----
+  const loadStream = useCallback(async (lang) => {
+    if (!currentEpisode?.embedUrl || !resolvedMalId) return
+
+    abortRef.current?.abort()
     const controller = new AbortController()
-    embedAbortRef.current = controller
+    abortRef.current = controller
+    const reqId = ++streamReqId.current
+
     setEmbedLoading(true)
     setEmbedErr(null)
-    setFailoverActive(false)
-    setFailoverAttempts(0)
-    setCurrentServer(null)
-    setCurrentServerUrl('')
+    setEmbedUrl('')
 
     try {
-      const streams = await getEpisodeStreams(resolvedMalId, ep.embedUrl, controller.signal)
-      if (!streams) {
-        const fallback = await getEpisodeEmbed(resolvedMalId, ep.embedUrl, controller.signal)
-        if (fallback) {
-          setEmbedUrl(fallback.embedUrl || '')
-          setEmbedType(fallback.type || 'hls')
-          setProvider(fallback.provider || '')
-          setStreamsData(null)
-          const defaultServer = fallback.servers?.[0]
-          if (defaultServer) {
-            setCurrentServer(defaultServer.label || null)
-            setCurrentServerUrl(defaultServer.url || '')
-          }
-        } else {
-          setEmbedErr('No stream sources available.')
-        }
+      const streams = await getEpisodeStreams(resolvedMalId, currentEpisode.embedUrl, lang, controller.signal)
+      if (!mountedRef.current || reqId !== streamReqId.current) return
+
+      if (!streams || !streams.languages?.length) {
+        setEmbedErr('No stream sources available.')
         setEmbedLoading(false)
         return
       }
 
-      setProvider(streams.provider || '')
       setEmbedType(streams.type || 'hls')
-      setStreamsData(streams)
+      streamsCache.current = streams
+      serverFailoverIdx.current = 0
+      retryCount.current = 0
 
-      const subLang = streams.languages?.find(l => l.language === 'SUB')
-      const dubLang = streams.languages?.find(l => l.language === 'DUB')
-      const defLang = subLang || dubLang || streams.languages?.[0]
-      const lang = defLang?.language || 'SUB'
-      setCurrentLanguage(lang)
+      const langGroup = streams.languages[0]
+      const servers = langGroup?.servers || []
+      const best = servers.find(s => s.verified && s.status === 'online') || servers[0]
 
-      const langServers = streams.languages?.find(l => l.language === lang)?.servers || []
-      const firstOnline = langServers.find(s => s.verified && s.status === 'online')
-      const firstAny = langServers[0]
-
-      if (firstOnline || firstAny) {
-        const target = firstOnline || firstAny
-        setCurrentServer(target.label || '')
-        setCurrentServerUrl(target.proxyUrl || target.url || '')
-        setEmbedUrl(target.proxyUrl || target.url || '')
+      if (best) {
+        setEmbedUrl(best.proxyUrl || best.url)
+        setStreamKey(k => k + 1)
       } else {
         setEmbedErr('No working servers found.')
+        setEmbedLoading(false)
       }
     } catch (err) {
-      if (err.name !== 'AbortError') {
-        setEmbedErr(extractErrorMessage(err))
-      }
-    } finally {
+      if (!mountedRef.current || reqId !== streamReqId.current) return
+      setEmbedErr(err.message?.includes('timed out')
+        ? 'Stream resolution timed out.'
+        : extractErrorMessage(err))
       setEmbedLoading(false)
     }
-  }, [resolvedMalId])
+  }, [currentEpisode?.embedUrl, resolvedMalId])
 
+  // Run when language is confirmed
   useEffect(() => {
-    if (currentEpisode?.embedUrl) loadEmbed(currentEpisode)
-  }, [currentEpisode, loadEmbed])
+    if (!selectedLanguage || !currentEpisode?.embedUrl) return
+    loadStream(selectedLanguage)
+  }, [selectedLanguage, currentEpisode?.embedUrl, loadStream])
 
-  const handleServerError = useCallback(() => {
-    if (!streamsData?.languages) return
-    const langServers = streamsData.languages.find(l => l.language === currentLanguage)?.servers || []
-
-    const currentIdx = langServers.findIndex(
-      s => s.proxyUrl === currentServerUrl || s.url === currentServerUrl
-    )
-
-    if (currentIdx < langServers.length - 1) {
-      setFailoverActive(true)
-      setFailoverAttempts(p => p + 1)
-      const next = langServers.find((s, i) => i > currentIdx && s.verified && s.status === 'online')
-      const target = next || langServers[currentIdx + 1]
-      if (target) {
-        const newUrl = target.proxyUrl || target.url
-        setCurrentServer(target.label)
-        setCurrentServerUrl(newUrl)
-        setEmbedUrl(newUrl)
-        setEmbedErr(null)
-        setEmbedLoading(true)
-        setTimeout(() => setEmbedLoading(false), 100)
-      }
-    } else {
-      const otherLangs = streamsData.languages.filter(l => l.language !== currentLanguage)
-      if (otherLangs.length > 0) {
-        setEmbedErr(`No working ${currentLanguage} servers found. Try ${otherLangs[0].language}.`)
-      } else {
-        setEmbedErr('No stream available.')
-      }
+  // ---- Player lifecycle ----
+  const handlePlayerReady = useCallback(() => {
+    if (mountedRef.current) {
+      setEmbedLoading(false)
     }
-  }, [streamsData, currentLanguage, currentServerUrl])
+  }, [])
 
+  const handlePlayerError = useCallback((errorMsg) => {
+    if (!mountedRef.current) return
+    setEmbedLoading(false)
+
+    const cache = streamsCache.current
+    if (!cache?.languages?.length) {
+      setEmbedErr('Stream temporarily unavailable.')
+      return
+    }
+
+    const langGroup = cache.languages[0]
+    const servers = langGroup?.servers || []
+
+    // Try next verified server
+    const nextIdx = serverFailoverIdx.current + 1
+    const next = servers.slice(nextIdx).find(s => s.verified && s.status === 'online')
+    if (next) {
+      serverFailoverIdx.current = servers.indexOf(next)
+      setEmbedUrl(next.proxyUrl || next.url)
+      setEmbedErr(null)
+      setEmbedLoading(true)
+      setStreamKey(k => k + 1)
+      return
+    }
+
+    // Re-resolve stream from scratch
+    if (retryCount.current < 2 && selectedLanguage && currentEpisode?.embedUrl) {
+      retryCount.current++
+      serverFailoverIdx.current = 0
+      loadStream(selectedLanguage)
+      return
+    }
+
+    setEmbedErr('Stream temporarily unavailable.')
+  }, [selectedLanguage, currentEpisode?.embedUrl, loadStream])
+
+  // ---- Language switching ----
+  const handleLanguageChange = useCallback((lang) => {
+    if (lang === selectedLanguage) return
+    localStorage.setItem(LANG_KEY, lang)
+    setSelectedLanguage(lang)
+
+    const { currentTime, duration } = progressRef.current
+    if (currentTime > 0 && duration > 0 && currentEpisode && resolvedMalId) {
+      try {
+        localStorage.setItem(`aw_resume_${resolvedMalId}_${currentEp}`, String(currentTime))
+      } catch {}
+    }
+  }, [selectedLanguage, currentEpisode, resolvedMalId, currentEp])
+
+  // ---- Navigation ----
+  const handleNext = useCallback(() => {
+    if (nextEpisode) {
+      setAutoNextVisible(false)
+      const targetSlug = resolvedSlug || resolvedMalId
+      navigate(`/anime/${targetSlug}/ep/${currentEp + 1}`, { replace: true })
+    }
+  }, [nextEpisode, resolvedSlug, resolvedMalId, currentEp, navigate])
+
+  const handlePrev = useCallback(() => {
+    if (currentEp > 1) {
+      setAutoNextVisible(false)
+      const targetSlug = resolvedSlug || resolvedMalId
+      navigate(`/anime/${targetSlug}/ep/${currentEp - 1}`, { replace: true })
+    }
+  }, [resolvedSlug, resolvedMalId, currentEp, navigate])
+
+  const handleEpisodeSelect = useCallback((ep) => {
+    setAutoNextVisible(false)
+    setCurrentEp(ep.episodeNumber)
+    streamsCache.current = null
+    serverFailoverIdx.current = 0
+    retryCount.current = 0
+    setEmbedUrl('')
+    setEmbedErr(null)
+    const targetSlug = resolvedSlug || resolvedMalId
+    navigate(`/anime/${targetSlug}/ep/${ep.episodeNumber}`, { replace: true })
+  }, [resolvedSlug, resolvedMalId, navigate])
+
+  const handleEnded = useCallback(() => {
+    if (nextEpisode) setAutoNextVisible(true)
+  }, [nextEpisode])
+
+  const handleCancelAutoNext = useCallback(() => setAutoNextVisible(false), [])
+
+  const handleRetryEmbed = useCallback(() => {
+    if (selectedLanguage && currentEpisode?.embedUrl) {
+      retryCount.current = 0
+      serverFailoverIdx.current = 0
+      loadStream(selectedLanguage)
+    }
+  }, [selectedLanguage, currentEpisode?.embedUrl, loadStream])
+
+  const handleTimeUpdate = useCallback(({ currentTime, duration }) => {
+    progressRef.current = { currentTime, duration }
+  }, [])
+
+  // ---- Resume logic ----
   useEffect(() => {
     if (!resolvedMalId) return
     getResume(resolvedMalId).then(resume => {
@@ -339,93 +422,19 @@ export default function WatchPage() {
   })
   const trending = trendingQ.data?.data ?? []
 
-  const handleServerSwitch = useCallback((server) => {
-    if (!server) return
-    const newUrl = server.proxyUrl || server.url
-    setCurrentServer(server.label)
-    setCurrentServerUrl(newUrl)
-    setEmbedUrl(newUrl)
-    setFailoverActive(false)
-    setEmbedLoading(true)
-    setEmbedErr(null)
-    setTimeout(() => setEmbedLoading(false), 100)
-  }, [])
-
-  const handleLanguageChange = useCallback((lang) => {
-    if (!streamsData?.languages) return
-    setCurrentLanguage(lang)
-    const langServers = streamsData.languages.find(l => l.language === lang)?.servers || []
-    const firstOnline = langServers.find(s => s.verified && s.status === 'online')
-    const target = firstOnline || langServers[0]
-    if (target) {
-      handleServerSwitch(target)
-    } else {
-      setEmbedUrl('')
-      setEmbedErr(`No servers available for ${lang}`)
-    }
-  }, [streamsData, handleServerSwitch])
-
-  const handleNext = useCallback(() => {
-    if (nextEpisode) {
-      setAutoNextVisible(false)
-      const targetSlug = resolvedSlug || resolvedMalId
-      navigate(`/anime/${targetSlug}/ep/${currentEp + 1}`, { replace: true })
-    }
-  }, [nextEpisode, resolvedSlug, resolvedMalId, currentEp, navigate])
-
-  const handlePrev = useCallback(() => {
-    if (currentEp > 1) {
-      setAutoNextVisible(false)
-      const targetSlug = resolvedSlug || resolvedMalId
-      navigate(`/anime/${targetSlug}/ep/${currentEp - 1}`, { replace: true })
-    }
-  }, [resolvedSlug, resolvedMalId, currentEp, navigate])
-
-  const handleEpisodeSelect = useCallback((ep) => {
-    setAutoNextVisible(false)
-    setCurrentEp(ep.episodeNumber)
-    const targetSlug = resolvedSlug || resolvedMalId
-    navigate(`/anime/${targetSlug}/ep/${ep.episodeNumber}`, { replace: true })
-  }, [resolvedSlug, resolvedMalId, navigate])
-
-  const handleEnded = useCallback(() => {
-    if (nextEpisode) setAutoNextVisible(true)
-  }, [nextEpisode])
-
-  const handleCancelAutoNext = useCallback(() => setAutoNextVisible(false), [])
-
-  const handleRetryEmbed = useCallback(() => {
-    if (currentEpisode?.embedUrl) loadEmbed(currentEpisode)
-  }, [currentEpisode, loadEmbed])
-
-  const handleTimeUpdate = useCallback(({ currentTime, duration }) => {
-    progressRef.current = { currentTime, duration }
-  }, [])
-
-  const currentQuality = useMemo(() => {
-    if (!currentServerUrl) return null
-    if (currentServerUrl.includes('1080')) return '1080p'
-    if (currentServerUrl.includes('720')) return '720p'
-    if (currentServerUrl.includes('480')) return '480p'
-    return null
-  }, [currentServerUrl])
-
   if (loading) return <LoadingSkeleton />
   if (animeQ.error) return <ErrorDisplay message={extractErrorMessage(animeQ.error)} onRetry={() => animeQ.refetch()} slug={resolvedSlug} malId={resolvedMalId} />
 
-  const showSidebar = !syncing || episodes.length > 0
-
   return (
-    <div className="max-w-7xl mx-auto p-3 sm:p-6 space-y-6">
-      {/* Player + Sidebar Row */}
-      <div className="flex flex-col lg:flex-row gap-4">
-        {/* Main Player Column */}
-        <div className="flex-1 min-w-0 space-y-4">
-          {/* Video Player */}
+    <div className="max-w-7xl mx-auto p-2 sm:p-4 lg:p-6">
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
+        {/* ===== LEFT COLUMN ===== */}
+        <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
+
+          {/* ---- VIDEO PLAYER ---- */}
           <div className="relative">
             <VideoPlayer
               embedUrl={embedUrl}
-              servers={[]}
               poster={anime?.imageUrl}
               animeTitle={anime?.title}
               episodeNumber={currentEp}
@@ -436,13 +445,13 @@ export default function WatchPage() {
               onTimeUpdate={handleTimeUpdate}
               onSwipeUp={handleNext}
               onSwipeDown={handlePrev}
-              provider={provider}
-              currentServer={currentServer}
-              currentLanguage={currentLanguage}
-              currentQuality={currentQuality}
+              currentLanguage={selectedLanguage}
+              onReady={handlePlayerReady}
+              onError={handlePlayerError}
+              streamKey={streamKey}
             />
 
-            {/* Embedded stream error display */}
+            {/* Stream error overlay */}
             {embedErr && !embedLoading && (
               <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/80 backdrop-blur-sm rounded-xl">
                 <div className="text-center max-w-sm px-6">
@@ -453,20 +462,14 @@ export default function WatchPage() {
                   </div>
                   <p className="text-white text-sm font-medium mb-1">{embedErr}</p>
                   <p className="text-muted text-xs mb-4">The servers may be down or the stream is unavailable.</p>
-                  <div className="flex items-center justify-center gap-2">
-                    <button onClick={handleRetryEmbed} className="bg-primary/20 hover:bg-primary/30 text-primary text-xs font-medium px-4 py-2 rounded-lg transition-all">
-                      Retry
-                    </button>
-                    {streamsData?.languages?.length > 1 && (
-                      <button onClick={() => handleLanguageChange(streamsData.languages.find(l => l.language !== currentLanguage)?.language || 'SUB')} className="text-white/60 hover:text-white text-xs font-medium px-4 py-2 rounded-lg border border-white/10 hover:border-white/20 transition-all">
-                        Try {streamsData.languages.find(l => l.language !== currentLanguage)?.language || 'SUB'}
-                      </button>
-                    )}
-                  </div>
+                  <button onClick={handleRetryEmbed} className="bg-primary/20 hover:bg-primary/30 text-primary text-xs font-medium px-4 py-2 rounded-lg transition-all">
+                    Retry
+                  </button>
                 </div>
               </div>
             )}
 
+            {/* Loading overlay */}
             {embedLoading && !embedErr && (
               <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 rounded-xl pointer-events-none">
                 <div className="flex flex-col items-center gap-3">
@@ -476,7 +479,6 @@ export default function WatchPage() {
               </div>
             )}
 
-            {/* Auto Next Overlay */}
             <AutoNextOverlay
               visible={autoNextVisible}
               nextEpisode={nextEpisode}
@@ -487,22 +489,63 @@ export default function WatchPage() {
             />
           </div>
 
-          {/* Mobile Server Selector (visible on small screens) */}
-          <div className="lg:hidden">
-            <ServerSelector
-              languages={streamsData?.languages || []}
-              currentLanguage={currentLanguage}
-              onLanguageChange={handleLanguageChange}
-              servers={[]}
-              selectedServerUrl={currentServerUrl}
-              onServerChange={handleServerSwitch}
-              loading={embedLoading}
-              failoverActive={failoverActive}
-              currentProvider={provider}
-            />
+          {/* ---- SUB / DUB + NAVIGATION ---- */}
+          <div className="flex flex-wrap items-center gap-3 justify-between">
+            {/* SUB / DUB pills — always visible, language check is immediate */}
+            <div className="flex gap-2">
+              {['SUB', 'DUB'].map(lang => {
+                const available = languagesLoaded ? availableLanguages.includes(lang) : false
+                const loadingLangs = languagesQ.isLoading || (!languagesLoaded && !languagesQ.isError)
+                return (
+                  <button
+                    key={lang}
+                    onClick={() => available && handleLanguageChange(lang)}
+                    disabled={!available || loadingLangs}
+                    className={`relative px-5 py-2 text-xs font-bold rounded-full transition-all duration-200 ${
+                      loadingLangs
+                        ? 'text-white/15 bg-white/[0.02] border border-white/[0.04] cursor-wait'
+                        : !available
+                          ? 'text-white/15 bg-white/[0.02] border border-white/[0.04] cursor-not-allowed'
+                          : selectedLanguage === lang
+                            ? 'bg-primary/25 text-primary shadow-lg shadow-primary/10 border border-primary/30 scale-105'
+                            : 'text-white/60 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:text-white hover:border-white/20 hover:scale-105'
+                    }`}
+                  >
+                    {lang}
+                    {loadingLangs && lang === 'SUB' && (
+                      <span className="ml-1.5 inline-block w-2 h-2 border border-current border-t-transparent rounded-full animate-spin" />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Prev / Current / Next */}
+            <div className="flex items-center gap-2">
+              {prevEpisode && (
+                <button onClick={handlePrev} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-xs text-muted hover:text-white transition-all">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Ep {currentEp - 1}
+                </button>
+              )}
+              <span className="text-xs text-muted px-3 py-1.5 bg-white/5 rounded-lg border border-white/5">
+                Episode {currentEp}
+                {episodes.length > 0 && <span className="text-muted/50 ml-1">/ {episodes.length}</span>}
+              </span>
+              {nextEpisode && (
+                <button onClick={handleNext} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-xs text-muted hover:text-white transition-all">
+                  Ep {currentEp + 1}
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Sync Error */}
+          {/* Sync error */}
           {syncErr && (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-center gap-3">
               <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -513,40 +556,8 @@ export default function WatchPage() {
             </div>
           )}
 
-          {/* Anime Info Section */}
-          <AnimeInfo anime={anime} episodes={episodes} />
-
-          {/* Comments Placeholder */}
-          <div className="bg-white/[0.03] border border-white/5 rounded-xl p-6 text-center">
-            <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-2">
-              <svg className="w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-            </div>
-            <p className="text-muted text-xs font-medium">Comments coming soon.</p>
-            <p className="text-muted/50 text-[10px] mt-0.5">Share your thoughts about this episode.</p>
-          </div>
-        </div>
-
-        {/* Right Sidebar */}
-        {showSidebar && (
-          <div className="w-full lg:w-80 flex-shrink-0 space-y-4">
-            {/* Desktop Server Selector */}
-            <div className="hidden lg:block">
-              <ServerSelector
-                languages={streamsData?.languages || []}
-                currentLanguage={currentLanguage}
-                onLanguageChange={handleLanguageChange}
-                servers={[]}
-                selectedServerUrl={currentServerUrl}
-                onServerChange={handleServerSwitch}
-                loading={embedLoading}
-                failoverActive={failoverActive}
-                currentProvider={provider}
-              />
-            </div>
-
-            {/* Episode Panel */}
+          {/* ---- MOBILE EPISODE PANEL ---- */}
+          <div className="lg:hidden">
             <EpisodePanel
               episodes={episodes}
               currentEp={currentEp}
@@ -556,26 +567,48 @@ export default function WatchPage() {
               onRetry={retrySync}
               malId={resolvedMalId}
             />
+          </div>
 
-            {/* Related / Trending */}
+          {/* ---- ANIME INFO ---- */}
+          <AnimeInfo anime={anime} episodes={episodes} />
+
+          {/* ---- RELATED ANIME (mobile) ---- */}
+          <div className="lg:hidden">
             {trending.length > 0 && (
-              <RelatedAnime anime={trending} title="Trending Now" />
+              <RelatedAnime items={trending} title="Trending Now" compact />
             )}
           </div>
-        )}
-      </div>
 
-      {/* Mobile Episode Panel (at bottom on small screens) */}
-      <div className="lg:hidden">
-        <EpisodePanel
-          episodes={episodes}
-          currentEp={currentEp}
-          onSelect={handleEpisodeSelect}
-          syncing={syncing}
-          error={syncErr}
-          onRetry={retrySync}
-          malId={resolvedMalId}
-        />
+          {/* ---- COMMENTS ---- */}
+          <div
+            onClick={() => setShowComments(!showComments)}
+            className="bg-white/[0.03] border border-white/5 rounded-xl p-6 text-center cursor-pointer hover:bg-white/[0.05] transition-all"
+          >
+            <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-2">
+              <svg className="w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </div>
+            <p className="text-muted text-xs font-medium">Comments</p>
+            <p className="text-muted/50 text-[10px] mt-0.5">Share your thoughts about this episode.</p>
+          </div>
+        </div>
+
+        {/* ===== RIGHT SIDEBAR ===== */}
+        <div className="hidden lg:block w-80 flex-shrink-0 space-y-4 lg:sticky lg:top-[88px] lg:self-start">
+          <EpisodePanel
+            episodes={episodes}
+            currentEp={currentEp}
+            onSelect={handleEpisodeSelect}
+            syncing={syncing}
+            error={syncErr}
+            onRetry={retrySync}
+            malId={resolvedMalId}
+          />
+          {trending.length > 0 && (
+            <RelatedAnime items={trending} title="Trending Now" compact />
+          )}
+        </div>
       </div>
     </div>
   )

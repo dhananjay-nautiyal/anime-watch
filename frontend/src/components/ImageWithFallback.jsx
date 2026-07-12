@@ -19,7 +19,7 @@ const ImageWithFallback = memo(function ImageWithFallback({
   const imageSrc = error ? FALLBACK_IMAGE : (proxyImage(src) || FALLBACK_IMAGE)
 
   return (
-    <div className={`relative overflow-hidden bg-surface/50 ${aspectRatio} ${containerClass}`}>
+    <div className={`relative overflow-hidden bg-card ${aspectRatio} ${containerClass}`}>
       {!loaded && !error && (
         <div className="absolute inset-0 skeleton" />
       )}

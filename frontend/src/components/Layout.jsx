@@ -6,7 +6,7 @@ const Layout = memo(function Layout({ children, hideNav = false, hideFooter = fa
   return (
     <div className="min-h-screen bg-body flex flex-col">
       {!hideNav && <Navbar />}
-      <main className={`flex-1 ${!hideNav ? 'pt-16' : ''}`}>
+      <main className={`flex-1 ${!hideNav ? 'pt-[72px]' : ''}`}>
         {children}
       </main>
       {!hideFooter && <Footer />}

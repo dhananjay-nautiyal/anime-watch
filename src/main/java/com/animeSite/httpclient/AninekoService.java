@@ -2,6 +2,7 @@ package com.animeSite.httpclient;
 
 import com.animeSite.persist.Episode;
 import com.animeSite.pipeline.*;
+import com.animeSite.model.JikanAnimeData;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -190,6 +191,10 @@ public class AninekoService implements StreamProvider {
                 if (html == null) continue;
 
                 if (html.contains("data-video=") || html.contains("/ep-")) {
+                    if (!verifyPageTitle(html, jikanData, title, slug)) {
+                        log.warn("[ANINEKO] PAGE TITLE MISMATCH | slug='{}' — skipping, likely wrong anime", slug);
+                        continue;
+                    }
                     List<Episode> episodes = parseEpisodesFromHtml(html, slug, malId);
                     if (!episodes.isEmpty()) {
                         episodes.sort(Comparator.comparingInt(Episode::getEpisodeNumber));
@@ -219,6 +224,70 @@ public class AninekoService implements StreamProvider {
         long elapsed = System.currentTimeMillis() - start;
         log.warn("[ANINEKO] ALL ATTEMPTS FAILED | title='{}' malId={} duration={}ms", title, malId, elapsed);
         return List.of();
+    }
+
+    private boolean verifyPageTitle(String html, JsonNode jikanData, String primaryTitle, String slug) {
+        if (html == null) return false;
+        String pageTitle = TitleNormalizer.extractPageTitle(html);
+        if (pageTitle.isEmpty()) {
+            log.warn("[ANINEKO] PAGE TITLE EMPTY | slug='{}' — cannot verify", slug);
+            // If slug is very specific (contains year), trust the slug
+            return slug.matches(".*(?:19[0-9]{2}|20[0-9]{2}).*");
+        }
+
+        log.info("[ANINEKO] PAGE TITLE | slug='{}' pageTitle='{}'", slug, pageTitle);
+
+        // Collect all known titles from Jikan data
+        Set<String> knownTitles = new LinkedHashSet<>();
+        if (primaryTitle != null) knownTitles.add(primaryTitle.toLowerCase());
+        if (jikanData != null) {
+            for (String key : new String[]{"title", "title_english", "title_japanese"}) {
+                if (jikanData.has(key) && !jikanData.get(key).isNull()) {
+                    String t = jikanData.get(key).asText().toLowerCase();
+                    if (!t.isEmpty()) knownTitles.add(t);
+                }
+            }
+            JsonNode titlesArr = jikanData.get("titles");
+            if (titlesArr != null) {
+                for (JsonNode t : titlesArr) {
+                    String val = t.has("title") ? t.get("title").asText("").toLowerCase() : "";
+                    if (!val.isEmpty()) knownTitles.add(val);
+                }
+            }
+        }
+
+        String pageLower = pageTitle.toLowerCase();
+        for (String known : knownTitles) {
+            if (known.isEmpty()) continue;
+            // Check if the known title appears in the page title
+            if (pageLower.contains(known)) {
+                return true;
+            }
+            // Also check normalized forms
+            String normKnown = TitleNormalizer.normalize(known).toLowerCase();
+            if (normKnown.length() > 3 && pageLower.contains(normKnown)) {
+                return true;
+            }
+            // Check if page title contains any token from known title (for short/common names)
+            String[] knownTokens = known.split("\\s+");
+            String[] pageTokens = pageLower.split("\\s+");
+            int matchCount = 0;
+            for (String kt : knownTokens) {
+                if (kt.length() < 3) continue;
+                for (String pt : pageTokens) {
+                    if (pt.equals(kt) || pt.startsWith(kt) || kt.startsWith(pt)) {
+                        matchCount++;
+                        break;
+                    }
+                }
+            }
+            if (matchCount >= Math.min(knownTokens.length, 3)) {
+                return true;
+            }
+        }
+
+        log.warn("[ANINEKO] PAGE TITLE VERIFICATION FAILED | slug='{}' pageTitle='{}' knownTitles={}", slug, pageTitle, knownTitles);
+        return false;
     }
 
     private List<Episode> parseEpisodesFromHtml(String html, String slug, int malId) {
@@ -297,13 +366,13 @@ public class AninekoService implements StreamProvider {
             }
 
             AnimeMatcher.ScoredMatch best = AnimeMatcher.findBestMatch(title, null, new ArrayList<>(candidates));
-            if (best != null && best.confidence >= 0.7) {
+            if (best != null && best.confidence >= 0.8) {
                 log.info("[ANINEKO] SEARCH BEST MATCH | slug='{}' confidence={}", best.slug, best.confidence);
                 return best.slug;
             }
 
-            log.info("[ANINEKO] SEARCH RESULT | candidates={}", candidates);
-            return candidates.isEmpty() ? null : candidates.iterator().next();
+            log.warn("[ANINEKO] SEARCH NO MATCH | title='{}' bestConfidence={} candidates={}", title, best != null ? best.confidence : 0, candidates);
+            return null;
         } catch (Exception e) {
             log.warn("[ANINEKO] SEARCH FAILED | error='{}'", e.getMessage());
             return null;
