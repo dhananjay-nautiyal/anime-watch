@@ -196,7 +196,7 @@ public class ProviderResolver {
             }
 
             // Validate stream before returning
-            if (streamVerificationEnabled) {
+            if (streamVerificationEnabled && !"iframe".equalsIgnoreCase(sr.getType())) {
                 String referer = getProviderBaseUrl(sr.getProvider());
                 StreamVerificationService.VerificationResult verification =
                     streamVerificationService.verify(sr, referer);

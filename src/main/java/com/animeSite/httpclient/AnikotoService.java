@@ -124,7 +124,8 @@ public class AnikotoService implements StreamProvider {
                 servers.add(new StreamResult.ServerOption(pair.dubUrl, "MegaPlay-DUB", servers.isEmpty()));
             }
         } else {
-            servers.add(new StreamResult.ServerOption(episodePageUrl, "MegaPlay", false));
+            log.warn("[ANIKOTO] UNRECOGNIZED URL | url={} — not a megaplay URL, skipping", episodePageUrl);
+            return StreamResult.failure(getName(), "Unrecognized URL format");
         }
 
         if (servers.isEmpty()) {
@@ -132,7 +133,7 @@ public class AnikotoService implements StreamProvider {
         }
 
         log.info("[ANIKOTO] STREAM RESOLVED | servers={}", servers.size());
-        return StreamResult.success(getName(), "hls", servers);
+        return StreamResult.success(getName(), "iframe", servers);
     }
 
     @Override
@@ -153,7 +154,8 @@ public class AnikotoService implements StreamProvider {
 
         if (url.endsWith("/sub")) {
             subUrl = url;
-            dubUrl = url.substring(0, url.length() - 4) + "/dub";
+            // Only return DUB if the URL explicitly points to DUB
+            // Deriving DUB from SUB may produce URLs that don't exist on megaplay
         } else if (url.endsWith("/dub")) {
             dubUrl = url;
             subUrl = url.substring(0, url.length() - 4) + "/sub";

@@ -374,6 +374,11 @@ public class AnimeGogoService implements StreamProvider {
         long start = System.currentTimeMillis();
         log.info("[GOGO] RESOLVE STREAM | url={}", episodePageUrl);
 
+        if (episodePageUrl == null || !episodePageUrl.startsWith(BASE_URL)) {
+            log.warn("[GOGO] SKIP — not a GoGoAnime URL | url={}", episodePageUrl);
+            return StreamResult.failure(getName(), "Not a GoGoAnime URL");
+        }
+
         try {
             String html = fetchWithLogging(episodePageUrl, "GOGO_STREAM");
             if (html == null) {

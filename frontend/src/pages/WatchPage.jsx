@@ -237,6 +237,12 @@ export default function WatchPage() {
       serverFailoverIdx.current = 0
       retryCount.current = 0
 
+      // Sync selectedLanguage with the actual language returned by the backend
+      const actualLang = streams.languages[0]?.language
+      if (actualLang && actualLang !== lang) {
+        setSelectedLanguage(actualLang)
+      }
+
       const langGroup = streams.languages[0]
       const servers = langGroup?.servers || []
       const best = servers.find(s => s.verified && s.status === 'online') || servers[0]

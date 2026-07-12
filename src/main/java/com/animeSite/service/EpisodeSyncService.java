@@ -34,8 +34,9 @@ public class EpisodeSyncService {
     private final ProviderHealthMonitor healthMonitor;
     private final ReleaseDetector releaseDetector;
 
-    private static final List<String> DEFAULT_PRIORITY = List.of("Anineko", "GoGoAnime");
     private static final int MAX_EPISODE_COUNT_TOLERANCE_PERCENT = 30;
+
+    private final ProviderPriorityManager priorityManager;
 
     public EpisodeSyncService(List<StreamProvider> providers,
                                ValidationService validationService,
@@ -44,7 +45,8 @@ public class EpisodeSyncService {
                                AnimeProviderCacheRepository cacheRepository,
                                JikanApiClient jikanApiClient,
                                ProviderHealthMonitor healthMonitor,
-                               ReleaseDetector releaseDetector) {
+                               ReleaseDetector releaseDetector,
+                               ProviderPriorityManager priorityManager) {
         this.providers = providers;
         this.validationService = validationService;
         this.animeRepository = animeRepository;
@@ -53,6 +55,7 @@ public class EpisodeSyncService {
         this.jikanApiClient = jikanApiClient;
         this.healthMonitor = healthMonitor;
         this.releaseDetector = releaseDetector;
+        this.priorityManager = priorityManager;
     }
 
     @Transactional
@@ -178,7 +181,10 @@ public class EpisodeSyncService {
         } catch (Exception e) {
             log.warn("[SYNC_SERVICE] CACHE_LOOKUP_FAILED | malId={}", malId);
         }
-        ordered.addAll(DEFAULT_PRIORITY);
+        // Use config-driven priority from ProviderPriorityManager
+        for (StreamProvider p : priorityManager.getActiveProviders()) {
+            ordered.add(p.getName());
+        }
         return new ArrayList<>(ordered);
     }
 
@@ -280,7 +286,8 @@ public class EpisodeSyncService {
                 .map(ProviderAttempt::providerName)
                 .collect(Collectors.toSet());
 
-            for (String providerName : DEFAULT_PRIORITY) {
+            for (String providerName : priorityManager.getActiveProviders().stream()
+                .map(StreamProvider::getName).toList()) {
                 // Even if provider failed before, retry with alternate titles
                 StreamProvider provider = findProvider(providerName);
                 if (provider == null) continue;

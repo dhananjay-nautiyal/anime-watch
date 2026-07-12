@@ -36,6 +36,7 @@ class EpisodeSyncServiceTest {
     @Mock private JikanApiClient jikanApiClient;
     @Mock private ProviderHealthMonitor healthMonitor;
     @Mock private ReleaseDetector releaseDetector;
+    @Mock(lenient = true) private ProviderPriorityManager priorityManager;
 
     private EpisodeSyncService syncService;
     private List<StreamProvider> providers;
@@ -46,10 +47,12 @@ class EpisodeSyncServiceTest {
         providers = List.of(aninekoProvider, gogoProvider);
         when(aninekoProvider.getName()).thenReturn("Anineko");
         when(gogoProvider.getName()).thenReturn("GoGoAnime");
+        lenient().when(priorityManager.getActiveProviders()).thenReturn(providers);
 
         syncService = new EpisodeSyncService(
             providers, validationService, animeRepository, episodeRepository,
-            cacheRepository, jikanApiClient, healthMonitor, releaseDetector
+            cacheRepository, jikanApiClient, healthMonitor, releaseDetector,
+            priorityManager
         );
 
         testAnime = new Anime();

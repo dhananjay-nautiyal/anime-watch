@@ -384,6 +384,11 @@ public class AninekoService implements StreamProvider {
         long start = System.currentTimeMillis();
         log.info("[ANINEKO] RESOLVE STREAM | url={}", episodePageUrl);
 
+        if (episodePageUrl == null || !episodePageUrl.startsWith(BASE_URL)) {
+            log.warn("[ANINEKO] SKIP — not an Anineko URL | url={}", episodePageUrl);
+            return StreamResult.failure(getName(), "Not an Anineko URL");
+        }
+
         try {
             String html = fetchWithLogging(episodePageUrl, "STREAM");
             if (html == null) {
@@ -404,16 +409,19 @@ public class AninekoService implements StreamProvider {
                 return StreamResult.failure(getName(), "No video sources found on episode page");
             }
 
+            int hlsExtracted = 0;
             for (int i = 0; i < embedUrls.size(); i++) {
                 String embedPageUrl = embedUrls.get(i);
                 boolean isBackup = i > 0;
                 log.info("[ANINEKO] TRY EMBED SERVER {} | url={} | backup={}", i + 1, embedPageUrl, isBackup);
 
-                if (embedPageUrl.contains("vivibebe.site") || embedPageUrl.contains("otakuhg.site") || embedPageUrl.contains("otakuvid.online")) {
+                // Only try HLS extraction for first 3 embed servers to avoid timeout
+                if (hlsExtracted < 3 && (embedPageUrl.contains("vivibebe.site") || embedPageUrl.contains("otakuhg.site") || embedPageUrl.contains("otakuvid.online"))) {
                     try {
                         String directVideo = extractDirectUrl(embedPageUrl);
                         if (directVideo != null) {
                             servers.add(new StreamResult.ServerOption(directVideo, "Server" + (i + 1) + "-HLS", isBackup));
+                            hlsExtracted++;
                         }
                     } catch (ProviderException e) {
                         log.warn("[ANINEKO] EMBED SERVER {} FAILED | url={} error='{}'", i + 1, embedPageUrl, e.getMessage());

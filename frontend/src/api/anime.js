@@ -97,7 +97,7 @@ export const getEpisodeEmbed = (malId, episodeUrl, signal) =>
   })
 
 export const getEpisodeLanguages = (malId, episodeUrl, signal) =>
-  client.get(`/api/anime/${malId}/episode/languages`, { params: { episodeUrl }, timeout: 15000, signal }).then((res) => {
+  client.get(`/api/anime/${malId}/episode/languages`, { params: { episodeUrl }, timeout: 30000, signal }).then((res) => {
     const payload = res.data?.data
     if (!payload?.languages) return []
     return payload.languages
@@ -106,7 +106,7 @@ export const getEpisodeLanguages = (malId, episodeUrl, signal) =>
 export const getEpisodeStreams = (malId, episodeUrl, language, signal) => {
   const params = { episodeUrl }
   if (language) params.language = language
-  return client.get(`/api/anime/${malId}/episode/streams`, { params, timeout: 30000, signal }).then((res) => {
+  return client.get(`/api/anime/${malId}/episode/streams`, { params, timeout: 60000, signal }).then((res) => {
     const payload = res.data?.data
     if (!payload) return null
     return payload
