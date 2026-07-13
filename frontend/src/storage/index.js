@@ -1,0 +1,1 @@
+export { webStorage } from './webStorage'

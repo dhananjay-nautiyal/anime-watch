@@ -1,23 +1,105 @@
 {
   "expo": {
-    "name": "luffy",
-    "slug": "luffy",
+    "name": "AnimeWatch",
+    "slug": "anime-watch",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "luffy",
+    "scheme": "animewatch",
     "userInterfaceStyle": "automatic",
+    "backgroundColor": "#1C1B1F",
+    "primaryColor": "#6750A4",
+    "extra": {
+      "eas": {
+        "projectId": "8f854c32-d61c-4450-99ff-4eb1509b4fe6"
+      },
+      "router": {}
+    },
+    "platforms": [
+      "android",
+      "ios"
+    ],
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.animewatch.app",
+      "supportsTablet": true,
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app does not use the camera.",
+        "NSPhotoLibraryUsageDescription": "Used to save screenshots from the app.",
+        "NSNotificationsUsageDescription": "Used to notify you about new episodes and updates.",
+        "UIBackgroundModes": [
+          "audio",
+          "fetch",
+          "remote-notification"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.animewatch.app",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#1C1B1F",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "blockedPermissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_CONTACTS",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.READ_SMS",
+        "android.permission.SEND_SMS",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_ADVERTISE",
+        "android.permission.BLUETOOTH_CONNECT"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "animewatch",
+              "host": "*",
+              "pathPrefix": "/anime"
+            },
+            {
+              "scheme": "animewatch",
+              "host": "*",
+              "pathPrefix": "/search"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
+      "allowBackup": false,
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -28,15 +110,59 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#1C1B1F",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 96,
+          "resizeMode": "contain"
+        }
+      ],
+      "expo-video",
+      "expo-sqlite",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#6750A4",
+          "sounds": [
+            "./assets/sounds/notification.wav"
+          ]
+        }
+      ],
+      [
+        "sentry-expo",
+        {
+          "organization": "animewatch",
+          "project": "animewatch-mobile"
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": false,
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0",
+            "minSdkVersion": 26,
+            "kotlinVersion": "1.9.24",
+            "packagingOptions": {
+              "exclude": [
+                "**/libfbjni.so",
+                "**/libjsc.so",
+                "**/libreactnativejni.so"
+              ]
+            },
+            "proguardRules": "-keep class com.animewatch.** { *; }\n-keep class expo.modules.** { *; }\n-keep class com.swmansion.reanimated.** { *; }\n-dontwarn com.swmansion.reanimated.**\n-keep class org.jetbrains.skia.** { *; }\n-keep class com.facebook.hermes.** { *; }\n-keep class com.facebook.jni.** { *; }\n# Keep notification service\n-keep class * extends android.app.Service { *; }\n# Keep Expo modules\n-keep class * extends expo.modules.core.interfaces.ReactNativeHostHandler { *; }"
+          },
+          "ios": {
+            "useFrameworks": "static"
+          }
         }
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     }
   }
 }

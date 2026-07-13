@@ -1,0 +1,9 @@
+{
+  "name": "anime-watch",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "frontend",
+    "luffy"
+  ]
+}

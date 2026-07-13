@@ -47,9 +47,18 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex) {
-        log.warn("Business rule violation: {}", ex.getErrorCode());
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiResponse.error(ex.getErrorCode(), ex.getMessage()));
+        String code = ex.getErrorCode();
+        log.warn("Business rule violation: {}", code);
+
+        HttpStatus status = switch (code) {
+            case "ANIME-0001", "USER-0001" -> HttpStatus.NOT_FOUND;
+            case "AUTH-0006" -> HttpStatus.TOO_MANY_REQUESTS;
+            case "AUTH-0004" -> HttpStatus.FORBIDDEN;
+            default -> HttpStatus.UNPROCESSABLE_ENTITY;
+        };
+
+        return ResponseEntity.status(status)
+                .body(ApiResponse.error(code, ex.getMessage()));
     }
 
     @ExceptionHandler(TechnicalException.class)

@@ -2,9 +2,12 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { AuthProvider } from './context/AuthContext'
+import { AuthProvider } from '@anime/auth'
+import { client } from '@anime/api'
+import { webStorage } from './storage/webStorage'
 
 console.log('API URL:', import.meta.env.VITE_API_URL || '(empty — using Vite proxy)')
+
 import App from './App'
 import ErrorBoundary from './components/ErrorBoundary'
 import './index.css'
@@ -25,7 +28,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
-          <AuthProvider>
+          <AuthProvider storage={webStorage} apiClient={client}>
             <App />
           </AuthProvider>
         </BrowserRouter>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Production: pin to API server certificate, no cleartext -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.animewatch.app</domain>
+        <domain includeSubdomains="true">animewatch.app</domain>
+        <!-- Pin to the backend certificate public key -->
+        <!-- Generate with: openssl s_client -connect api.animewatch.app:443 -servername api.animewatch.app | openssl x509 -pubkey -noout | openssl pkey -pubin -outform DER | openssl dgst -sha256 -binary | base64 -->
+        <pin-set expiration="2030-01-01">
+            <pin digest="SHA-256">YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY=</pin>
+            <!-- Backup pin -->
+            <pin digest="SHA-256">ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ=</pin>
+        </pin-set>
+    </domain-config>
+    <!-- Debug: allow cleartext for local development -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+    <!-- Default: deny cleartext -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -13,10 +13,12 @@ export function wrapProxy(url, referer) {
 }
 
 export function useAnime(malId, slug) {
+  const isNumericSlug = slug && /^\d+$/.test(slug)
   return useQuery({
     queryKey: ['anime', malId || slug],
     queryFn: ({ signal }) => {
       if (malId) return getAnimeById(malId, signal)
+      if (isNumericSlug) return getAnimeById(parseInt(slug), signal)
       return getAnimeBySlug(slug, signal)
     },
     enabled: !!malId || !!slug,

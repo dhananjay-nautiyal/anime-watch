@@ -1,65 +1,96 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
+import { Platform } from 'react-native'
 
-import '@/global.css';
+export const Palette = {
+  primary: '#6750A4',
+  onPrimary: '#FFFFFF',
+  primaryContainer: '#EADDFF',
+  onPrimaryContainer: '#21005D',
+  secondary: '#625B71',
+  onSecondary: '#FFFFFF',
+  secondaryContainer: '#E8DEF8',
+  onSecondaryContainer: '#1D192B',
+  tertiary: '#7D5260',
+  error: '#B3261E',
+  onError: '#FFFFFF',
+  errorContainer: '#F9DEDC',
+  background: '#FFFBFE',
+  onBackground: '#1C1B1F',
+  surface: '#FFFBFE',
+  onSurface: '#1C1B1F',
+  surfaceVariant: '#E7E0EC',
+  onSurfaceVariant: '#49454F',
+  outline: '#79747E',
+  outlineVariant: '#CAC4D0',
+  surfaceContainer: '#F3EDF7',
+  surfaceContainerHigh: '#ECE6F0',
+  surfaceContainerHighest: '#E6E0EB',
+  inverseSurface: '#313033',
+  inverseOnSurface: '#F4EFF4',
+  inversePrimary: '#D0BCFF',
+}
 
-import { Platform } from 'react-native';
+export const DarkPalette = {
+  primary: '#D0BCFF',
+  onPrimary: '#381E72',
+  primaryContainer: '#4F378B',
+  onPrimaryContainer: '#EADDFF',
+  secondary: '#CCC2DC',
+  onSecondary: '#332D41',
+  secondaryContainer: '#4A4458',
+  onSecondaryContainer: '#E8DEF8',
+  tertiary: '#EFB8C8',
+  error: '#F2B8B5',
+  onError: '#601410',
+  errorContainer: '#8C1D18',
+  onErrorContainer: '#F9DEDC',
+  background: '#1C1B1F',
+  onBackground: '#E6E1E5',
+  surface: '#1C1B1F',
+  onSurface: '#E6E1E5',
+  surfaceVariant: '#49454F',
+  onSurfaceVariant: '#CAC4D0',
+  outline: '#938F99',
+  outlineVariant: '#49454F',
+  surfaceContainer: '#211F26',
+  surfaceContainerHigh: '#2B2930',
+  surfaceContainerHighest: '#36343B',
+  inverseSurface: '#E6E1E5',
+  inverseOnSurface: '#313033',
+  inversePrimary: '#6750A4',
+}
 
-export const Colors = {
-  light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
-  },
-  dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
-  },
-} as const;
-
-export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
-
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: 'var(--font-display)',
-    serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
-    mono: 'var(--font-mono)',
-  },
-});
+export const Typography = {
+  displayLarge: { fontSize: 57, lineHeight: 64, fontFamily: Platform.OS === 'android' ? 'sans-serif' : undefined, fontWeight: '400' as const },
+  displayMedium: { fontSize: 45, lineHeight: 52, fontFamily: Platform.OS === 'android' ? 'sans-serif' : undefined, fontWeight: '400' as const },
+  headlineLarge: { fontSize: 32, lineHeight: 40, fontFamily: Platform.OS === 'android' ? 'sans-serif' : undefined, fontWeight: '400' as const },
+  headlineMedium: { fontSize: 28, lineHeight: 36, fontFamily: Platform.OS === 'android' ? 'sans-serif-medium' : undefined, fontWeight: '500' as const },
+  headlineSmall: { fontSize: 24, lineHeight: 32, fontFamily: Platform.OS === 'android' ? 'sans-serif-medium' : undefined, fontWeight: '500' as const },
+  titleLarge: { fontSize: 22, lineHeight: 28, fontFamily: Platform.OS === 'android' ? 'sans-serif' : undefined, fontWeight: '400' as const },
+  titleMedium: { fontSize: 16, lineHeight: 24, fontFamily: Platform.OS === 'android' ? 'sans-serif-medium' : undefined, fontWeight: '500' as const },
+  titleSmall: { fontSize: 14, lineHeight: 20, fontFamily: Platform.OS === 'android' ? 'sans-serif-medium' : undefined, fontWeight: '500' as const },
+  bodyLarge: { fontSize: 16, lineHeight: 24, fontFamily: Platform.OS === 'android' ? 'sans-serif' : undefined, fontWeight: '400' as const },
+  bodyMedium: { fontSize: 14, lineHeight: 20, fontFamily: Platform.OS === 'android' ? 'sans-serif' : undefined, fontWeight: '400' as const },
+  bodySmall: { fontSize: 12, lineHeight: 16, fontFamily: Platform.OS === 'android' ? 'sans-serif' : undefined, fontWeight: '400' as const },
+  labelLarge: { fontSize: 14, lineHeight: 20, fontFamily: Platform.OS === 'android' ? 'sans-serif-medium' : undefined, fontWeight: '500' as const },
+  labelMedium: { fontSize: 12, lineHeight: 16, fontFamily: Platform.OS === 'android' ? 'sans-serif-medium' : undefined, fontWeight: '500' as const },
+  labelSmall: { fontSize: 11, lineHeight: 16, fontFamily: Platform.OS === 'android' ? 'sans-serif-medium' : undefined, fontWeight: '500' as const },
+}
 
 export const Spacing = {
-  half: 2,
-  one: 4,
-  two: 8,
-  three: 16,
-  four: 24,
-  five: 32,
-  six: 64,
-} as const;
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  xxl: 48,
+}
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
-export const MaxContentWidth = 800;
+export const BorderRadius = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  full: 9999,
+}
+
+export const BottomTabHeight = 64
