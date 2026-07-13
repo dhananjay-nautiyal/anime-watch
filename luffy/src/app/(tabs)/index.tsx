@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, memo } from 'react'
+import { useCallback, useMemo, memo } from 'react'
 import {
   View, Text, RefreshControl, StyleSheet, FlatList, Dimensions,
 } from 'react-native'

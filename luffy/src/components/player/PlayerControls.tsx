@@ -68,6 +68,8 @@ export default function PlayerControls({
   const [settingsTab, setSettingsTab] = useState<'speed' | 'quality' | 'subs' | 'audio' | null>(null)
   const [seeking, setSeeking] = useState(false)
   const [seekTime, setSeekTime] = useState(0)
+  const seekingRef = useRef(false)
+  const seekTimeRef = useRef(0)
 
   useEffect(() => {
     Animated.timing(opacity, {
@@ -90,18 +92,22 @@ export default function PlayerControls({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (_, gesture) => {
+        seekingRef.current = true
         setSeeking(true)
         const newTime = (gesture.x0 / SCREEN_WIDTH) * duration
-        setSeekTime(Math.max(0, Math.min(duration, newTime)))
+        seekTimeRef.current = Math.max(0, Math.min(duration, newTime))
+        setSeekTime(seekTimeRef.current)
       },
       onPanResponderMove: (_, gesture) => {
         const newTime = (gesture.moveX / SCREEN_WIDTH) * duration
-        setSeekTime(Math.max(0, Math.min(duration, newTime)))
+        seekTimeRef.current = Math.max(0, Math.min(duration, newTime))
+        setSeekTime(seekTimeRef.current)
       },
       onPanResponderRelease: () => {
-        if (seeking) {
-          player.currentTime = seekTime
+        if (seekingRef.current && player) {
+          player.currentTime = seekTimeRef.current
         }
+        seekingRef.current = false
         setSeeking(false)
       },
     }),

@@ -4,7 +4,7 @@ const API_BASE = typeof process !== 'undefined' && (process.env?.EXPO_PUBLIC_API
   ? (process.env.EXPO_PUBLIC_API_URL || process.env.VITE_API_URL)
   : (typeof import.meta !== 'undefined' && (import.meta.env?.EXPO_PUBLIC_API_URL || import.meta.env?.VITE_API_URL)
     ? (import.meta.env.EXPO_PUBLIC_API_URL || import.meta.env.VITE_API_URL)
-    : '')
+    : 'https://api.animewatch.app')
 
 const client = axios.create({
   baseURL: API_BASE,

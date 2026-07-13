@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Share,
   TextInput, FlatList, ActivityIndicator, Animated, Alert, Dimensions,
-  LayoutAnimation, Platform, UIManager,
+  LayoutAnimation, Platform, UIManager, Keyboard,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Image } from 'expo-image'
@@ -123,7 +123,6 @@ export default function AnimeDetailScreen() {
     queryKey: ['trending-recs'],
     queryFn: ({ signal }) => getTrending(0, 20, signal),
     staleTime: 5 * 60 * 1000,
-    enabled: !!anime?.id,
   })
 
   const watchlistQuery = useQuery({
@@ -166,7 +165,7 @@ export default function AnimeDetailScreen() {
       seen.add(key)
       return true
     })
-    return showAllEps ? deduped : deduped.slice(0, 12)
+    return showAllEps ? deduped.slice(0, 100) : deduped.slice(0, 12)
   }, [episodesQuery.data, showAllEps])
 
   const reviews = reviewsQuery.data?.content || []
@@ -489,6 +488,11 @@ export default function AnimeDetailScreen() {
                     {showAllEps ? 'Show Less' : `Show All ${episodesQuery.data?.length || 0} Episodes`}
                   </Text>
                 </TouchableOpacity>
+              )}
+              {(episodesQuery.data?.length || 0) > 100 && showAllEps && (
+                <Text style={[sty.epTruncateNote, { color: colors.onSurfaceVariant }]}>
+                  Showing first 100 episodes. Open the watch page for the full list.
+                </Text>
               )}
             </CollapsibleSection>
           )}
@@ -824,6 +828,7 @@ const sty = StyleSheet.create({
     marginTop: Spacing.xs,
   },
   showAllText: { ...Typography.labelLarge, fontWeight: '600' },
+  epTruncateNote: { ...Typography.bodySmall, textAlign: 'center', marginTop: Spacing.xs },
   reviewForm: {
     padding: Spacing.md,
     marginBottom: Spacing.md,

@@ -169,7 +169,10 @@ async function processDownload(animeSlug: string, episodeNumber: number) {
 
   try {
     // Fetch HLS playlist
-    const response = await fetch(rec.streamUrl)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000)
+    const response = await fetch(rec.streamUrl, { signal: controller.signal })
+    clearTimeout(timeoutId)
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const playlist = await response.text()
 

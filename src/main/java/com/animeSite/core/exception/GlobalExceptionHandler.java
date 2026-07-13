@@ -286,7 +286,7 @@ public class GlobalExceptionHandler {
             .success(false)
             .message("An unexpected error occurred. Please try again.")
             .errorCode("UNEXPECTED_ERROR")
-            .data(Map.of("type", ex.getClass().getSimpleName(), "detail", ex.getMessage()))
+            .data(        Map.of("type", ex.getClass().getSimpleName(), "detail", "An internal error occurred."))
             .timestamp(Instant.now())
             .build());
     }

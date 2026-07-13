@@ -11,8 +11,8 @@ spring:
 
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/anime_db}
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:root}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: ${DB_DRIVER:org.postgresql.Driver}
 
   jpa:
@@ -34,7 +34,7 @@ spring:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -55,8 +55,8 @@ jwt:
   refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
 
 app:
-  base-url: ${APP_BASE_URL:http://localhost:8080}
-  frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
+  base-url: ${APP_BASE_URL}
+  frontend-url: ${APP_FRONTEND_URL}
 
   providers:
     priority: ${PROVIDER_PRIORITY:AnimeSuge,Anineko,GoGoAnime}

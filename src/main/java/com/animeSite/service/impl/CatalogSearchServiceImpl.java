@@ -45,6 +45,10 @@ public class CatalogSearchServiceImpl implements CatalogSearchService {
         // Build sort
         Sort sort = Sort.unsorted();
         if (sortBy != null && !sortBy.isBlank()) {
+            List<String> allowedSortFields = List.of("title", "score", "episodes", "startDate", "endDate", "popularity", "members", "malId", "rank", "type", "status");
+            if (!allowedSortFields.contains(sortBy)) {
+                sortBy = "score";
+            }
             Sort.Direction dir = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
             sort = Sort.by(dir, sortBy);
         }

@@ -1,14 +1,12 @@
 {
   "cli": {
-    "version": ">= 15.0.0"
+    "version": ">=20.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "android": {
-        "withoutCredentials": true
-      }
+      "distribution": "internal"
     },
     "preview": {
       "distribution": "internal",
@@ -22,7 +20,7 @@
       },
       "env": {
         "APP_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "https://api.animewatch.app"
+        "EXPO_PUBLIC_API_URL": "YOUR_BACKEND_URL"
       }
     }
   }

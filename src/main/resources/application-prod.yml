@@ -23,6 +23,12 @@ jwt:
   expiration-ms: ${JWT_EXPIRATION_MS:86400000}
   refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
 
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
 app:
   base-url: ${APP_BASE_URL}
   frontend-url: ${APP_FRONTEND_URL}

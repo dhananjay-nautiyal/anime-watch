@@ -5,6 +5,7 @@ import {
   FlatList, Animated,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { VideoView } from 'expo-video'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useColorScheme } from 'react-native'
@@ -533,12 +534,7 @@ export default function WatchScreen() {
   const VideoViewComponent = useMemo(() => {
     if (!streamUrl) return null
 
-    // Dynamic require to avoid import error on web
-    try {
-      const expoVideo = require('expo-video')
-      const VideoView = expoVideo.VideoView
-
-      return (
+    return (
         <View style={playerStyle.videoContainer}>
           <VideoView
             style={playerStyle.video}
@@ -553,14 +549,6 @@ export default function WatchScreen() {
           />
         </View>
       )
-    } catch {
-      return (
-        <View style={[playerStyle.videoContainer, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }]}>
-          <ActivityIndicator color="#FFF" size="large" />
-          <Text style={{ color: '#FFF', marginTop: 12 }}>Loading player...</Text>
-        </View>
-      )
-    }
   }, [streamUrl, playerRef.current])
 
   // Loading state

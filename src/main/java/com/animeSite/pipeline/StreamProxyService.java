@@ -1,5 +1,6 @@
 package com.animeSite.pipeline;
 
+import com.animeSite.core.util.UrlValidator;
 import com.animeSite.repo.AnimeProviderCacheRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +36,10 @@ public class StreamProxyService {
     }
     
     public ProxyResult proxyStream(String url, String referer, String acceptHeader) {
+        if (!UrlValidator.isValidStreamUrl(url)) {
+            log.warn("[PROXY] BLOCKED_SSRF | url='{}'", url);
+            return new ProxyResult(403, "Forbidden: URL not allowed".getBytes(), "text/plain", 0);
+        }
         long start = System.currentTimeMillis();
         log.info("[PROXY] REQUEST | url='{}' referer='{}'", url, referer);
         

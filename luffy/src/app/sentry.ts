@@ -3,8 +3,8 @@ import * as SentryExpo from 'sentry-expo'
 const NativeSentry = SentryExpo.Native
 
 SentryExpo.init({
-  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN || 'https://your-dsn@sentry.io/your-project-id',
-  tracesSampleRate: 1.0,
+  dsn: __DEV__ ? undefined : process.env.EXPO_PUBLIC_SENTRY_DSN,
+  tracesSampleRate: __DEV__ ? 1.0 : 0.2,
   environment: process.env.APP_ENV || 'development',
   enableAutoPerformanceTracing: true,
   debug: false,

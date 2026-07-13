@@ -1,7 +1,7 @@
 package com.animeSite.controller;
 
+import com.animeSite.core.util.UrlValidator;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,6 +20,9 @@ public class ImageProxyController {
 
     @GetMapping
     public ResponseEntity<byte[]> proxyImage(@RequestParam String url) {
+        if (!UrlValidator.isValidImageUrl(url)) {
+            return ResponseEntity.badRequest().build();
+        }
         try {
             HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(url))
@@ -32,7 +35,7 @@ public class ImageProxyController {
             return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_TYPE, contentType)
                 .header(HttpHeaders.CACHE_CONTROL, "public, max-age=86400")
-                .header("Access-Control-Allow-Origin", "*")
+
                 .body(res.body());
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();

@@ -39,9 +39,7 @@ public class StreamProxyController {
 
         response.setStatus(result.status());
         response.setContentType(result.contentType());
-        response.setHeader("Access-Control-Allow-Origin", "*");
-        response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-        response.setHeader("Access-Control-Allow-Headers", "*");
+
         response.setHeader("Cache-Control", "public, max-age=300");
         response.setContentLength(result.data().length);
 

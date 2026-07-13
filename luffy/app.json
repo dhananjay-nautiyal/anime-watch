@@ -9,6 +9,15 @@
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#1C1B1F",
     "primaryColor": "#6750A4",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/8f854c32-d61c-4450-99ff-4eb1509b4fe6",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 30000
+    },
     "extra": {
       "eas": {
         "projectId": "8f854c32-d61c-4450-99ff-4eb1509b4fe6"
@@ -26,7 +35,7 @@
       "infoPlist": {
         "NSCameraUsageDescription": "This app does not use the camera.",
         "NSPhotoLibraryUsageDescription": "Used to save screenshots from the app.",
-        "NSNotificationsUsageDescription": "Used to notify you about new episodes and updates.",
+
         "UIBackgroundModes": [
           "audio",
           "fetch",
@@ -90,6 +99,11 @@
               "scheme": "animewatch",
               "host": "*",
               "pathPrefix": "/search"
+            },
+            {
+              "scheme": "animewatch",
+              "host": "*",
+              "pathPrefix": "/"
             }
           ],
           "category": [
@@ -159,7 +173,8 @@
             "useFrameworks": "static"
           }
         }
-      ]
+      ],
+      "./src/config/withNetworkSecurityConfig"
     ],
     "experiments": {
       "typedRoutes": true
