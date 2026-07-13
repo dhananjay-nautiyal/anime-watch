@@ -6,7 +6,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "import_job")
+@Table(name = "import_job", indexes = {
+    @Index(name = "idx_import_job_status_created", columnList = "status,created_at")
+})
 @Getter
 @Setter
 @NoArgsConstructor

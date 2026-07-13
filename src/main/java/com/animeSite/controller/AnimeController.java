@@ -9,6 +9,7 @@ import com.animeSite.persist.User;
 import java.util.UUID;
 import com.animeSite.pipeline.AnimeMatcherV2;
 import com.animeSite.pipeline.AnimeState;
+import com.animeSite.pipeline.ProviderResolver;
 import com.animeSite.pipeline.ReleaseDetector;
 import com.animeSite.repo.UserRepository;
 import com.animeSite.service.AnimeService;
@@ -24,6 +25,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/anime")
 @Tag(name = "Anime", description = "Public anime endpoints")
@@ -33,13 +36,16 @@ public class AnimeController {
     private final ReviewService reviewService;
     private final UserRepository userRepository;
     private final ReleaseDetector releaseDetector;
+    private final ProviderResolver providerResolver;
 
     public AnimeController(AnimeService animeService, ReviewService reviewService,
-                           UserRepository userRepository, ReleaseDetector releaseDetector) {
+                           UserRepository userRepository, ReleaseDetector releaseDetector,
+                           ProviderResolver providerResolver) {
         this.animeService = animeService;
         this.reviewService = reviewService;
         this.userRepository = userRepository;
         this.releaseDetector = releaseDetector;
+        this.providerResolver = providerResolver;
     }
 
     @GetMapping("/trending")
@@ -185,5 +191,70 @@ public class AnimeController {
             } catch (NumberFormatException ignored) {}
         }
         return ResponseEntity.ok(ApiResponse.success(results));
+    }
+
+    @GetMapping("/home")
+    @Operation(summary = "Get all home page sections in a single request")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getHomePage() {
+        String exclude = "15";
+
+        CompletableFuture<List<Anime>> trendingF = CompletableFuture.supplyAsync(() ->
+            animeService.getTrending(0).animeList());
+        CompletableFuture<List<Anime>> airingF = CompletableFuture.supplyAsync(() ->
+            animeService.filterAnime(null, exclude, null, "airing", null, null, 0).animeList());
+        CompletableFuture<List<Anime>> topRatedF = CompletableFuture.supplyAsync(() ->
+            animeService.filterAnime(null, exclude, null, "complete", "score", "desc", 0).animeList());
+        CompletableFuture<List<Anime>> upcomingF = CompletableFuture.supplyAsync(() ->
+            animeService.filterAnime(null, exclude, null, "upcoming", null, null, 0).animeList());
+        CompletableFuture<List<Anime>> seasonalF = CompletableFuture.supplyAsync(() ->
+            animeService.getSeasonal(0).animeList());
+        CompletableFuture<List<Anime>> newReleasesF = CompletableFuture.supplyAsync(() ->
+            animeService.filterAnime(null, exclude, null, null, "popularity", "desc", 0).animeList());
+        CompletableFuture<List<Anime>> completedF = CompletableFuture.supplyAsync(() ->
+            animeService.filterAnime(null, exclude, null, "complete", "popularity", "desc", 0).animeList());
+        CompletableFuture<List<Anime>> popularWeekF = CompletableFuture.supplyAsync(() ->
+            animeService.filterAnime(null, exclude, null, null, "popularity", "desc", 0).animeList());
+        CompletableFuture<List<Anime>> moviesF = CompletableFuture.supplyAsync(() ->
+            animeService.filterAnime(null, exclude, "Movie", null, "score", "desc", 0).animeList());
+        CompletableFuture<List<Anime>> mostViewedF = CompletableFuture.supplyAsync(() ->
+            animeService.filterAnime(null, exclude, null, null, "members", "desc", 0).animeList());
+
+        CompletableFuture.allOf(trendingF, airingF, topRatedF, upcomingF, seasonalF,
+            newReleasesF, completedF, popularWeekF, moviesF, mostViewedF).join();
+
+        try {
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("trending", limit(trendingF.get(), 25));
+            response.put("airing", limit(airingF.get(), 20));
+            response.put("topRated", limit(topRatedF.get(), 20));
+            response.put("upcoming", limit(upcomingF.get(), 20));
+            response.put("seasonal", limit(seasonalF.get(), 20));
+            response.put("newReleases", limit(newReleasesF.get(), 20));
+            response.put("completed", limit(completedF.get(), 20));
+            response.put("popularWeek", limit(popularWeekF.get(), 20));
+            response.put("movies", limit(moviesF.get(), 20));
+            response.put("mostViewed", limit(mostViewedF.get(), 20));
+
+            Set<Integer> allIds = new HashSet<>();
+            for (CompletableFuture<List<Anime>> f : List.of(trendingF, airingF, topRatedF, upcomingF, seasonalF,
+                    newReleasesF, completedF, popularWeekF, moviesF, mostViewedF)) {
+                for (Anime a : f.get()) {
+                    if (a.getMalId() != null) allIds.add(a.getMalId());
+                }
+            }
+
+            List<Integer> streamableIds = allIds.stream()
+                .filter(id -> providerResolver.getCachedProviderForAnime(id) != null)
+                .collect(Collectors.toList());
+            response.put("streamableIds", streamableIds);
+
+            return ResponseEntity.ok(ApiResponse.success(response));
+        } catch (Exception e) {
+            return ResponseEntity.ok(ApiResponse.error("HOME_LOAD_FAILED", "Failed to load home page data"));
+        }
+    }
+
+    private <T> List<T> limit(List<T> list, int max) {
+        return list.subList(0, Math.min(list.size(), max));
     }
 }

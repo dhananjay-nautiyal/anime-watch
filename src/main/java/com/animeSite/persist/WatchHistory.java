@@ -10,7 +10,10 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "watch_history", uniqueConstraints = {
+@Table(name = "watch_history", indexes = {
+    @Index(name = "idx_watch_history_user_id", columnList = "user_id"),
+    @Index(name = "idx_watch_history_updated", columnList = "user_id,updated_at")
+}, uniqueConstraints = {
     @UniqueConstraint(columnNames = {"user_id", "mal_id"})
 })
 @Getter

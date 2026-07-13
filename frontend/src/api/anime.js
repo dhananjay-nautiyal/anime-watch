@@ -1,5 +1,4 @@
 import client, { extractErrorMessage, extractErrorCode } from './client'
-import { withCache } from './cache'
 
 const unwrapData = (res) => res.data?.data ?? res.data ?? []
 
@@ -13,43 +12,35 @@ const unwrapPaged = (res) => ({
 })
 
 export const getTrending = (page = 0, size = 25, signal) =>
-  withCache(`trending:${page}:${size}`, () =>
-    client.get('/api/anime/trending', { params: { page, size }, signal }).then(unwrapPaged), 60000)
+  client.get('/api/anime/trending', { params: { page, size }, signal }).then(unwrapPaged)
 
 export const searchAnime = (q, page = 0, size = 25, signal) =>
-  withCache(`search:${q}:${page}:${size}`, () =>
-    client.get('/api/anime/search', { params: { q, page, size }, signal }).then(unwrapPaged), 60000)
+  client.get('/api/anime/search', { params: { q, page, size }, signal }).then(unwrapPaged)
 
 export const filterAnime = (params, signal) =>
-  withCache(`filter:${JSON.stringify(params)}`, () =>
-    client.get('/api/anime/filter', { params, signal }).then(unwrapPaged), 60000)
+  client.get('/api/anime/filter', { params, signal }).then(unwrapPaged)
 
 export const getAnimeById = (id, signal) =>
-  withCache(`anime:${id}`, () =>
-    client.get(`/api/anime/${id}`, { signal }).then((res) => res.data?.data ?? null), 120000)
+  client.get(`/api/anime/${id}`, { signal }).then((res) => res.data?.data ?? null)
 
 export const getAnimeBySlug = (slug, signal) =>
-  withCache(`animeSlug:${slug}`, () =>
-    client.get(`/api/anime/slug/${slug}`, { signal }).then((res) => res.data?.data ?? null), 120000)
+  client.get(`/api/anime/slug/${slug}`, { signal }).then((res) => res.data?.data ?? null)
 
 export const getSeasonal = (page = 0, size = 25, signal) =>
-  withCache(`seasonal:${page}:${size}`, () =>
-    client.get('/api/anime/seasonal', { params: { page, size }, signal }).then(unwrapPaged), 60000)
+  client.get('/api/anime/seasonal', { params: { page, size }, signal }).then(unwrapPaged)
 
 export const addReview = (animeId, starRating, comment) =>
   client.post(`/api/anime/${animeId}/review`, { starRating, comment }).then((res) => res.data?.data ?? null)
 
 export const getReviews = (animeId, page = 0, size = 10, signal) =>
-  withCache(`reviews:${animeId}:${page}:${size}`, () =>
-    client.get(`/api/anime/${animeId}/reviews`, { params: { page, size }, signal }).then((res) => ({
-      content: res.data?.data?.content ?? [],
-      totalPages: res.data?.data?.totalPages ?? 1,
-      number: res.data?.data?.number ?? page,
-    })), 60000)
+  client.get(`/api/anime/${animeId}/reviews`, { params: { page, size }, signal }).then((res) => ({
+    content: res.data?.data?.content ?? [],
+    totalPages: res.data?.data?.totalPages ?? 1,
+    number: res.data?.data?.number ?? page,
+  }))
 
 export const getEpisodes = (malId, signal) =>
-  withCache(`episodes:${malId}`, () =>
-    client.get(`/api/anime/${malId}/episodes`, { signal }).then(unwrapData), 120000)
+  client.get(`/api/anime/${malId}/episodes`, { signal }).then(unwrapData)
 
 export const syncEpisodes = (malId) => {
   console.log('[Sync] Request body: null (malId in URL path: ' + malId + ')')
@@ -96,6 +87,11 @@ export const getEpisodeEmbed = (malId, episodeUrl, signal) =>
     return payload
   })
 
+export const getEpisodePlayData = (malId, episodeUrl, signal) =>
+  client.get(`/api/anime/${malId}/episode/play`, { params: { episodeUrl }, timeout: 60000, signal }).then((res) => {
+    return res.data?.data ?? null
+  })
+
 export const getEpisodeLanguages = (malId, episodeUrl, signal) =>
   client.get(`/api/anime/${malId}/episode/languages`, { params: { episodeUrl }, timeout: 30000, signal }).then((res) => {
     const payload = res.data?.data
@@ -114,8 +110,7 @@ export const getEpisodeStreams = (malId, episodeUrl, language, signal) => {
 }
 
 export const getAnimeState = (id, signal) =>
-  withCache(`animeState:${id}`, () =>
-    client.get(`/api/anime/${id}/state`, { signal }).then((res) => res.data?.data ?? null), 60000)
+  client.get(`/api/anime/${id}/state`, { signal }).then((res) => res.data?.data ?? null)
 
 export const getAnimeStates = (ids, signal) => {
   if (!ids || ids.length === 0) return []
@@ -123,9 +118,11 @@ export const getAnimeStates = (ids, signal) => {
   return client.get(`/api/anime/states?ids=${idStr}`, { signal }).then((res) => res.data?.data ?? [])
 }
 
+export const getHomePage = (signal) =>
+  client.get('/api/anime/home', { signal }).then((res) => res.data?.data ?? {})
+
 export const getComingSoonAnime = (page = 0, size = 25, signal) =>
-  withCache(`comingSoon:${page}:${size}`, () =>
-    client.get('/api/anime/filter', { params: { status: 'upcoming', page, size }, signal }).then(unwrapPaged), 60000)
+  client.get('/api/anime/filter', { params: { status: 'upcoming', page, size }, signal }).then(unwrapPaged)
 
 export const isComingSoon = async (malId) => {
   try {

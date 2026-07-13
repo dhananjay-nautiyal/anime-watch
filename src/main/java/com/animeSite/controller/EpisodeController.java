@@ -21,6 +21,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @RestController
@@ -320,6 +321,108 @@ public class EpisodeController {
         return ResponseEntity.ok()
             .header("Cache-Control", "public, max-age=120")
             .body(ApiResponse.success(response));
+    }
+
+    @GetMapping("/{malId}/episode/play")
+    public ResponseEntity<?> getEpisodePlayData(
+            @PathVariable int malId,
+            @RequestParam String episodeUrl) {
+        long start = System.currentTimeMillis();
+        log.info("[PLAY] GET | malId={} episodeUrl={}", malId, episodeUrl);
+
+        CompletableFuture<List<String>> languagesF = CompletableFuture.supplyAsync(() -> {
+            ProviderResolver.PipelineResult<List<String>> r = providerResolver.resolveLanguages(malId, episodeUrl);
+            return r.success && r.data != null ? r.data : List.of("SUB");
+        });
+
+        CompletableFuture<StreamResult> streamsF = CompletableFuture.supplyAsync(() -> {
+            ProviderResolver.PipelineResult<StreamResult> r = providerResolver.resolveStream(malId, episodeUrl);
+            return r.data;
+        });
+
+        CompletableFuture.allOf(languagesF, streamsF).join();
+
+        try {
+            List<String> languages = languagesF.get();
+            StreamResult sr = streamsF.get();
+
+            if (sr == null || !sr.isSuccess()) {
+                log.warn("[PLAY] STREAM_FAILED | malId={} duration={}ms", malId, System.currentTimeMillis() - start);
+                return ResponseEntity.ok(ApiResponse.builder()
+                    .success(false)
+                    .message("Stream is temporarily unavailable. Please try again later.")
+                    .errorCode("STREAM_RESOLVE_FAILED")
+                    .data(Map.of("languages", languages, "durationMs", System.currentTimeMillis() - start))
+                    .timestamp(Instant.now())
+                    .build());
+            }
+
+            String providerBaseUrl = getProviderBaseUrl(sr.getProvider());
+            String streamType = sr.getType();
+            if (streamType == null) streamType = "hls";
+
+            List<StreamsResponse.ServerInfo> verifiedServers = new ArrayList<>();
+            for (StreamResult.ServerOption server : sr.getServers()) {
+                String proxyUrl = "iframe".equalsIgnoreCase(streamType)
+                    ? server.url
+                    : toProxyUrl(server.url, providerBaseUrl);
+                verifiedServers.add(new StreamsResponse.ServerInfo(
+                    server.label, server.url, proxyUrl,
+                    List.of("1080p", "720p", "480p"),
+                    List.of(), List.of(), "online", 0, true
+                ));
+            }
+
+            verifiedServers.sort((a, b) -> {
+                if (a.isVerified() && !b.isVerified()) return -1;
+                if (!a.isVerified() && b.isVerified()) return 1;
+                return Long.compare(a.getLatencyMs(), b.getLatencyMs());
+            });
+
+            List<StreamsResponse.ServerInfo> subServers = new ArrayList<>();
+            List<StreamsResponse.ServerInfo> dubServers = new ArrayList<>();
+            for (StreamsResponse.ServerInfo server : verifiedServers) {
+                String label = server.getLabel() != null ? server.getLabel().toLowerCase() : "";
+                if (label.contains("dub") || label.contains("english")) {
+                    dubServers.add(server);
+                } else {
+                    subServers.add(server);
+                }
+            }
+            List<StreamsResponse.LanguageGroup> streamLanguages = new ArrayList<>();
+            if (!subServers.isEmpty()) {
+                streamLanguages.add(new StreamsResponse.LanguageGroup("SUB", subServers));
+            }
+            if (!dubServers.isEmpty()) {
+                streamLanguages.add(new StreamsResponse.LanguageGroup("DUB", dubServers));
+            }
+            if (streamLanguages.isEmpty() && !verifiedServers.isEmpty()) {
+                streamLanguages.add(new StreamsResponse.LanguageGroup("SUB", verifiedServers));
+            }
+
+            StreamsResponse streamsResponse = new StreamsResponse(sr.getProvider(), streamType, streamLanguages);
+
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("availableLanguages", languages);
+            data.put("provider", streamsResponse.getProvider());
+            data.put("type", streamsResponse.getType());
+            data.put("languages", streamsResponse.getLanguages());
+            data.put("durationMs", System.currentTimeMillis() - start);
+
+            log.info("[PLAY] SUCCESS | malId={} languages={} provider={} servers={} duration={}ms",
+                malId, languages, sr.getProvider(), verifiedServers.size(), System.currentTimeMillis() - start);
+
+            return ResponseEntity.ok()
+                .header("Cache-Control", "public, max-age=120")
+                .body(ApiResponse.builder()
+                    .success(true)
+                    .data(data)
+                    .timestamp(Instant.now())
+                    .build());
+        } catch (Exception e) {
+            log.error("[PLAY] EXCEPTION | malId={} error='{}'", malId, e.getMessage());
+            return ResponseEntity.ok(ApiResponse.error("PLAY_DATA_FAILED", "Failed to load play data"));
+        }
     }
 
     private String toProxyUrl(String url, String referer) {

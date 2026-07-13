@@ -21,9 +21,11 @@ import java.util.UUID;
     @Index(name = "idx_anime_created_at", columnList = "created_at"),
     @Index(name = "idx_anime_status", columnList = "status"),
     @Index(name = "idx_anime_type", columnList = "type"),
-    @Index(name = "idx_anime_season_year", columnList = "season,year"),
+    @Index(name = "idx_anime_season_year", columnList = "season,`year`"),
     @Index(name = "idx_anime_score", columnList = "score"),
-    @Index(name = "idx_anime_rank", columnList = "rank")
+    @Index(name = "idx_anime_rank", columnList = "`rank`"),
+    @Index(name = "idx_anime_popularity", columnList = "popularity"),
+    @Index(name = "idx_anime_imported_at", columnList = "imported_at")
 })
 @Getter
 @Setter
@@ -95,6 +97,7 @@ public class Anime extends Auditable implements Serializable {
     @Schema(description = "Airing status", example = "Finished Airing")
     private String status;
 
+    @Column(name = "\"year\"")
     @Schema(description = "Release year", example = "2022")
     private Integer year;
 

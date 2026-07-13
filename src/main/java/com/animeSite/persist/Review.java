@@ -10,8 +10,11 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.UUID;
 
 @Entity
-@Table(name = "reviews", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"anime_id", "user_id"})
+@Table(name = "reviews", indexes = {
+    @Index(name = "idx_reviews_anime_id", columnList = "anime_id"),
+    @Index(name = "idx_reviews_user_id", columnList = "user_id")
+}, uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"anime_id", "user_id"})
 })
 @Getter
 @Setter

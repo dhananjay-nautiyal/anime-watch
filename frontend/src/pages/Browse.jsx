@@ -6,6 +6,7 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { CardSkeleton } from '../components/Skeleton'
 import Pagination from '../components/Pagination'
 import ErrorState from '../components/ErrorState'
+import EmptyState from '../components/EmptyState'
 
 const GENRES = ['Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Horror', 'Romance', 'Sci-Fi', 'Slice of Life', 'Sports', 'Thriller', 'Mystery']
 const YEARS = Array.from({ length: 10 }, (_, i) => 2026 - i)
@@ -124,9 +125,7 @@ export default function Browse() {
       ) : error ? (
         <ErrorState title="Search failed" message="Could not fetch results. Please try again." compact />
       ) : items.length === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-muted">No results found</p>
-        </div>
+        <EmptyState icon="search" title="No results found" message="Try adjusting your filters or search query." actionLabel="Clear Filters" actionLink="/browse" />
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">

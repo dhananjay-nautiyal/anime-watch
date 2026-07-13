@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getAnimeById, getEpisodes, syncEpisodes, getEpisodeEmbed, getAnimeState, getTrending } from '../api/anime'
+import { getAnimeById, getAnimeBySlug, getEpisodes, syncEpisodes, getEpisodeEmbed, getAnimeState, getTrending, searchAnime } from '../api/anime'
 import { getResume, saveResume } from '../api/watchHistory'
 import { extractErrorMessage } from '../api/client'
 
@@ -12,11 +12,14 @@ export function wrapProxy(url, referer) {
   return `${PROXY_BASE}?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer || 'https://anineko.to/')}`
 }
 
-export function useAnime(malId) {
+export function useAnime(malId, slug) {
   return useQuery({
-    queryKey: ['anime', malId],
-    queryFn: ({ signal }) => getAnimeById(malId, signal),
-    enabled: !!malId,
+    queryKey: ['anime', malId || slug],
+    queryFn: ({ signal }) => {
+      if (malId) return getAnimeById(malId, signal)
+      return getAnimeBySlug(slug, signal)
+    },
+    enabled: !!malId || !!slug,
     staleTime: 300000,
     retry: 2,
   })
@@ -163,6 +166,15 @@ export function useContinueWatching(malId, anime, currentEp) {
       localStorage.setItem('aw_continue', JSON.stringify(data))
     } catch {}
   }, [anime, malId, currentEp])
+}
+
+export function useSearchAnime(query, page = 0, size = 25) {
+  return useQuery({
+    queryKey: ['search', query, page, size],
+    queryFn: ({ signal }) => searchAnime(query, page, size, signal),
+    enabled: !!query?.trim(),
+    staleTime: 1000 * 60 * 2,
+  })
 }
 
 export function useComingSoonRedirect(anime, malId) {

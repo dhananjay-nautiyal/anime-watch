@@ -11,7 +11,10 @@ import java.io.Serializable;
 import java.util.UUID;
 
 @Entity
-@Table(name = "setting_detail")
+@Table(name = "setting_detail", indexes = {
+    @Index(name = "idx_setting_detail_setting_id", columnList = "setting_id"),
+    @Index(name = "idx_setting_detail_key", columnList = "setting_key")
+})
 @SQLRestriction("is_active = 1")
 @Getter
 @Setter

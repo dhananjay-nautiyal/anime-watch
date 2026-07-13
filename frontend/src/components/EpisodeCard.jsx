@@ -1,8 +1,9 @@
+import { memo } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import ImageWithFallback from './ImageWithFallback'
 
-export default function EpisodeCard({ episode, animeId, animeTitle, isActive, progress, animeSlug }) {
+const EpisodeCard = memo(function EpisodeCard({ episode, animeId, animeTitle, isActive, progress, animeSlug }) {
   const location = useLocation()
   const slug = animeSlug || animeId
 
@@ -49,7 +50,7 @@ export default function EpisodeCard({ episode, animeId, animeTitle, isActive, pr
       </Link>
     </motion.div>
   )
-}
+})
 
 export function EpisodeGridCard({ episode, animeId, isActive, animeSlug }) {
   const slug = animeSlug || animeId
@@ -78,3 +79,5 @@ export function EpisodeGridCard({ episode, animeId, isActive, animeSlug }) {
     </Link>
   )
 }
+
+export default EpisodeCard

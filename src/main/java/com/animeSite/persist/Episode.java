@@ -10,7 +10,10 @@ import lombok.Setter;
 import java.util.UUID;
 
 @Entity
-@Table(name = "episodes")
+@Table(name = "episodes", indexes = {
+    @Index(name = "idx_episodes_anime_mal_id", columnList = "anime_mal_id"),
+    @Index(name = "idx_episodes_mal_id_number", columnList = "anime_mal_id,episode_number")
+})
 @Getter
 @Setter
 @NoArgsConstructor

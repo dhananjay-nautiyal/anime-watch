@@ -4,6 +4,7 @@ import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute'
 import Layout from './components/Layout'
 import Loading from './components/Loading'
 import Home from './pages/Home'
+import { ToastProvider } from './context/ToastContext'
 const Browse = lazy(() => import('./pages/Browse'))
 const Schedule = lazy(() => import('./pages/Schedule'))
 const Login = lazy(() => import('./pages/Login'))
@@ -69,7 +70,11 @@ function AppRoutes() {
 }
 
 function App() {
-  return <AppRoutes />
+  return (
+    <ToastProvider>
+      <AppRoutes />
+    </ToastProvider>
+  )
 }
 
 export default App

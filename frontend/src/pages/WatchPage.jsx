@@ -1,80 +1,20 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getAnimeById, getAnimeBySlug, getEpisodes, syncEpisodes, getEpisodeLanguages, getEpisodeStreams, getTrending } from '../api/anime'
+import { useQuery } from '@tanstack/react-query'
+import { getEpisodePlayData, getEpisodeLanguages, getEpisodeStreams, getTrending } from '../api/anime'
 import { extractErrorMessage } from '../api/client'
 import { getResume, saveResume } from '../api/watchHistory'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
-import VideoPlayer from '../components/watch/VideoPlayer'
+import { useAnime, useEpisodes, useSync } from '../hooks/useWatch'
 import EpisodePanel from '../components/watch/EpisodePanel'
 import AnimeInfo from '../components/watch/AnimeInfo'
 import AutoNextOverlay from '../components/watch/AutoNextOverlay'
 import RelatedAnime from '../components/watch/RelatedAnime'
 import { useAuth } from '../context/AuthContext'
 
+const VideoPlayer = lazy(() => import('../components/watch/VideoPlayer'))
+
 const LANG_KEY = 'aw_language'
-
-function useAnimeQuery(malId, slug) {
-  return useQuery({
-    queryKey: ['anime', malId || slug],
-    queryFn: ({ signal }) => {
-      if (malId) return getAnimeById(malId, signal)
-      return getAnimeBySlug(slug, signal)
-    },
-    enabled: !!malId || !!slug,
-    staleTime: 300000,
-    retry: 2,
-  })
-}
-
-function useEpisodesQuery(malId) {
-  return useQuery({
-    queryKey: ['episodes', malId],
-    queryFn: ({ signal }) => getEpisodes(malId, signal),
-    enabled: !!malId,
-    staleTime: 300000,
-    retry: 1,
-  })
-}
-
-function useSync(malId, episodes, isLoading) {
-  const qc = useQueryClient()
-  const attempted = useRef(false)
-  const [syncing, setSyncing] = useState(false)
-  const [syncErr, setSyncErr] = useState(null)
-
-  const doSync = useCallback(async () => {
-    if (attempted.current) return
-    attempted.current = true
-    setSyncing(true)
-    setSyncErr(null)
-    try {
-      const data = await syncEpisodes(malId)
-      if (data && data.length > 0) {
-        qc.setQueryData(['episodes', malId], data)
-      } else {
-        setSyncErr('No episodes available from streaming providers.')
-      }
-    } catch (err) {
-      setSyncErr(extractErrorMessage(err))
-    } finally {
-      setSyncing(false)
-    }
-  }, [malId, qc])
-
-  useEffect(() => {
-    if (episodes?.length === 0 && !isLoading && !syncing && !attempted.current) {
-      doSync()
-    }
-  }, [episodes, isLoading, syncing, doSync])
-
-  const retry = useCallback(() => {
-    attempted.current = false
-    doSync()
-  }, [doSync])
-
-  return { syncing, syncErr, retry }
-}
 
 function LoadingSkeleton() {
   return (
@@ -152,12 +92,12 @@ export default function WatchPage() {
     return () => { mountedRef.current = false }
   }, [])
 
-  const animeQ = useAnimeQuery(malId, slug)
+  const animeQ = useAnime(malId, slug)
   const anime = animeQ.data
   const resolvedMalId = anime?.malId || malId
 
-  const episodesQ = useEpisodesQuery(resolvedMalId)
-  const { syncing, syncErr, retry: retrySync } = useSync(resolvedMalId, episodesQ.data, episodesQ.isLoading)
+  const episodesQ = useEpisodes(resolvedMalId)
+  const { syncing, error: syncErr, retry: retrySync } = useSync(resolvedMalId, episodesQ.data, episodesQ.isLoading)
   const episodes = episodesQ.data ?? []
   const loading = animeQ.isLoading
   const resolvedSlug = anime?.slug || slug
@@ -182,92 +122,57 @@ export default function WatchPage() {
     }
   }, [anime, resolvedMalId, navigate])
 
-  // ---- Phase 1: Discover available languages ----
-  const languagesQ = useQuery({
-    queryKey: ['languages', resolvedMalId, currentEpisode?.embedUrl],
-    queryFn: ({ signal }) => getEpisodeLanguages(resolvedMalId, currentEpisode.embedUrl, signal),
+  // ---- Combined languages + streams fetch ----
+  const playDataQ = useQuery({
+    queryKey: ['play', resolvedMalId, currentEpisode?.embedUrl],
+    queryFn: ({ signal }) => getEpisodePlayData(resolvedMalId, currentEpisode.embedUrl, signal),
     enabled: !!resolvedMalId && !!currentEpisode?.embedUrl,
     staleTime: 120000,
     retry: 1,
   })
+  const { refetch: refetchPlayData } = playDataQ
 
-  const availableLanguages = languagesQ.data || []
+  const availableLanguages = playDataQ.data?.availableLanguages || []
   const hasSub = availableLanguages.includes('SUB')
   const hasDub = availableLanguages.includes('DUB')
-  const languagesLoaded = languagesQ.isSuccess && availableLanguages.length > 0
+  const languagesLoaded = playDataQ.isSuccess && availableLanguages.length > 0
 
-  // Auto-select language when languages arrive or when known deterministic
+  // Process play data and auto-select language
   useEffect(() => {
-    if (!availableLanguages.length) return
-    const saved = localStorage.getItem(LANG_KEY)
-    if (saved && availableLanguages.includes(saved)) {
-      setSelectedLanguage(saved)
-    } else if (hasDub && !hasSub) {
-      setSelectedLanguage('DUB')
-    } else {
-      setSelectedLanguage('SUB')
+    const playData = playDataQ.data
+    if (!playData) return
+
+    if (!playData.languages?.length) {
+      setEmbedErr('No stream sources available.')
+      setEmbedLoading(false)
+      return
     }
-  }, [availableLanguages, hasSub, hasDub])
 
-  // ---- Phase 2: Load stream once language is confirmed ----
-  const loadStream = useCallback(async (lang) => {
-    if (!currentEpisode?.embedUrl || !resolvedMalId) return
+    setEmbedType(playData.type || 'hls')
+    streamsCache.current = playData
+    serverFailoverIdx.current = 0
+    retryCount.current = 0
 
-    abortRef.current?.abort()
-    const controller = new AbortController()
-    abortRef.current = controller
-    const reqId = ++streamReqId.current
+    const saved = localStorage.getItem(LANG_KEY)
+    const lang = saved && availableLanguages.includes(saved)
+      ? saved
+      : hasDub && !hasSub ? 'DUB' : 'SUB'
+    setSelectedLanguage(lang)
 
-    setEmbedLoading(true)
-    setEmbedErr(null)
-    setEmbedUrl('')
+    const langGroup = playData.languages.find(g => g.language === lang) || playData.languages[0]
+    const servers = langGroup?.servers || []
+    const best = servers.find(s => s.verified && s.status === 'online') || servers[0]
 
-    try {
-      const streams = await getEpisodeStreams(resolvedMalId, currentEpisode.embedUrl, lang, controller.signal)
-      if (!mountedRef.current || reqId !== streamReqId.current) return
-
-      if (!streams || !streams.languages?.length) {
-        setEmbedErr('No stream sources available.')
-        setEmbedLoading(false)
-        return
-      }
-
-      setEmbedType(streams.type || 'hls')
-      streamsCache.current = streams
-      serverFailoverIdx.current = 0
-      retryCount.current = 0
-
-      // Sync selectedLanguage with the actual language returned by the backend
-      const actualLang = streams.languages[0]?.language
-      if (actualLang && actualLang !== lang) {
-        setSelectedLanguage(actualLang)
-      }
-
-      const langGroup = streams.languages[0]
-      const servers = langGroup?.servers || []
-      const best = servers.find(s => s.verified && s.status === 'online') || servers[0]
-
-      if (best) {
-        setEmbedUrl(best.proxyUrl || best.url)
-        setStreamKey(k => k + 1)
-      } else {
-        setEmbedErr('No working servers found.')
-        setEmbedLoading(false)
-      }
-    } catch (err) {
-      if (!mountedRef.current || reqId !== streamReqId.current) return
-      setEmbedErr(err.message?.includes('timed out')
-        ? 'Stream resolution timed out.'
-        : extractErrorMessage(err))
+    if (best) {
+      setEmbedUrl(best.proxyUrl || best.url)
+      setStreamKey(k => k + 1)
+      setEmbedLoading(false)
+      setEmbedErr(null)
+    } else {
+      setEmbedErr('No working servers found.')
       setEmbedLoading(false)
     }
-  }, [currentEpisode?.embedUrl, resolvedMalId])
-
-  // Run when language is confirmed
-  useEffect(() => {
-    if (!selectedLanguage || !currentEpisode?.embedUrl) return
-    loadStream(selectedLanguage)
-  }, [selectedLanguage, currentEpisode?.embedUrl, loadStream])
+  }, [playDataQ.data, availableLanguages, hasSub, hasDub])
 
   // ---- Player lifecycle ----
   const handlePlayerReady = useCallback(() => {
@@ -286,10 +191,10 @@ export default function WatchPage() {
       return
     }
 
-    const langGroup = cache.languages[0]
+    const langGroup = cache.languages.find(g => g.language === selectedLanguage) || cache.languages[0]
     const servers = langGroup?.servers || []
 
-    // Try next verified server
+    // Try next verified server from cache
     const nextIdx = serverFailoverIdx.current + 1
     const next = servers.slice(nextIdx).find(s => s.verified && s.status === 'online')
     if (next) {
@@ -301,22 +206,21 @@ export default function WatchPage() {
       return
     }
 
-    // Re-resolve stream from scratch
+    // Retry with fresh data from backend
     if (retryCount.current < 2 && selectedLanguage && currentEpisode?.embedUrl) {
       retryCount.current++
       serverFailoverIdx.current = 0
-      loadStream(selectedLanguage)
+      refetchPlayData()
       return
     }
 
     setEmbedErr('Stream temporarily unavailable.')
-  }, [selectedLanguage, currentEpisode?.embedUrl, loadStream])
+  }, [selectedLanguage, currentEpisode?.embedUrl, refetchPlayData])
 
   // ---- Language switching ----
   const handleLanguageChange = useCallback((lang) => {
     if (lang === selectedLanguage) return
     localStorage.setItem(LANG_KEY, lang)
-    setSelectedLanguage(lang)
 
     const { currentTime, duration } = progressRef.current
     if (currentTime > 0 && duration > 0 && currentEpisode && resolvedMalId) {
@@ -324,6 +228,20 @@ export default function WatchPage() {
         localStorage.setItem(`aw_resume_${resolvedMalId}_${currentEp}`, String(currentTime))
       } catch {}
     }
+
+    // Switch stream from cache — no new API call needed
+    const cache = streamsCache.current
+    if (cache?.languages) {
+      const langGroup = cache.languages.find(g => g.language === lang) || cache.languages[0]
+      const servers = langGroup?.servers || []
+      const best = servers.find(s => s.verified && s.status === 'online') || servers[0]
+      if (best) {
+        setEmbedUrl(best.proxyUrl || best.url)
+        setEmbedErr(null)
+        setStreamKey(k => k + 1)
+      }
+    }
+    setSelectedLanguage(lang)
   }, [selectedLanguage, currentEpisode, resolvedMalId, currentEp])
 
   // ---- Navigation ----
@@ -365,9 +283,9 @@ export default function WatchPage() {
     if (selectedLanguage && currentEpisode?.embedUrl) {
       retryCount.current = 0
       serverFailoverIdx.current = 0
-      loadStream(selectedLanguage)
+      refetchPlayData()
     }
-  }, [selectedLanguage, currentEpisode?.embedUrl, loadStream])
+  }, [selectedLanguage, currentEpisode?.embedUrl, refetchPlayData])
 
   const handleTimeUpdate = useCallback(({ currentTime, duration }) => {
     progressRef.current = { currentTime, duration }
@@ -439,6 +357,14 @@ export default function WatchPage() {
 
           {/* ---- VIDEO PLAYER ---- */}
           <div className="relative">
+            <Suspense fallback={
+              <div className="w-full aspect-video bg-black rounded-xl overflow-hidden shadow-2xl flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-10 h-10 border-[3px] border-primary/30 border-t-primary rounded-full animate-spin" />
+                  <p className="text-white/60 text-xs">Loading player...</p>
+                </div>
+              </div>
+            }>
             <VideoPlayer
               embedUrl={embedUrl}
               poster={anime?.imageUrl}
@@ -456,6 +382,7 @@ export default function WatchPage() {
               onError={handlePlayerError}
               streamKey={streamKey}
             />
+            </Suspense>
 
             {/* Stream error overlay */}
             {embedErr && !embedLoading && (
@@ -501,7 +428,7 @@ export default function WatchPage() {
             <div className="flex gap-2">
               {['SUB', 'DUB'].map(lang => {
                 const available = languagesLoaded ? availableLanguages.includes(lang) : false
-                const loadingLangs = languagesQ.isLoading || (!languagesLoaded && !languagesQ.isError)
+                const loadingLangs = playDataQ.isLoading || (!languagesLoaded && !playDataQ.isError)
                 return (
                   <button
                     key={lang}

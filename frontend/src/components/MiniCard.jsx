@@ -1,7 +1,8 @@
+import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import ImageWithFallback from './ImageWithFallback'
 
-export default function MiniCard({ anime }) {
+const MiniCard = memo(function MiniCard({ anime }) {
 
   return (
     <div className="flex bg-card hover:bg-cardHover transition-colors" style={{ marginTop: '0.3rem' }}>
@@ -26,4 +27,6 @@ export default function MiniCard({ anime }) {
       </div>
     </div>
   )
-}
+})
+
+export default MiniCard

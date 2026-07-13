@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import ImageWithFallback from './ImageWithFallback'
@@ -29,7 +30,7 @@ function TypeBadge({ type }) {
   )
 }
 
-export default function AnimeCard({ anime, index = 0, rank, state, score }) {
+const AnimeCard = memo(function AnimeCard({ anime, index = 0, rank, state, score }) {
   const malId = anime.malId || anime.id
   const imageUrl = anime.imageUrl || anime.images?.jpg?.image_url
   const status = getStatus(anime)
@@ -119,4 +120,6 @@ export default function AnimeCard({ anime, index = 0, rank, state, score }) {
       </Link>
     </motion.div>
   )
-}
+})
+
+export default AnimeCard

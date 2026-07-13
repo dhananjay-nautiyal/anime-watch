@@ -1,7 +1,8 @@
+import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import ImageWithFallback from './ImageWithFallback'
 
-export default function TopCard({ anime, rank }) {
+const TopCard = memo(function TopCard({ anime, rank }) {
 
   return (
     <Link
@@ -32,4 +33,6 @@ export default function TopCard({ anime, rank }) {
       </div>
     </Link>
   )
-}
+})
+
+export default TopCard
