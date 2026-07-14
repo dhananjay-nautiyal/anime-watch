@@ -1,38 +1,29 @@
-import { withAndroidManifest, withProjectBuildGradle, type ConfigPlugin } from '@expo/config-plugins'
+import { withAndroidManifest, AndroidConfig, withDangerousMod, type ConfigPlugin } from '@expo/config-plugins'
 import path from 'path'
+import fs from 'fs'
 
 const withNetworkSecurityConfig: ConfigPlugin<{ filePath?: string }> = (config, { filePath } = {}) => {
-  const srcPath = filePath || path.join('src', 'config', 'network_security_config.xml')
-
   config = withAndroidManifest(config, async manifestConfig => {
     const manifest = manifestConfig.modResults
-    const application = manifest.manifest.application?.[0]
-
-    if (application) {
-      application.$['android:networkSecurityConfig'] = '@xml/network_security_config'
-    }
-
+    const application = AndroidConfig.Manifest.getMainApplicationOrThrow(manifest)
+    application.$['android:networkSecurityConfig'] = '@xml/network_security_config'
     return manifestConfig
   })
 
-  config = withProjectBuildGradle(config, async gradleConfig => {
-    const buildGradle = gradleConfig.modResults
-    const content = buildGradle.contents
-
-    const resourceStmt = `copy {
-      from '${srcPath}'
-      into 'src/main/res/xml/'
-    }`
-
-    if (!content.includes('network_security_config')) {
-      const preBuildBlock = content.includes('preBuild') 
-        ? content 
-        : content.replace(/(android\s*\{)/, 'preBuild.doLast {\n    $1')
-      gradleConfig.modResults.contents = preBuildBlock
-    }
-
-    return gradleConfig
-  })
+  config = withDangerousMod(config, [
+    'android',
+    async config => {
+      const srcPath = filePath
+        ? path.resolve(config.modRequest.projectRoot, filePath)
+        : path.join(config.modRequest.projectRoot, 'src', 'config', 'network_security_config.xml')
+      const destDir = path.join(config.modRequest.platformProjectRoot, 'app', 'src', 'main', 'res', 'xml')
+      if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true })
+      }
+      fs.copyFileSync(srcPath, path.join(destDir, 'network_security_config.xml'))
+      return config
+    },
+  ])
 
   return config
 }

@@ -155,16 +155,14 @@
         {
           "android": {
             "usesCleartextTraffic": false,
-            "compileSdkVersion": 35,
-            "targetSdkVersion": 35,
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
             "buildToolsVersion": "35.0.0",
             "minSdkVersion": 26,
-            "kotlinVersion": "1.9.24",
+            "kotlinVersion": "2.1.20",
             "packagingOptions": {
               "exclude": [
-                "**/libfbjni.so",
-                "**/libjsc.so",
-                "**/libreactnativejni.so"
+                "**/libjsc.so"
               ]
             },
             "proguardRules": "-keep class com.animewatch.** { *; }\n-keep class expo.modules.** { *; }\n-keep class com.swmansion.reanimated.** { *; }\n-dontwarn com.swmansion.reanimated.**\n-keep class org.jetbrains.skia.** { *; }\n-keep class com.facebook.hermes.** { *; }\n-keep class com.facebook.jni.** { *; }\n# Keep notification service\n-keep class * extends android.app.Service { *; }\n# Keep Expo modules\n-keep class * extends expo.modules.core.interfaces.ReactNativeHostHandler { *; }"
