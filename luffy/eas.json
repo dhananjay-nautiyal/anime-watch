@@ -14,8 +14,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://192.168.1.100:8080",
-        "APP_ENV": "development"
+        "EXPO_PUBLIC_API_URL": "https://YOUR_BACKEND_URL",
+        "APP_ENV": "preview"
       }
     },
     "production": {
