@@ -43,7 +43,9 @@ export const getEpisodes = (malId, signal) =>
   client.get(`/api/anime/${malId}/episodes`, { signal }).then(unwrapData)
 
 export const syncEpisodes = (malId) => {
-  return client.post(`/api/anime/${malId}/episodes/sync`, null, { timeout: 60000 }).then(res => {
+  // Providers alone can burn ~70s before the Jikan fallback runs; keep the
+  // client timeout above that so the fallback response arrives.
+  return client.post(`/api/anime/${malId}/episodes/sync`, null, { timeout: 120000 }).then(res => {
     const body = res.data
     if (!body?.success) {
       const err = new Error(body?.message || 'Sync failed')

@@ -15,7 +15,7 @@ import {
   getAnimeById, getAnimeBySlug, getEpisodes, getReviews, getTrending,
   getFavorites, addFavorite, removeFavorite,
   getWatchlist, addToWatchlist, updateWatchlistStatus, removeFromWatchlist,
-  addReview, deleteReview,
+  addReview, deleteReview, syncEpisodes,
 } from '@anime/api'
 import { Palette, DarkPalette, Typography, Spacing, BorderRadius } from '@/constants/theme'
 import AnimeCard from '@/components/AnimeCard'
@@ -111,6 +111,21 @@ export default function AnimeDetailScreen() {
     enabled: !!anime?.malId,
     staleTime: 10 * 60 * 1000,
   })
+
+  // Auto-sync once when the list is empty (DB only fills via sync).
+  const [epsSyncing, setEpsSyncing] = useState(false)
+  const epsSyncAttempted = useRef(false)
+  useEffect(() => {
+    if (episodesQuery.isLoading || episodesQuery.isFetching || !anime?.malId) return
+    if ((episodesQuery.data?.length || 0) > 0 || epsSyncAttempted.current) return
+    epsSyncAttempted.current = true
+    setEpsSyncing(true)
+    syncEpisodes(anime.malId)
+      .then(() => episodesQuery.refetch())
+      .catch(() => {})
+      .finally(() => setEpsSyncing(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [episodesQuery.isLoading, episodesQuery.isFetching, episodesQuery.data, anime?.malId])
 
   const reviewsQuery = useQuery({
     queryKey: ['reviews', anime?.id, reviewPage],
@@ -469,6 +484,18 @@ export default function AnimeDetailScreen() {
           )}
 
           {/* Episodes */}
+          {episodes.length === 0 && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 }}>
+              {epsSyncing ? (
+                <>
+                  <ActivityIndicator color={colors.primary} size="small" />
+                  <Text style={[sty.emptyText, { color: colors.onSurfaceVariant }]}>Finding episodes…</Text>
+                </>
+              ) : (
+                <Text style={[sty.emptyText, { color: colors.onSurfaceVariant }]}>No episodes available yet.</Text>
+              )}
+            </View>
+          )}
           {episodes.length > 0 && (
             <CollapsibleSection title={`Episodes (${episodesQuery.data?.length || 0})`} defaultOpen icon="play-box-multiple-outline">
               <View style={sty.episodesGrid}>
