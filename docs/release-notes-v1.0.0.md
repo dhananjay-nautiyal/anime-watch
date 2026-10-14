@@ -26,5 +26,7 @@ First installable cut of AnimeWatch (backend + docs; mobile/web binaries follow)
 - EAS preview profile builds a sideloadable APK, no baked-in LAN IP
 - Dev backend boots with zero config (H2, ~5 s)
 - README rewritten (BitChord style) with Download-via-Releases section
+- Removed sentry-expo (crashed every launch: its nested
+  @sentry/react-native@5.5.0 extends a base gone in RN 0.86)
 
 Full history: `git log v1.0.0 --oneline` after tagging.
