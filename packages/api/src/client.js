@@ -1,16 +1,39 @@
 import axios from 'axios'
 
-const API_BASE = typeof process !== 'undefined' && (process.env?.EXPO_PUBLIC_API_URL || process.env?.VITE_API_URL)
-  ? (process.env.EXPO_PUBLIC_API_URL || process.env.VITE_API_URL)
-  : (typeof import.meta !== 'undefined' && (import.meta.env?.EXPO_PUBLIC_API_URL || import.meta.env?.VITE_API_URL)
-    ? (import.meta.env.EXPO_PUBLIC_API_URL || import.meta.env.VITE_API_URL)
-    : 'https://api.animewatch.app')
+// NOTE: this file must stay free of `import.meta`. Metro/Hermes cannot
+// parse that syntax, so a single occurrence crashes every luffy screen
+// that imports `@anime/api` at bundle load. Expo inlines
+// `process.env.EXPO_PUBLIC_*` at build time, so native reads its URL
+// from `process.env` here. Web (Vite) injects its URL via
+// `setApiBaseURL()` from `frontend/src/api/client.js`, which *is*
+// Vite-processed and may use `import.meta.env`.
+function readNativeBaseURL() {
+  if (typeof process !== 'undefined' && process.env) {
+    const url = (process.env.EXPO_PUBLIC_API_URL || process.env.VITE_API_URL || '').trim()
+    if (url) return url.replace(/\/$/, '')
+  }
+  return ''
+}
+
+let API_BASE = readNativeBaseURL()
+
+export function getApiBaseURL() {
+  return API_BASE
+}
 
 const client = axios.create({
+  // Empty string = relative URLs. In web dev that hits the Vite `/api`
+  // proxy (localhost:8080); on native a missing EXPO_PUBLIC_API_URL
+  // surfaces as a network error instead of silently hitting a placeholder.
   baseURL: API_BASE,
   timeout: 25000,
   headers: { 'Content-Type': 'application/json' },
 })
+
+export function setApiBaseURL(url) {
+  API_BASE = (url || '').trim().replace(/\/$/, '')
+  client.defaults.baseURL = API_BASE
+}
 
 let tokenStore = {
   getToken: () => Promise.resolve(null),
