@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics'
 import { Palette, DarkPalette, Typography, Spacing, BorderRadius } from '@/constants/theme'
 import PressableScale from '@/components/PressableScale'
 import EmptyState from '@/components/EmptyState'
+import { useAuth } from '@anime/auth'
 
 const STATUS_FILTERS = ['All', 'Watching', 'Completed', 'On Hold', 'Dropped', 'Plan to Watch']
 
@@ -17,6 +18,7 @@ export default function WatchlistScreen() {
   const colorScheme = useColorScheme()
   const colors = colorScheme === 'dark' ? DarkPalette : Palette
   const [activeFilter, setActiveFilter] = useState('All')
+  const { isAuthenticated } = useAuth()
 
   const handleFilterPress = useCallback((status: string) => {
     Haptics.selectionAsync()
@@ -57,10 +59,10 @@ export default function WatchlistScreen() {
 
       <EmptyState
         icon="bookmark-outline"
-        title="Your watchlist is empty"
-        subtitle="Start adding anime to keep track of what you're watching"
-        actionLabel="Browse Anime"
-        onAction={() => router.push('/(tabs)/search')}
+        title={isAuthenticated ? 'Your watchlist is empty' : 'Sign in to track anime'}
+        subtitle={isAuthenticated ? "Start adding anime to keep track of what you're watching" : 'Your watchlist syncs with your account on every device'}
+        actionLabel={isAuthenticated ? 'Browse Anime' : 'Sign In'}
+        onAction={() => router.push(isAuthenticated ? '/(tabs)/search' : '/login')}
       />
     </View>
   )

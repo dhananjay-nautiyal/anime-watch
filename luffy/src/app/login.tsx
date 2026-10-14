@@ -133,6 +133,15 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </Link>
         </View>
+
+        <TouchableOpacity
+          accessibilityRole="link"
+          accessibilityLabel="Continue as guest"
+          onPress={() => router.replace('/(tabs)')}
+          style={{ alignItems: 'center', marginTop: Spacing.md }}
+        >
+          <Text style={[styles.footerLink, { color: colors.onSurfaceVariant }]}>Continue as guest</Text>
+        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   )
