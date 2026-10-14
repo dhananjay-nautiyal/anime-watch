@@ -23,3 +23,22 @@ application-local.yml
 .env
 
 cache-data/
+
+# dependencies (monorepo: root + workspaces)
+node_modules/
+frontend/node_modules/
+luffy/node_modules/
+packages/*/node_modules/
+
+# build output (never commit)
+dist/
+frontend/dist/
+luffy/dist/
+build/
+.expo/
+expo-env.d.ts
+web-build/
+
+# generated CI report
+scripts/verify_report.json
+scripts/__pycache__/
