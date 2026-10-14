@@ -70,8 +70,13 @@ function NotificationInit() {
 export default function RootLayout() {
   // Preload the icon font explicitly: release builds have rendered tofu
   // boxes when relying on lazy @expo/vector-icons loading alone.
-  // Splash stays up until this returns true.
-  const [fontsLoaded] = useFonts({ ...MaterialCommunityIcons.font })
+  // Both an explicit require and the set's .font map (either may be absent
+  // depending on bundler static handling) — Splash stays up until loaded.
+  const [fontsLoaded] = useFonts({
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    'material-community': require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf'),
+    ...MaterialCommunityIcons.font,
+  })
   // Update prompt: once per cold start until the user updates.
   const { update, dismiss } = useAppUpdate()
   if (!fontsLoaded) return null
