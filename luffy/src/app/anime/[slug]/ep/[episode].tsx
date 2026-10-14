@@ -250,7 +250,12 @@ export default function WatchScreen() {
       ])
       return
     }
-    if (!anime?.slug || !streamUrl) return
+    if (!anime?.slug || !streamUrl) {
+      if (isAuthenticated) {
+        Alert.alert('No download available', 'This episode has no playable stream yet, so there is nothing to download.')
+      }
+      return
+    }
     if (downloadStatus === 'completed' || downloadStatus === 'downloading') {
       cancelDownload(anime.slug, currentEpNum)
       setDownloadStatus('paused')
