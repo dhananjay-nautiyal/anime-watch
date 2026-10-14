@@ -57,6 +57,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/reviews/**").authenticated()
                 .requestMatchers("/api/user/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/news/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/app/version").permitAll()
                 .requestMatchers("/api/news/**").hasRole("ADMIN")
                 .requestMatchers("/api/notifications/register").authenticated()
                 .requestMatchers("/api/notifications/unregister").authenticated()
