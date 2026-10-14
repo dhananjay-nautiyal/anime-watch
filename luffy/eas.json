@@ -14,7 +14,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://YOUR_BACKEND_URL",
+        "EXPO_PUBLIC_API_URL": "https://anime-watch-6h6z.onrender.com",
         "APP_ENV": "preview"
       }
     },
@@ -24,7 +24,7 @@
       },
       "env": {
         "APP_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "YOUR_BACKEND_URL"
+        "EXPO_PUBLIC_API_URL": "https://anime-watch-6h6z.onrender.com"
       }
     }
   }
