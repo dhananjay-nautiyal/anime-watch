@@ -119,4 +119,13 @@ public class JikanApiClient {
         rateLimit();
         return restTemplate.getForObject(url, JikanExternalResponse.class, args);
     }
+
+    public JikanEpisodeListResponse fetchAnimeEpisodes(int id, int page) {
+        return callApiEpisodes(BASE_URL + "/anime/{id}/episodes?page={page}", id, page);
+    }
+
+    private JikanEpisodeListResponse callApiEpisodes(String url, Object... args) {
+        rateLimit();
+        return restTemplate.getForObject(url, JikanEpisodeListResponse.class, args);
+    }
 }

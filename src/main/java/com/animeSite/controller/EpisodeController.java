@@ -81,7 +81,7 @@ public class EpisodeController {
             long elapsed = System.currentTimeMillis() - start;
 
             Map<String, Object> response = new LinkedHashMap<>();
-            response.put("success", result.isSuccess() || result.isComingSoon());
+            response.put("success", result.isSuccess() || result.isComingSoon() || result.isEpisodeListOnly());
             response.put("status", result.status());
             response.put("message", result.message());
             response.put("durationMs", elapsed);
