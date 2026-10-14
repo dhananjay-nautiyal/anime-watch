@@ -1,7 +1,6 @@
 package com.animeSite.httpclient;
 
-import com.animeSite.model.ConsumetInfoResponse;
-import com.animeSite.model.ConsumetSearchResponse;
+import com.animeSite.model.ConsumetResolveResponse;
 import com.animeSite.model.ConsumetWatchResponse;
 import com.animeSite.persist.Episode;
 import com.animeSite.pipeline.StreamProvider;
@@ -43,28 +42,25 @@ public class ConsumetStreamProvider implements StreamProvider {
         List<Episode> out = new ArrayList<>();
         try {
             if (!client.isConfigured()) return out;
-            ConsumetSearchResponse search = client.search(title);
-            if (search == null || search.getResults() == null || search.getResults().isEmpty()) {
+            // One atomic bridge call: tries hianime -> animekai -> animepahe.
+            ConsumetResolveResponse resolved = client.resolve(title);
+            if (resolved == null || resolved.getEpisodes() == null || resolved.getEpisodes().isEmpty()) {
                 log.info("[CONSUMET] NO_MATCH | malId={} title='{}'", malId, title);
                 return out;
             }
-            ConsumetSearchResponse.ConsumetSearchResult best = pickBest(title, search.getResults());
-            ConsumetInfoResponse info = client.info(best.getId());
-            if (info == null || info.getEpisodes() == null || info.getEpisodes().isEmpty()) {
-                log.info("[CONSUMET] NO_EPISODES | malId={} id='{}'", malId, best.getId());
-                return out;
-            }
-            for (ConsumetInfoResponse.ConsumetEpisode e : info.getEpisodes()) {
+            int n = 0;
+            for (ConsumetResolveResponse.ConsumetEpisode e : resolved.getEpisodes()) {
                 if (e.getId() == null || e.getId().isBlank()) continue;
+                n++;
                 Episode ep = new Episode();
                 ep.setAnimeMalId(malId);
-                ep.setEpisodeNumber(e.getNumber() > 0 ? e.getNumber() : out.size() + 1);
+                ep.setEpisodeNumber(e.getNumber() > 0 ? e.getNumber() : n);
                 ep.setTitle(e.getTitle() != null && !e.getTitle().isBlank()
                         ? e.getTitle() : "Episode " + ep.getEpisodeNumber());
                 ep.setEmbedUrl(PREFIX + e.getId());
                 out.add(ep);
             }
-            log.info("[CONSUMET] EPISODES | malId={} id='{}' count={}", malId, best.getId(), out.size());
+            log.info("[CONSUMET] EPISODES | malId={} provider={} count={}", malId, resolved.getProvider(), out.size());
         } catch (Exception e) {
             log.warn("[CONSUMET] FETCH_FAILED | malId={} error='{}'", malId, e.getMessage());
         }
@@ -99,24 +95,5 @@ public class ConsumetStreamProvider implements StreamProvider {
             log.warn("[CONSUMET] STREAM_FAILED | ep='{}' error='{}'", episodeId, e.getMessage());
             return StreamResult.failure(getName(), "Consumet watch failed: " + e.getMessage());
         }
-    }
-
-    private ConsumetSearchResponse.ConsumetSearchResult pickBest(
-            String title, List<ConsumetSearchResponse.ConsumetSearchResult> results) {
-        String want = norm(title);
-        for (ConsumetSearchResponse.ConsumetSearchResult r : results) {
-            if (r.getTitle() != null && norm(r.getTitle()).equals(want)) return r;
-        }
-        for (ConsumetSearchResponse.ConsumetSearchResult r : results) {
-            if (r.getTitle() != null && (norm(r.getTitle()).startsWith(want) || want.startsWith(norm(r.getTitle())))) return r;
-        }
-        for (ConsumetSearchResponse.ConsumetSearchResult r : results) {
-            if (r.getTitle() != null && norm(r.getTitle()).contains(want)) return r;
-        }
-        return results.get(0);
-    }
-
-    private String norm(String s) {
-        return s == null ? "" : s.toLowerCase().replaceAll("[^a-z0-9]", "");
     }
 }
