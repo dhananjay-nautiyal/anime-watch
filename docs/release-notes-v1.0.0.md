@@ -4,16 +4,16 @@ First installable cut of AnimeWatch (backend + docs; mobile/web binaries follow)
 
 ## Included
 
+- `animewatch-1.0.0.apk` — Android app (EAS preview, sideloadable).
+  Install from the link/QR below. Note: it bakes the
+  `https://YOUR_BACKEND_URL` placeholder, so it installs and opens but
+  needs a real backend (rebuild with `EXPO_PUBLIC_API_URL`) for data.
 - `anime-backend-1.0.0.jar` — Spring Boot 3.2 / Java 21 API server.
   Run with `java -jar` (needs Postgres + env, see README Quick Start).
   Dev alternative needs nothing: `SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run`.
 
 ## Not in this release (coming next)
 
-- **Android APK** — needs one EAS cloud build with your backend URL
-  (we can't run `eas login` for you):
-  `cd luffy && EXPO_PUBLIC_API_URL=https://<backend-host> eas build -p android --profile preview`,
-  then `gh release upload v1.0.0 app.apk`. See `luffy/INSTALL_MOBILE.md`.
 - **Web bundle** — baked per backend URL at build time:
   `cd frontend && VITE_API_URL=https://<backend-host> npm run build`,
   then attach `dist/` as `animewatch-web-1.0.0.zip`.
