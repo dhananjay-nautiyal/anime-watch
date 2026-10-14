@@ -1,7 +1,11 @@
 package com.animeSite;
 
 import com.animeSite.persist.Anime;
+import com.animeSite.persist.Episode;
 import com.animeSite.repo.AnimeRepository;
+import com.animeSite.repo.EpisodeRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -9,8 +13,11 @@ import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.core.io.ClassPathResource;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @SpringBootApplication
 @EnableAsync
@@ -23,9 +30,72 @@ public class AnimeBackendApplication {
     }
 
     @Bean
-    public CommandLineRunner seedAnime(AnimeRepository animeRepository) {
+    public CommandLineRunner seedAnime(AnimeRepository animeRepository, EpisodeRepository episodeRepository) {
         return args -> {
-            if (animeRepository.count() > 0) return;
+            // Catalog top-up: existing DBs seeded with the old 20-title list
+            // (count < 100) get the offline catalog added on next boot.
+            // Skip only once the catalog is in (count >= 100).
+            if (animeRepository.count() >= 100) return;
+
+            // Offline catalog first (works with zero external connectivity):
+            // 1500 curated titles + numbered episode shells.
+            try {
+                ClassPathResource res = new ClassPathResource("static-data/offline-catalog.json");
+                if (res.exists()) {
+                    ObjectMapper mapper = new ObjectMapper();
+                    List<Map<String, Object>> rows = mapper.readValue(
+                            res.getInputStream(), new TypeReference<>() {});
+                    List<Anime> catalog = new ArrayList<>();
+                    List<Episode> shells = new ArrayList<>();
+                    // Never duplicate: skip titles already present; still add
+                    // episode shells for them when they have none.
+                    java.util.Set<Integer> present = new java.util.HashSet<>();
+                    animeRepository.findAll().forEach(a -> present.add(a.getMalId()));
+                    // malIds that already have episode rows (avoids shell dupes).
+                    java.util.Set<Integer> presentEpMalIds = new java.util.HashSet<>();
+                    episodeRepository.findAll().forEach(e -> presentEpMalIds.add(e.getAnimeMalId()));
+                    for (Map<String, Object> r : rows) {
+                        int rowMalId = (Integer) r.get("malId");
+                        int eps = r.get("episodes") instanceof Number n ? n.intValue() : 0;
+                        if (!present.contains(rowMalId)) {
+                            Anime a = new Anime();
+                            a.setMalId(rowMalId);
+                            a.setTitle((String) r.get("title"));
+                            Object syn = r.get("synonyms");
+                            if (syn instanceof List<?> l && !l.isEmpty()) {
+                                a.setTitleSynonyms(String.join("|", l.stream().map(String::valueOf).toList()));
+                            }
+                            if (r.get("score") instanceof Number n) a.setScore(n.doubleValue());
+                            a.setEpisodes(eps);
+                            a.setType((String) r.get("type"));
+                            a.setStatus((String) r.get("status"));
+                            if (r.get("year") instanceof Number n) a.setYear(n.intValue());
+                            a.setSeason((String) r.get("season"));
+                            a.setImageUrl((String) r.get("imageUrl"));
+                            catalog.add(a);
+                            present.add(rowMalId);
+                        }
+                        boolean needShells = !presentEpMalIds.contains(rowMalId);
+                        if (needShells) {
+                            for (int i = 1; i <= Math.min(eps, 2000); i++) {
+                                Episode ep = new Episode();
+                                ep.setAnimeMalId(rowMalId);
+                                ep.setEpisodeNumber(i);
+                                ep.setTitle("Episode " + i);
+                                shells.add(ep);
+                            }
+                            presentEpMalIds.add(rowMalId);
+                        }
+                    }
+                    animeRepository.saveAll(catalog);
+                    episodeRepository.saveAll(shells);
+                    System.out.println("Seeded offline catalog: " + catalog.size()
+                            + " anime, " + shells.size() + " episode shells.");
+                    return;
+                }
+            } catch (Exception e) {
+                System.out.println("Offline catalog seed failed, falling back: " + e.getMessage());
+            }
 
             List<Anime> seedList = List.of(
                 createAnime(1, "Cowboy Bebop", "Spike and Jet chase criminals across the galaxy aboard the Bebop.", 8.75, 26,
@@ -69,8 +139,12 @@ public class AnimeBackendApplication {
                 createAnime(100, "Shinigami no Ballad", "A gentle girl who acts as a psychopomp helps souls pass on.", 7.05, 6,
                     "https://cdn.myanimelist.net/images/anime/9/75188.jpg")
             );
-            animeRepository.saveAll(seedList);
-            System.out.println("Seeded " + seedList.size() + " anime into the database.");
+            // Legacy 20-title seed: only on a truly empty DB, so it can never
+            // duplicate rows on catalog top-up boots.
+            if (animeRepository.count() == 0) {
+                animeRepository.saveAll(seedList);
+                System.out.println("Seeded " + seedList.size() + " anime into the database.");
+            }
         };
     }
 
