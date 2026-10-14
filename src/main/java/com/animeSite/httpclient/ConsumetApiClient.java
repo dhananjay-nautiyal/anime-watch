@@ -1,6 +1,7 @@
 package com.animeSite.httpclient;
 
 import com.animeSite.model.ConsumetInfoResponse;
+import com.animeSite.model.ConsumetResolveResponse;
 import com.animeSite.model.ConsumetSearchResponse;
 import com.animeSite.model.ConsumetWatchResponse;
 import org.slf4j.Logger;
@@ -56,8 +57,15 @@ public class ConsumetApiClient {
         return restTemplate.getForObject(url, ConsumetInfoResponse.class);
     }
 
-    public ConsumetWatchResponse watch(String episodeId, String server, String category) {
+    public ConsumetResolveResponse resolve(String query) {
         requireConfigured();
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/anime/resolve")
+                .queryParam("q", query).build().encode().toUriString();
+        log.info("[CONSUMET] RESOLVE | q='{}'", query);
+        return restTemplate.getForObject(url, ConsumetResolveResponse.class);
+    }
+
+    public ConsumetWatchResponse watch(String episodeId, String server, String category) {        requireConfigured();
         UriComponentsBuilder b = UriComponentsBuilder
                 .fromHttpUrl(baseUrl + "/anime/hianime/watch/{episodeId}")
                 .queryParam("category", category != null ? category : "sub");
