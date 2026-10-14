@@ -9,6 +9,8 @@ import { secureStorage } from '@/storage/secureStorage'
 import { setupNotificationListeners, syncPushTokenWithBackend } from '@/services/notifications'
 import { preventAutoHideAsync } from 'expo-splash-screen'
 import OfflineBanner from '@/components/OfflineBanner'
+import UpdatePrompt from '@/components/UpdatePrompt'
+import { useAppUpdate } from '@/hooks/useAppUpdate'
 import { setUser, clearUser, addBreadcrumb } from './sentry'
 
 preventAutoHideAsync()
@@ -70,12 +72,15 @@ export default function RootLayout() {
   // boxes when relying on lazy @expo/vector-icons loading alone.
   // Splash stays up until this returns true.
   const [fontsLoaded] = useFonts({ ...MaterialCommunityIcons.font })
+  // Update prompt: once per cold start until the user updates.
+  const { update, dismiss } = useAppUpdate()
   if (!fontsLoaded) return null
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider storage={secureStorage} apiClient={client}>
         <NotificationInit />
         <OfflineBanner />
+        {update && <UpdatePrompt update={update} onLater={dismiss} />}
         <Stack
           screenOptions={{
             headerShown: false,
