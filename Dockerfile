@@ -15,4 +15,8 @@ COPY --from=build /app/target/anime-backend-*.jar app.jar
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-Dspring.profiles.active=${SPRING_PROFILES_ACTIVE:-prod}", "-jar", "app.jar"]
+# NOTE: exec-form ENTRYPOINT does NOT expand ${...}, so don't put placeholders
+# here (it previously produced a literal "-prod" profile and prod config never
+# loaded). Spring Boot reads SPRING_PROFILES_ACTIVE env natively — set it to
+# "prod" in the Render dashboard.
+ENTRYPOINT ["java", "-jar", "app.jar"]

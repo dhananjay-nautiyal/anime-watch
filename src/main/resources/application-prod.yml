@@ -12,7 +12,9 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: validate
+      # update until a Flyway baseline (V1__schema.sql) lands; validate on a
+      # fresh managed DB fails boot because no tables exist yet.
+      ddl-auto: update
     show-sql: false
     properties:
       hibernate:
