@@ -3,6 +3,8 @@ import { Stack, useRouter } from 'expo-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from '@anime/auth'
 import { client } from '@anime/api'
+import { useFonts } from 'expo-font'
+import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { secureStorage } from '@/storage/secureStorage'
 import { setupNotificationListeners, syncPushTokenWithBackend } from '@/services/notifications'
 import { preventAutoHideAsync } from 'expo-splash-screen'
@@ -64,6 +66,11 @@ function NotificationInit() {
 }
 
 export default function RootLayout() {
+  // Preload the icon font explicitly: release builds have rendered tofu
+  // boxes when relying on lazy @expo/vector-icons loading alone.
+  // Splash stays up until this returns true.
+  const [fontsLoaded] = useFonts({ ...MaterialCommunityIcons.font })
+  if (!fontsLoaded) return null
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider storage={secureStorage} apiClient={client}>

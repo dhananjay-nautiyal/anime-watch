@@ -16,7 +16,7 @@ import { getItemAsync, setItemAsync } from 'expo-secure-store'
 import * as Haptics from 'expo-haptics'
 import {
   getAnimeById, getAnimeBySlug, getEpisodes, getEpisodePlayData,
-  getResume, saveResume,
+  getResume, saveResume, syncEpisodes,
 } from '@anime/api'
 import { startDownload, cancelDownload, getDownload, formatBytes } from '@/services/downloadManager'
 import type { DownloadRecord } from '@/services/downloadDB'
@@ -126,6 +126,42 @@ export default function WatchScreen() {
     episodes.find((e: any) => e.episodeNumber === currentEpNum + 1),
     [episodes, currentEpNum],
   )
+
+  // Auto-sync when the list is empty: the DB only fills via sync, and nothing
+  // else triggers it. One attempt per screen mount, then honest states below.
+  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'failed'>('idle')
+  const syncAttempted = useRef(false)
+  useEffect(() => {
+    if (episodesQuery.isLoading || episodesQuery.isFetching) return
+    if (episodes.length > 0 || !anime?.malId || syncAttempted.current) return
+    syncAttempted.current = true
+    setSyncState('syncing')
+    syncEpisodes(anime.malId)
+      .then(() => episodesQuery.refetch())
+      .catch(() => setSyncState('failed'))
+      .finally(() => setSyncState(s => (s === 'syncing' ? 'idle' : s)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [episodesQuery.isLoading, episodesQuery.isFetching, episodes.length, anime?.malId])
+
+  // Honest player state: never sit on "Preparing stream..." when there is
+  // nothing to play (empty list, or entries without stream URLs).
+  useEffect(() => {
+    if (episodesQuery.isLoading || episodesQuery.isFetching || syncState === 'syncing') return
+    if (playDataQuery.isLoading || playDataQuery.isFetching) return
+    if (playDataQuery.data) return
+    if (!currentEpisode) {
+      setEmbedLoading(false)
+      setEmbedErr(
+        syncState === 'failed'
+          ? 'Episodes unavailable. Check your connection and retry.'
+          : 'No episodes found for this title yet.',
+      )
+    } else if (!currentEpisode.embedUrl) {
+      setEmbedLoading(false)
+      setEmbedErr('No playable stream for this episode yet.')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [episodesQuery.isLoading, episodesQuery.isFetching, syncState, currentEpisode, playDataQuery.isLoading, playDataQuery.isFetching, playDataQuery.data])
 
   // Fetch play data
   const resolvedMalId = anime?.malId || anime?.id

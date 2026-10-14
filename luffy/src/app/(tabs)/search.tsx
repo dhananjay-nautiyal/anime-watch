@@ -1,12 +1,13 @@
-import { useState, useCallback } from 'react'
-import { View, Text, TextInput, ScrollView, StyleSheet } from 'react-native'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { View, Text, TextInput, ScrollView, StyleSheet, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useColorScheme } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { Palette, DarkPalette, Typography, Spacing, BorderRadius } from '@/constants/theme'
 import PressableScale from '@/components/PressableScale'
+import AnimeCard from '@/components/AnimeCard'
+import { searchAnime } from '@anime/api'
 
 const GENRES = [
   'Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy',
@@ -16,22 +17,72 @@ const GENRES = [
 
 export default function SearchScreen() {
   const insets = useSafeAreaInsets()
-  const router = useRouter()
   const colorScheme = useColorScheme()
   const colors = colorScheme === 'dark' ? DarkPalette : Palette
   const [query, setQuery] = useState('')
+  const [results, setResults] = useState<any[]>([])
+  const [searching, setSearching] = useState(false)
+  const [searched, setSearched] = useState(false)
+  const [searchError, setSearchError] = useState('')
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const requestRef = useRef(0)
+
+  const runSearch = useCallback(async (q: string) => {
+    const term = q.trim()
+    if (!term) {
+      setResults([])
+      setSearched(false)
+      setSearchError('')
+      setSearching(false)
+      return
+    }
+    const id = ++requestRef.current
+    setSearching(true)
+    setSearchError('')
+    try {
+      const res = await searchAnime(term, 0, 25)
+      if (requestRef.current !== id) return
+      setResults(res?.data ?? [])
+      setSearched(true)
+    } catch {
+      if (requestRef.current !== id) return
+      setResults([])
+      setSearched(true)
+      setSearchError('Search failed. Check your connection and retry.')
+    } finally {
+      if (requestRef.current === id) setSearching(false)
+    }
+  }, [])
+
+  const handleQueryChange = useCallback((text: string) => {
+    setQuery(text)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!text.trim()) {
+      runSearch('')
+      return
+    }
+    setSearching(true)
+    debounceRef.current = setTimeout(() => runSearch(text), 450)
+  }, [runSearch])
+
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+  }, [])
 
   const handleGenrePress = useCallback((genre: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    router.push(`/(tabs)/search?genre=${genre.toLowerCase()}`)
-  }, [router])
+    setQuery(genre)
+    runSearch(genre)
+  }, [runSearch])
 
   const handleSubmitSearch = useCallback(() => {
     if (query.trim()) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-      router.push(`/(tabs)/search?q=${encodeURIComponent(query.trim())}`)
+      runSearch(query)
     }
-  }, [query, router])
+  }, [query, runSearch])
+
+  const showResults = searched || searching || results.length > 0
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -44,7 +95,7 @@ export default function SearchScreen() {
             placeholder="Search anime..."
             placeholderTextColor={colors.onSurfaceVariant}
             value={query}
-            onChangeText={setQuery}
+            onChangeText={handleQueryChange}
             onSubmitEditing={handleSubmitSearch}
             returnKeyType="search"
             autoCapitalize="none"
@@ -61,7 +112,34 @@ export default function SearchScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Browse by Genre</Text>
+        {showResults ? (
+          <View>
+            <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>
+              {searching ? 'Searching…' : `Results (${results.length})`}
+            </Text>
+            {searching && results.length === 0 ? (
+              <ActivityIndicator color={colors.primary} size="large" style={{ marginTop: Spacing.lg }} />
+            ) : searchError ? (
+              <View style={[styles.emptyBox, { backgroundColor: colors.surfaceContainerHigh }]}>
+                <MaterialCommunityIcons name="cloud-off-outline" size={32} color={colors.onSurfaceVariant} />
+                <Text style={[styles.emptyText, { color: colors.onSurfaceVariant }]}>{searchError}</Text>
+              </View>
+            ) : results.length === 0 ? (
+              <View style={[styles.emptyBox, { backgroundColor: colors.surfaceContainerHigh }]}>
+                <MaterialCommunityIcons name="magnify-close" size={32} color={colors.onSurfaceVariant} />
+                <Text style={[styles.emptyText, { color: colors.onSurfaceVariant }]}>No anime found. Try another title.</Text>
+              </View>
+            ) : (
+              <View style={styles.resultsGrid}>
+                {results.map((item: any, i: number) => (
+                  <AnimeCard key={item.slug || item.malId || item.id || i} anime={item} index={i} />
+                ))}
+              </View>
+            )}
+          </View>
+        ) : (
+          <View>
+            <Text style={[styles.sectionTitle, { color: colors.onSurface }]}>Browse by Genre</Text>
         <View style={styles.chipGrid}>
           {GENRES.map(genre => (
             <PressableScale
@@ -84,6 +162,8 @@ export default function SearchScreen() {
         </View>
 
         <View style={{ height: insets.bottom + Spacing.xl }} />
+          </View>
+        )}
       </ScrollView>
     </View>
   )
@@ -141,5 +221,11 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...Typography.bodyMedium,
+  },
+  resultsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    justifyContent: 'space-between',
   },
 })
