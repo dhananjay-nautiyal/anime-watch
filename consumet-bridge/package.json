@@ -1,0 +1,18 @@
+{
+  "name": "animewatch-consumet-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Thin self-hosted REST wrapper over @consumet/extensions (HiAnime). Deploy on Render free tier; point the Spring backend at CONSUMET_BASE_URL.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@consumet/extensions": "1.8.8",
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
