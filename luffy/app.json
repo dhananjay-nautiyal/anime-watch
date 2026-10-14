@@ -142,13 +142,6 @@
           ]
         }
       ],
-      [
-        "sentry-expo",
-        {
-          "organization": "animewatch",
-          "project": "animewatch-mobile"
-        }
-      ],
       "expo-secure-store",
       [
         "expo-build-properties",
