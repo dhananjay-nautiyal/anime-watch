@@ -10,6 +10,8 @@ import { useColorScheme } from 'react-native'
 import { useAuth } from '@anime/auth'
 import { getNotificationPreferences, updateNotificationPreferences } from '@anime/api'
 import * as Haptics from 'expo-haptics'
+import Constants from 'expo-constants'
+import { client } from '@anime/api'
 import { Palette, DarkPalette, Typography, Spacing, BorderRadius } from '@/constants/theme'
 import { registerForPushNotificationsAsync, syncPushTokenWithBackend } from '@/services/notifications'
 import PressableScale from '@/components/PressableScale'
@@ -35,6 +37,18 @@ export default function SettingsScreen() {
   const [pushEnabled, setPushEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
+  const [backendInfo, setBackendInfo] = useState<{ version?: string; commit?: string }>({})
+
+  const appVersion: string = Constants.expoConfig?.version ?? 'unknown'
+
+  useEffect(() => {
+    let cancelled = false
+    client.get('/api/app/version').then(res => {
+      const d = res.data?.data ?? {}
+      if (!cancelled) setBackendInfo({ version: d.version, commit: d.commit })
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => { loadPreferences() }, [])
 
@@ -152,6 +166,35 @@ export default function SettingsScreen() {
               </View>
             </View>
           ))}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.onSurfaceVariant }]}>About</Text>
+            <View style={[styles.card, { backgroundColor: colors.surfaceContainerHigh }]}>
+              <View style={styles.settingItem}>
+                <MaterialCommunityIcons name="information-outline" size={24} color={colors.onSurfaceVariant} />
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: colors.onSurface }]}>AnimeWatch</Text>
+                  <Text style={[styles.settingDesc, { color: colors.onSurfaceVariant }]}>Track, watch and never miss an anime</Text>
+                </View>
+              </View>
+              <View style={[styles.settingItem, { borderTopWidth: 1, borderTopColor: colors.outlineVariant }]}>
+                <MaterialCommunityIcons name="cellphone" size={24} color={colors.onSurfaceVariant} />
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: colors.onSurface }]}>App version</Text>
+                </View>
+                <Text style={[styles.settingDesc, { color: colors.onSurfaceVariant }]}>{appVersion}</Text>
+              </View>
+              <View style={[styles.settingItem, { borderTopWidth: 1, borderTopColor: colors.outlineVariant }]}>
+                <MaterialCommunityIcons name="server" size={24} color={colors.onSurfaceVariant} />
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: colors.onSurface }]}>Backend</Text>
+                  <Text style={[styles.settingDesc, { color: colors.onSurfaceVariant }]}>
+                    {backendInfo.version ? `v${backendInfo.version}` : 'unreachable'}
+                    {backendInfo.commit && backendInfo.commit !== 'local' ? ` (${String(backendInfo.commit).slice(0, 7)})` : ''}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
           <View style={{ height: insets.bottom + Spacing.xxl }} />
         </ScrollView>
       )}
