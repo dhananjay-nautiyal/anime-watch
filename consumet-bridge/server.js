@@ -11,7 +11,14 @@ app.use(express.json());
 const hianime = new ANIME.Hianime();
 const ok = res => res.json({ status: 'running', provider: 'hianime' });
 const fail = (res, code, err) => {
-  console.warn('[bridge]', code, err && err.message ? err.message : err);
+  const detail = {
+    message: err && err.message ? err.message : String(err),
+    name: err && err.name,
+    cause: err && err.cause ? String(err.cause).slice(0, 300) : undefined,
+    status: err && (err.status || err.statusCode || err.response?.status),
+    stack: err && err.stack ? String(err.stack).split('\n').slice(0, 4).join(' | ') : undefined,
+  };
+  console.warn('[bridge]', code, JSON.stringify(detail).slice(0, 600));
   res.status(502).json({ error: code, message: String((err && err.message) || err || 'upstream failed') });
 };
 
