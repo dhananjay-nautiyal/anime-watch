@@ -22,7 +22,7 @@ export default function ProfileScreen() {
   const router = useRouter()
   const colorScheme = useColorScheme()
   const colors = colorScheme === 'dark' ? DarkPalette : Palette
-  const { user, logout } = useAuth()
+  const { user, logout, isAuthenticated } = useAuth()
 
   const menuItems: MenuItem[] = [
     { icon: 'account-cog-outline', label: 'Settings', route: '/settings' },
@@ -88,13 +88,13 @@ export default function ProfileScreen() {
         </View>
 
         <PressableScale
-          onPress={handleLogout}
+          onPress={() => isAuthenticated ? handleLogout() : router.push('/login')}
           haptics
           hapticType="medium"
-          style={[styles.logoutButton, { backgroundColor: colors.errorContainer }]}
+          style={[styles.logoutButton, { backgroundColor: isAuthenticated ? colors.errorContainer : colors.primaryContainer }]}
         >
-          <MaterialCommunityIcons name="logout" size={24} color={colors.error} />
-          <Text style={[styles.logoutText, { color: colors.error }]}>Sign Out</Text>
+          <MaterialCommunityIcons name={isAuthenticated ? 'logout' : 'login'} size={24} color={isAuthenticated ? colors.error : colors.onPrimaryContainer} />
+          <Text style={[styles.logoutText, { color: isAuthenticated ? colors.error : colors.onPrimaryContainer }]}>{isAuthenticated ? 'Sign Out' : 'Sign In'}</Text>
         </PressableScale>
 
         <View style={{ height: insets.bottom + Spacing.xxl }} />

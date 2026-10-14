@@ -22,7 +22,9 @@ export default function SplashGate() {
   }
 
   if (!isAuthenticated) {
-    return <Redirect href="/login" />
+    // Guests browse freely; sign-in is only required for saving,
+    // downloading, or reviewing.
+    return <Redirect href="/(tabs)" />
   }
 
   return <Redirect href="/(tabs)" />

@@ -207,6 +207,13 @@ export default function WatchScreen() {
   }, [anime?.slug, currentEpNum])
 
   const handleDownload = useCallback(async () => {
+    if (!isAuthenticated) {
+      Alert.alert('Sign in required', 'Create an account or sign in to download episodes.', [
+        { text: 'Later', style: 'cancel' },
+        { text: 'Sign In', onPress: () => router.push('/login') },
+      ])
+      return
+    }
     if (!anime?.slug || !streamUrl) return
     if (downloadStatus === 'completed' || downloadStatus === 'downloading') {
       cancelDownload(anime.slug, currentEpNum)

@@ -213,6 +213,13 @@ export default function AnimeDetailScreen() {
 
   const handleFavAction = () => {
     if (!anime?.id) return
+    if (!isAuthenticated) {
+      Alert.alert('Sign in required', 'Create an account or sign in to save favorites.', [
+        { text: 'Later', style: 'cancel' },
+        { text: 'Sign In', onPress: () => router.push('/login') },
+      ])
+      return
+    }
     Alert.alert(isFavorited ? 'Remove from Favorites?' : 'Add to Favorites?', undefined, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Yes', onPress: () => favMutation.mutate() },
@@ -223,6 +230,13 @@ export default function AnimeDetailScreen() {
 
   const handleWatchlistAction = useCallback(async (status: string) => {
     if (!anime?.id) return
+    if (!isAuthenticated) {
+      Alert.alert('Sign in required', 'Create an account or sign in to track anime.', [
+        { text: 'Later', style: 'cancel' },
+        { text: 'Sign In', onPress: () => router.push('/login') },
+      ])
+      return
+    }
     setWatchlistLoading(true)
     try {
       if (watchlistEntry?.status === status && watchlistEntry?.id) {
@@ -500,6 +514,14 @@ export default function AnimeDetailScreen() {
           {/* Reviews */}
           <CollapsibleSection title={`Reviews (${reviewsQuery.data?.totalPages ? '...' : '0'})`} icon="star-outline">
             {/* Review Form */}
+            {!isAuthenticated && (
+              <TouchableOpacity
+                style={[sty.submitBtn, { backgroundColor: colors.primary }]}
+                onPress={() => router.push('/login')}
+              >
+                <Text style={[sty.submitText, { color: colors.onPrimary }]}>Sign in to write a review</Text>
+              </TouchableOpacity>
+            )}
             {isAuthenticated && (
               <View style={[sty.reviewForm, { backgroundColor: colors.surfaceContainerHigh, borderRadius: BorderRadius.md }]}>
                 <Text style={[sty.reviewFormTitle, { color: colors.onSurface }]}>Write a Review</Text>
