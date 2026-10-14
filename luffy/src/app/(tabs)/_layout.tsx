@@ -38,6 +38,11 @@ export default function TabLayout() {
           marginTop: 2,
         },
         tabBarHideOnKeyboard: true,
+        tabBarIcon: ({ focused, color, size }) => {
+          const set = TAB_ICONS[route.name] ?? { focused: 'circle', unfocused: 'circle-outline' }
+          const name = focused ? set.focused : set.unfocused
+          return <MaterialCommunityIcons name={name} size={size} color={color} />
+        },
       })}
     >
       <Tabs.Screen
