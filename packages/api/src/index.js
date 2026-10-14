@@ -1,4 +1,4 @@
-export { default as client, configureTokenStorage, extractErrorMessage, extractErrorCode } from './client'
+export { default as client, configureTokenStorage, extractErrorMessage, extractErrorCode, getApiBaseURL, setApiBaseURL } from './client'
 
 export * from './auth'
 export * from './anime'
