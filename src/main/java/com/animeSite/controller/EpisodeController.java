@@ -196,7 +196,7 @@ public class EpisodeController {
         if (validatedUrl != null) {
             validatedUrl = "iframe".equalsIgnoreCase(streamType)
                 ? validatedUrl
-                : toProxyUrl(validatedUrl, providerBaseUrl);
+                : toProxyUrl(validatedUrl, firstReferer(sr, providerBaseUrl));
         }
 
         if (streamType == null) streamType = "hls";
@@ -206,7 +206,7 @@ public class EpisodeController {
             .map(s -> {
                 String embedUrl = "iframe".equalsIgnoreCase(finalStreamType)
                     ? s.url
-                    : toProxyUrl(s.url, providerBaseUrl);
+                    : toProxyUrl(s.url, s.referer != null ? s.referer : providerBaseUrl);
                 return Map.<String, Object>of(
                     "url", embedUrl,
                     "label", s.label,
@@ -265,7 +265,7 @@ public class EpisodeController {
             // Skip per-server verification — ProviderResolver.resolveStream() already validated the stream
             String proxyUrl = "iframe".equalsIgnoreCase(streamType)
                 ? server.url
-                : toProxyUrl(server.url, providerBaseUrl);
+                : toProxyUrl(server.url, server.referer != null ? server.referer : providerBaseUrl);
 
             String status = "online";
             boolean verified = true;
@@ -423,6 +423,14 @@ public class EpisodeController {
             log.error("[PLAY] EXCEPTION | malId={} error='{}'", malId, e.getMessage());
             return ResponseEntity.ok(ApiResponse.error("PLAY_DATA_FAILED", "Failed to load play data"));
         }
+    }
+
+    private String firstReferer(StreamResult sr, String fallback) {
+        if (sr != null && sr.getServers() != null && !sr.getServers().isEmpty()
+                && sr.getServers().get(0).referer != null) {
+            return sr.getServers().get(0).referer;
+        }
+        return fallback;
     }
 
     private String toProxyUrl(String url, String referer) {
