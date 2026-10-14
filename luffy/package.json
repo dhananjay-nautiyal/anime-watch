@@ -1,7 +1,7 @@
 {
   "name": "luffy",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
     "@shopify/flash-list": "2.0.2",
