@@ -1,36 +1,96 @@
-# anime-watch
+<p align="center">
+  <img src="luffy/assets/images/icon.png" width="120" alt="AnimeWatch app icon" />
+</p>
 
-Legal anime info, tracking and news platform. Monorepo with a Spring Boot
-backend, a Vite + React web app, shared JS packages, and an Expo
-React Native mobile app.
+<h1 align="center">AnimeWatch</h1>
 
-| App | Folder | Stack |
-|-----|--------|-------|
-| Backend | `src/` + `pom.xml` | Spring Boot 3.2, Java 21 |
-| Web frontend | `frontend/` | Vite 4, React 18 |
-| Mobile app | `luffy/` | Expo 57, React Native 0.86 |
-| Shared web/mobile code | `packages/` (`api`, `auth`, `constants`, `hooks`, `types`, `utils`) | JS + TS types |
+<p align="center"><b>Track, watch and never miss an anime</b></p>
 
-## Prerequisites
+<p align="center">
 
-- Java 21 + Maven (backend)
-- Node 20+ + npm (frontend, mobile)
-- PostgreSQL 14+ (backend `prod`/default profile only; `dev` uses in-memory H2)
-- For mobile releases: free Expo account + `eas-cli` (see Release options)
+[![Latest release](https://img.shields.io/github/v/release/dhani748/anime-watch?style=for-the-badge&labelColor=0d1117)](https://github.com/dhani748/anime-watch/releases)
+[![Downloads](https://img.shields.io/github/downloads/dhani748/anime-watch/total?style=for-the-badge&labelColor=0d1117)](https://github.com/dhani748/anime-watch/releases)
 
-## Quick Start
+</p>
 
-### Backend (zero-config dev)
+<p align="center">
+
+[**Download**](#download) · [**Features**](#features) · [**Quick Start**](#quick-start) · [**Releases**](https://github.com/dhani748/anime-watch/releases) · [**Disclaimer**](#disclaimer)
+
+</p>
+
+> [!IMPORTANT]
+> AnimeWatch is an independent community project. It is not affiliated with,
+> endorsed by, or connected to MyAnimeList, AniList, Jikan, or any anime
+> licensor. Streams resolve via third-party providers — availability varies.
+
+---
+
+# Features
+
+| #### Watch & Tracking - **Search, browse and watch** trending, seasonal and filtered anime. - **Episode streams & embeds** with resume and continue-watching. - **Offline downloads** on mobile with local library. - **Watchlist** (`WATCHING`, `COMPLETED`, `PLAN_TO_WATCH`) and **favorites**. - **Reviews** with 1–5 stars, one per user per anime, ownership checks. - **News feed** with admin publishing and public paginated reads. | #### Experience & Platform - **Mobile app** (Expo, Material 3, SecureStore auth, SQLite cache, push). - **Web app** (Vite + React, Tailwind, query-cached API layer). - **Shared packages** — one `@anime/api` + `@anime/auth` core for web and mobile. - **JWT auth** (access + refresh), BCrypt, `USER` / `ADMIN` roles. - **Fast API** — Ehcache 3, Guava rate limits, Postgres + H2 dev mode. - **OTA updates** — ship mobile JS fixes without a reinstall. |
+| --- | --- |
+
+---
+
+# Download
+
+<p>
+
+[![Download for Android](https://img.shields.io/badge/Download_for_Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/dhani748/anime-watch/releases/latest)
+[![Backend & Web](https://img.shields.io/badge/Backend_%26_Web-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/dhani748/anime-watch/releases/latest)
+
+</p>
+
+Grab the latest signed APK from the
+[**Releases**](https://github.com/dhani748/anime-watch/releases/latest) page.
+Sideloading needs **Install unknown apps** allowed for the browser you
+download with. Each release also ships the backend JAR and the web `dist`
+bundle as attached assets.
+
+| Artifact | File | Install |
+|----------|------|---------|
+| Android app | `animewatch-<version>.apk` | Download → tap → install |
+| Backend | `anime-backend-<version>.jar` | `java -jar` with env (see Quick Start) |
+| Web frontend | `animewatch-web-<version>.zip` | Unzip to any static host |
+
+No release published yet? Build your own APK in one command
+([details](luffy/INSTALL_MOBILE.md)):
+
+```bash
+cd luffy
+EXPO_PUBLIC_API_URL=https://<backend-host> \
+  eas build --platform android --profile preview
+```
+
+## Publishing a release (maintainer)
+
+```bash
+# 1. Build the APK (see command above), download it from the EAS link
+# 2. Build backend + web
+mvn clean package -DskipTests
+cd frontend && VITE_API_URL=https://<backend-host> npm run build && cd ..
+# 3. Publish everything to GitHub Releases
+gh release create v1.0.0 \
+  path/to/animewatch-1.0.0.apk \
+  target/anime-backend-*.jar \
+  --title "v1.0.0" --notes "See README for install steps"
+```
+
+---
+
+# Quick Start
+
+## Backend (zero-config dev, H2 in-memory)
 
 ```bash
 SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
 ```
 
-Uses in-memory H2, a dev-only JWT key and no-op mail. API on
-`http://localhost:8080`, Swagger UI at
-`http://localhost:8080/swagger-ui.html`.
+API on `http://localhost:8080` ·
+Swagger at `http://localhost:8080/swagger-ui.html`.
 
-### Backend (PostgreSQL, like prod)
+## Backend (PostgreSQL, like prod)
 
 ```bash
 export DB_URL=jdbc:postgresql://localhost:5432/anime_db
@@ -41,171 +101,72 @@ export MAIL_HOST=smtp.gmail.com MAIL_PORT=587 MAIL_USERNAME=... MAIL_PASSWORD=..
 mvn spring-boot:run
 ```
 
-`.env.example` lists every variable. `prod` additionally requires a
-managed schema (`ddl-auto: validate` — no auto-migrations yet).
+Full variable list in `.env.example`. `prod` uses `ddl-auto: validate`.
 
-### Web frontend
-
-```bash
-npm install          # from repo root (workspaces)
-cd frontend
-npm run dev          # empty VITE_API_URL => Vite proxies /api to localhost:8080
-```
-
-Production build needs the backend URL:
+## Web frontend
 
 ```bash
-VITE_API_URL=https://<backend-host> npm run build
+npm install          # repo root (workspaces)
+cd frontend && npm run dev     # empty VITE_API_URL => proxies /api to :8080
+VITE_API_URL=https://<backend-host> npm run build   # production
 ```
 
-### Mobile app (dev)
+## Mobile app
 
 ```bash
-npm install          # from repo root (workspaces)
-cd luffy
-npx expo start       # scan QR with Expo Go (same Wi-Fi)
+npm install          # repo root (workspaces)
+cd luffy && npx expo start     # scan QR with Expo Go
 ```
 
-`EXPO_PUBLIC_API_URL` points the app at the backend (defaults to
-`luffy/.env.development` LAN value; override per build).
-
-## Features
-
-### Anime
-- Trending, seasonal, search and filter (Jikan API / MyAnimeList)
-- Episode lists, stream/embed resolution, resume + continue-watching
-- Ehcache 3 caching, Guava rate limiting
-
-### Auth & Users
-- JWT access + refresh flow, BCrypt, logout revocation
-- Forgot / reset password (mail when SMTP configured)
-- Roles USER / ADMIN; profile view/update, password change, delete account
-- Email-verification tokens are persisted; verify/resend endpoints are planned
-
-### Tracking & Community
-- Watchlist (`WATCHING`, `COMPLETED`, `PLAN_TO_WATCH`), favorites
-- Reviews with 1–5 stars, one per user per anime, ownership checks
-- News articles (public read with pagination, admin CRUD)
-
-### Admin & Ops
-- User list/delete, review moderation, provider health + import endpoints
-- 23-code `ErrorCode` + i18n bundle, `ApiResponse` envelope
-- 16 REST controllers under `/api/**` (auth, anime, episodes, stream proxy,
-  image proxy, reviews, watchlist, favorites, news, user, admin, import,
-  notifications, provider-health, codes, home)
-
-## API Documentation
-
-Dev profile: [Swagger UI](http://localhost:8080/swagger-ui.html)
-(docs path `/api-docs`). Disabled in `prod`.
-
-## Release options
-
-Pick what you want to ship. No Play Store / Apple account needed for A.
-
-### A. Android APK for anyone (recommended first release)
-
-Sideloadable `.apk` built in the cloud, installed from a QR/download link.
-Full steps in [`luffy/INSTALL_MOBILE.md`](luffy/INSTALL_MOBILE.md).
-
-```bash
-cd luffy
-EXPO_PUBLIC_API_URL=https://<backend-host> \
-  eas build --platform android --profile preview
-```
-
-### B. Android production (Play Store)
-
-`.aab` with production env (requires real `EXPO_PUBLIC_API_URL` —
-the `YOUR_BACKEND_URL` placeholder in `eas.json` will not work):
-
-```bash
-cd luffy
-EXPO_PUBLIC_API_URL=https://<backend-host> \
-  eas build --platform android --profile production
-```
-
-### C. iOS
-
-```bash
-cd luffy
-eas build --platform ios --profile preview   # needs Apple Developer account
-```
-
-### D. Backend Docker image
+## Backend Docker
 
 ```bash
 docker build -t anime-backend .
-docker run -p 8080:8080 \
-  -e SPRING_PROFILES_ACTIVE=prod \
-  -e DB_URL=jdbc:postgresql://<host>:5432/anime_db \
-  -e DB_USERNAME=... -e DB_PASSWORD=... \
-  -e JWT_SECRET=... \
-  -e APP_BASE_URL=... -e APP_FRONTEND_URL=... \
-  anime-backend
+docker run -p 8080:8080 -e SPRING_PROFILES_ACTIVE=prod \
+  -e DB_URL=... -e DB_USERNAME=... -e DB_PASSWORD=... -e JWT_SECRET=... \
+  -e APP_BASE_URL=... -e APP_FRONTEND_URL=... anime-backend
 ```
 
-### E. Web frontend (static hosting)
+---
 
-```bash
-cd frontend
-VITE_API_URL=https://<backend-host> npm run build   # outputs frontend/dist/
-```
-
-Deploy `frontend/dist/` to Vercel/Netlify/any static host
-(`frontend/vercel.json` already handles the SPA rewrite).
-
-### OTA updates (mobile, no reinstall)
-
-JS-only mobile changes ship over the air after any A–C install:
-
-```bash
-cd luffy
-eas update --branch preview --message "..."
-```
-
-Native changes (permissions, `app.json` plugins, SDK upgrades) need a
-fresh build from A–C.
-
-## Project Structure
+# Project Structure
 
 ```
 ├── src/main/java/com/animeSite/
-│   ├── controller/      # 16 REST controllers (Auth, Anime, Episode, Review,
-│   │                      # Watchlist, Favorite, News, User, Admin, ImportAdmin,
-│   │                      # StreamProxy, ImageProxy, Notification, ProviderHealth,
-│   │                      # Code, Home)
-│   ├── core/            # exception hierarchy, ApiResponse, audit, cache, spec, validation
-│   ├── security/        # JwtTokenProvider, JwtAuthenticationFilter
-│   ├── service/         # interfaces + impl (incl. EmailServiceImpl)
-│   ├── persist/         # JPA entities (+ EmailVerificationToken, RefreshToken, ...)
-│   ├── repo/            # Spring Data repositories
+│   ├── controller/      # 16 REST controllers (auth, anime, episodes, stream,
+│   │                      # image-proxy, reviews, watchlist, favorites, news,
+│   │                      # user, admin, import, notifications, health, codes, home)
+│   ├── core/            # exceptions, ApiResponse envelope, audit, cache, specs
+│   ├── security/        # JWT provider + filter
+│   ├── service/         # business logic (auth, anime, reviews, mail, ...)
+│   ├── persist/ + repo/ # JPA entities + repositories
 │   ├── httpclient/      # Jikan + provider clients
-│   ├── pipeline/        # provider priority, diagnostics, recovery
-│   └── config/          # SecurityConfig, AppConfig (RestTemplates), OpenApiConfig
-├── src/main/resources/  # application.yml (+ -dev H2 / -prod Postgres), ehcache.xml
-├── frontend/src/        # pages, components, api shims, storage, hooks
-├── luffy/src/           # expo-router app, services, storage (SecureStore)
+│   └── pipeline/        # provider priority, diagnostics, recovery
+├── frontend/src/        # pages, components, api shims, storage
+├── luffy/src/           # expo-router app, services, SecureStore storage
 ├── packages/            # @anime/api, auth, constants, hooks, types, utils
-├── scripts/             # verify_playback.py (API smoke test)
-├── Dockerfile           # backend prod image (Temurin 21, profile prod)
-└── anime-api-test.http  # manual endpoint tests
+└── scripts/             # API smoke test
 ```
-
-## Tech Stack
 
 | Component | Technology |
 |-----------|-----------|
-| Framework | Spring Boot 3.2 |
-| Language | Java 21 |
-| Database | PostgreSQL 14+ (prod/default); H2 in-memory (dev) |
-| ORM | JPA / Hibernate (`update` dev, `validate` prod) |
+| Backend | Spring Boot 3.2, Java 21, PostgreSQL 14+ (H2 in dev) |
+| Web | Vite 4, React 18, React Router 7, TanStack Query |
+| Mobile | Expo 57, React Native 0.86, expo-router |
 | Auth | JWT (jjwt 0.12) + Spring Security, BCrypt |
-| API Docs | Springdoc OpenAPI 2.3 |
-| Caching | Ehcache 3 (JCache) |
-| External API | Jikan API v4 (MyAnimeList) + provider scrapers |
-| Email | Spring Mail (SMTP, async, no-op when unconfigured) |
-| Web | Vite 4 + React 18 + React Router 7 + TanStack Query |
-| Mobile | Expo 57 + expo-router + SecureStore + SQLite |
-| Builds | Maven (backend), npm workspaces (frontend/mobile), EAS (mobile binaries) |
-| Container | Docker (Eclipse Temurin 21) |
+
+---
+
+# Disclaimer
+
+AnimeWatch is a community client for browsing public anime metadata (via
+Jikan / MyAnimeList) and user-curated tracking. It hosts no media itself.
+You are responsible for complying with your local laws and each provider's
+terms of use.
+
+---
+
+# License
+
+No license file is published yet — add one (e.g. MIT / GPL-3.0) to define
+reuse terms.
