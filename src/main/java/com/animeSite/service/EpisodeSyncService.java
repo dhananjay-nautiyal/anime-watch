@@ -3,6 +3,8 @@ package com.animeSite.service;
 import com.animeSite.httpclient.JikanApiClient;
 import com.animeSite.httpclient.TitleNormalizer;
 import com.animeSite.model.JikanAnimeData;
+import com.animeSite.model.JikanEpisodeData;
+import com.animeSite.model.JikanEpisodeListResponse;
 import com.animeSite.model.JikanSingleResponse;
 import com.animeSite.persist.Anime;
 import com.animeSite.persist.AnimeProviderCache;
@@ -128,6 +130,14 @@ public class EpisodeSyncService {
             SyncResult recoveryResult = attemptRecovery(malId, anime, failures, altTitles, jikanData, start);
             if (recoveryResult != null) {
                 return recoveryResult;
+            }
+
+            // Last resort: Jikan episode list (titles/numbers, no stream URLs).
+            // Providers are routinely unreachable from datacenter IPs, but the
+            // episode LIST, counts and continue-watching still work from Jikan.
+            SyncResult jikanFallback = attemptJikanFallback(malId, start);
+            if (jikanFallback != null) {
+                return jikanFallback;
             }
 
             long elapsed = System.currentTimeMillis() - start;
@@ -320,6 +330,75 @@ public class EpisodeSyncService {
         return null;
     }
 
+    /**
+     * Jikan episode-list fallback. Jikan's /anime/{id}/episodes returns titles
+     * in order but no per-episode numbers, so number = (page-1)*100 + index+1.
+     * Shells carry no stream URLs: lists/counts work, playback stays honest
+     * about being unavailable (cache streamable=false).
+     */
+    private SyncResult attemptJikanFallback(int malId, long start) {
+        try {
+            log.info("[SYNC_SERVICE] JIKAN_FALLBACK_START | malId={}", malId);
+            List<Episode> shells = new ArrayList<>();
+            int page = 1;
+            for (int p = 0; p < 20; p++) {
+                JikanEpisodeListResponse resp;
+                try {
+                    resp = jikanApiClient.fetchAnimeEpisodes(malId, page);
+                } catch (Exception e) {
+                    log.warn("[SYNC_SERVICE] JIKAN_FALLBACK_PAGE_FAILED | malId={} page={} error='{}'", malId, page, e.getMessage());
+                    break;
+                }
+                if (resp == null || resp.getData() == null || resp.getData().isEmpty()) break;
+                int base = (page - 1) * 100;
+                for (int i = 0; i < resp.getData().size(); i++) {
+                    JikanEpisodeData d = resp.getData().get(i);
+                    Episode ep = new Episode();
+                    ep.setAnimeMalId(malId);
+                    ep.setEpisodeNumber(base + i + 1);
+                    ep.setTitle(d.getTitle() != null && !d.getTitle().isBlank() ? d.getTitle() : "Episode " + (base + i + 1));
+                    shells.add(ep);
+                }
+                if (resp.getPagination() == null || !resp.getPagination().isHasNextPage()) break;
+                page++;
+            }
+            if (shells.isEmpty()) {
+                log.warn("[SYNC_SERVICE] JIKAN_FALLBACK_EMPTY | malId={}", malId);
+                return null;
+            }
+            episodeRepository.deleteByAnimeMalId(malId);
+            episodeRepository.flush();
+            episodeRepository.saveAll(shells);
+            episodeRepository.flush();
+
+            try {
+                Optional<AnimeProviderCache> existing = cacheRepository.findByMalId(malId);
+                AnimeProviderCache cache = existing.orElseGet(() -> {
+                    AnimeProviderCache c = new AnimeProviderCache();
+                    c.setMalId(malId);
+                    return c;
+                });
+                cache.setProvider("jikan");
+                cache.setEpisodeCount(shells.size());
+                cache.setStreamable(false);
+                cache.setValidated(true);
+                cache.setPreferredProvider("jikan");
+                cache.setFailureCount(0);
+                cache.setExpiresAt(Instant.now().plusSeconds(86400));
+                cacheRepository.save(cache);
+            } catch (Exception e) {
+                log.warn("[SYNC_SERVICE] JIKAN_FALLBACK_CACHE_FAILED | malId={} error='{}'", malId, e.getMessage());
+            }
+
+            long elapsed = System.currentTimeMillis() - start;
+            log.info("[SYNC_SERVICE] JIKAN_FALLBACK_SAVED | malId={} count={} duration={}ms", malId, shells.size(), elapsed);
+            return SyncResult.episodeListOnly("jikan", shells.size(), shells, elapsed);
+        } catch (Exception e) {
+            log.warn("[SYNC_SERVICE] JIKAN_FALLBACK_FAILED | malId={} error='{}'", malId, e.getMessage());
+            return null;
+        }
+    }
+
     protected SyncResult saveEpisodes(int malId, List<Episode> validEpisodes, String providerName, JikanAnimeData jikanData) {
         if (validEpisodes == null || validEpisodes.isEmpty()) {
             log.warn("[SYNC_SERVICE] SAVE: no valid episodes | malId={}", malId);
@@ -463,6 +542,7 @@ public class EpisodeSyncService {
                               List<Episode> episodes, List<Map<String, Object>> providerFailures, long durationMs) {
         public boolean isSuccess() { return "SUCCESS".equals(status); }
         public boolean isComingSoon() { return "COMING_SOON".equals(status); }
+        public boolean isEpisodeListOnly() { return "JIKAN_FALLBACK".equals(status); }
         public boolean isTemporaryFailure() { return "TEMPORARY_FAILURE".equals(status); }
         public boolean isUnavailable() { return !isSuccess() && !isComingSoon() && !isTemporaryFailure(); }
         public boolean hasFailed() { return !isSuccess() && !isComingSoon(); }
@@ -487,6 +567,9 @@ public class EpisodeSyncService {
         }
         public static SyncResult comingSoon(Anime anime, long durationMs) {
             return new SyncResult("COMING_SOON", "This anime has not aired yet.", null, 0, List.of(), List.of(), durationMs);
+        }
+        public static SyncResult episodeListOnly(String provider, int count, List<Episode> episodes, long durationMs) {
+            return new SyncResult("JIKAN_FALLBACK", "Episode list only: no playable streams currently available.", provider, count, episodes, List.of(), durationMs);
         }
         public static SyncResult temporaryFailure(String message, long durationMs) {
             return new SyncResult("TEMPORARY_FAILURE", message, null, 0, List.of(), List.of(), durationMs);
