@@ -26,4 +26,16 @@ public class HomeController {
                 "status", "running"
         )));
     }
+
+    @GetMapping("/api/app/version")
+    @Operation(summary = "Deployed build info", description = "Returns the exact git commit baked into this image, so deploys are verifiable without guessing.")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> version() {
+        String commit = System.getenv().getOrDefault("RENDER_GIT_COMMIT", "local");
+        return ResponseEntity.ok(ApiResponse.success(Map.of(
+                "application", appName,
+                "version", "1.0.0",
+                "commit", commit,
+                "status", "running"
+        )));
+    }
 }
