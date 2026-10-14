@@ -1,6 +1,9 @@
 {
   "name": "anime-watch",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "workspaces": [
     "packages/*",
     "frontend",
