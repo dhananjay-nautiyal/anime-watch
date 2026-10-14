@@ -58,8 +58,13 @@ app:
   base-url: ${APP_BASE_URL}
   frontend-url: ${APP_FRONTEND_URL}
 
+  consumet:
+    # Self-hosted Consumet bridge (see consumet-bridge/). Blank = disabled,
+    # other providers still run.
+    base-url: ${CONSUMET_BASE_URL:}
+
   providers:
-    priority: ${PROVIDER_PRIORITY:AnimeSuge,Anineko,GoGoAnime}
+    priority: ${PROVIDER_PRIORITY:Consumet,AnimeSuge,Anineko,GoGoAnime}
     disabled: ${PROVIDER_DISABLED:}
     cache-ttl-seconds: ${PROVIDER_CACHE_TTL:86400}
     failure-cache-ttl-seconds: ${PROVIDER_FAILURE_CACHE_TTL:300}

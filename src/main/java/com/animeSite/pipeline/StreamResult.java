@@ -35,13 +35,23 @@ public class StreamResult {
         public final String url;
         public final String label;
         public final boolean isBackup;
+        public final String referer;
 
         public ServerOption(String url, String label, boolean isBackup) {
-            this.url = url;
-            this.label = label;
-            this.isBackup = isBackup;
+            this(url, label, isBackup, null);
         }
 
         public ServerOption(String url, String label) { this(url, label, false); }
+
+        public ServerOption(String url, String label, String referer) {
+            this(url, label, false, referer);
+        }
+
+        public ServerOption(String url, String label, boolean isBackup, String referer) {
+            this.url = url;
+            this.label = label;
+            this.isBackup = isBackup;
+            this.referer = referer;
+        }
     }
 }
