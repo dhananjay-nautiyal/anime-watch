@@ -12,8 +12,20 @@ spring:
     console:
       enabled: true
       path: /h2-console
+  # Dev sends no mail: blank username makes EmailServiceImpl a stdout no-op.
+  mail:
+    host: localhost
+    port: 1025
+    username:
+    password:
 
 jwt:
-  secret: dev-secret-key-change-in-production-123456789
+  # DEV ONLY. A real Base64 256-bit key so the dev profile boots with zero
+  # config. NEVER copy this into prod — set JWT_SECRET env (openssl rand -base64 32).
+  secret: MQjEYEY3IMmZlGd58pAs2HDwMT+hhB3Bhpg4oh4RiJw=
   expiration-ms: 86400000
   refresh-expiration-ms: 604800000
+
+app:
+  base-url: http://localhost:8080
+  frontend-url: http://localhost:5173
