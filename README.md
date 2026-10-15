@@ -10,6 +10,7 @@
 
 [![Latest release](https://img.shields.io/github/v/release/dhani748/anime-watch?style=for-the-badge&labelColor=0d1117)](https://github.com/dhani748/anime-watch/releases)
 [![Downloads](https://img.shields.io/github/downloads/dhani748/anime-watch/total?style=for-the-badge&labelColor=0d1117)](https://github.com/dhani748/anime-watch/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green?style=for-the-badge&labelColor=0d1117)](LICENSE)
 
 </p>
 
@@ -24,12 +25,29 @@
 > endorsed by, or connected to MyAnimeList, AniList, Jikan, or any anime
 > licensor. Streams resolve via third-party providers — availability varies.
 
+<!--
+## Screenshots
+
+Drop images into `docs/screenshots/` and remove these comment tags.
+
+| Mobile app | Web app |
+| --- | --- |
+| ![Mobile home](docs/screenshots/mobile-home.png) | ![Web home](docs/screenshots/web-home.png) |
+| ![Player](docs/screenshots/mobile-player.png) | ![Watchlist](docs/screenshots/web-watchlist.png) |
+-->
+
 ---
 
 # Features
 
-| #### Watch & Tracking - **Search, browse and watch** trending, seasonal and filtered anime. - **Episode streams & embeds** with resume and continue-watching. - **Offline downloads** on mobile with local library. - **Watchlist** (`WATCHING`, `COMPLETED`, `PLAN_TO_WATCH`) and **favorites**. - **Reviews** with 1–5 stars, one per user per anime, ownership checks. - **News feed** with admin publishing and public paginated reads. | #### Experience & Platform - **Mobile app** (Expo, Material 3, SecureStore auth, SQLite cache, push). - **Web app** (Vite + React, Tailwind, query-cached API layer). - **Shared packages** — one `@anime/api` + `@anime/auth` core for web and mobile. - **JWT auth** (access + refresh), BCrypt, `USER` / `ADMIN` roles. - **Fast API** — Ehcache 3, Guava rate limits, Postgres + H2 dev mode. - **OTA updates** — ship mobile JS fixes without a reinstall. |
+| #### Watch & Tracking | #### Experience & Platform |
 | --- | --- |
+| **Search, browse & watch** trending, seasonal and filtered anime. | **Mobile app** (Expo, Material 3, SecureStore auth, SQLite cache, push). |
+| **Episode streams & embeds** with resume and continue-watching. | **Web app** (Vite + React, Tailwind, query-cached API layer). |
+| **Offline downloads** on mobile with a local library. | **Shared packages** — one `@anime/api` + `@anime/auth` core for web and mobile. |
+| **Watchlist** (`WATCHING`, `COMPLETED`, `PLAN_TO_WATCH`) and favorites. | **JWT auth** (access + refresh), BCrypt, `USER` / `ADMIN` roles. |
+| **Reviews** with 1–5 stars, one per user per anime, ownership checks. | **Fast API** — Ehcache 3, Guava rate limits, Postgres + H2 dev mode. |
+| **News feed** with admin publishing and public paginated reads. | **OTA updates** — ship mobile JS fixes without a reinstall. |
 
 ---
 
@@ -168,5 +186,4 @@ terms of use.
 
 # License
 
-No license file is published yet — add one (e.g. MIT / GPL-3.0) to define
-reuse terms.
+Released under the [MIT License](LICENSE).
