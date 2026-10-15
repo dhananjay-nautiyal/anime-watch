@@ -116,12 +116,13 @@ export default function HomeScreen() {
   const colors = colorScheme === 'dark' ? DarkPalette : Palette
   const { isAuthenticated } = useAuth()
 
-  const { data: homeData, isLoading, isRefetching, refetch } = useQuery<HomeData>({
+  const { data: homeData, isLoading, isFetching, isError, isRefetching, refetch } = useQuery<HomeData>({
     queryKey: ['home', 'batch'],
     queryFn: ({ signal }) => getHomePage(signal),
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
-    retry: 1,
+    // Render free tier sleeps: first wake can exceed one 25s client timeout.
+    retry: 2,
   })
 
   const { data: continueData } = useQuery<ContinueItem[]>({
@@ -363,6 +364,21 @@ export default function HomeScreen() {
           <Text style={[styles.appTitle, { color: colors.onSurface }]}>AnimeWatch</Text>
         </View>
         <HomeSkeleton colors={colors} />
+      </View>
+    )
+  }
+
+  if (isError && !homeData) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.headerContainer, { paddingTop: insets.top + Spacing.md }]}>
+          <Text style={[styles.greeting, { color: colors.onSurfaceVariant }]}>Welcome back</Text>
+          <Text style={[styles.appTitle, { color: colors.onSurface }]}>AnimeWatch</Text>
+        </View>
+        <ErrorView
+          message={isFetching ? 'Waking up the server…' : 'Could not load home. Check your connection.'}
+          onRetry={() => refetch()}
+        />
       </View>
     )
   }
