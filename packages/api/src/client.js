@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 // NOTE: this file must stay free of `import.meta`. Metro/Hermes cannot
-// parse that syntax, so a single occurrence crashes every luffy screen
+// parse that syntax, so a single occurrence crashes every mobile screen
 // that imports `@anime/api` at bundle load. Expo inlines
 // `process.env.EXPO_PUBLIC_*` at build time, so native reads its URL
 // from `process.env` here. Web (Vite) injects its URL via

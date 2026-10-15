@@ -1,5 +1,5 @@
 {
-  "name": "luffy",
+  "name": "animewatch-mobile",
   "main": "expo-router/entry",
   "version": "1.0.1",
   "dependencies": {
