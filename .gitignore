@@ -27,13 +27,13 @@ cache-data/
 # dependencies (monorepo: root + workspaces)
 node_modules/
 frontend/node_modules/
-luffy/node_modules/
+mobile/node_modules/
 packages/*/node_modules/
 
 # build output (never commit)
 dist/
 frontend/dist/
-luffy/dist/
+mobile/dist/
 build/
 .expo/
 expo-env.d.ts

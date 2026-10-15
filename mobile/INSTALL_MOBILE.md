@@ -15,7 +15,7 @@ cloud build. The preview profile produces a plain `.apk` for sideloading
 ## Build a shareable APK
 
 ```bash
-cd luffy
+cd mobile
 # Replace the URL with your real backend:
 EXPO_PUBLIC_API_URL=https://anime-backend.onrender.com \
   eas build --platform android --profile preview
@@ -45,7 +45,7 @@ Notes:
 installed, JS-only changes ship with:
 
 ```bash
-cd luffy
+cd mobile
 eas update --branch preview --message "fix: ..."
 ```
 

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="luffy/assets/images/icon.png" width="120" alt="AnimeWatch app icon" />
+  <img src="mobile/assets/images/icon.png" width="120" alt="AnimeWatch app icon" />
 </p>
 
 <h1 align="center">AnimeWatch</h1>
@@ -72,10 +72,10 @@ bundle as attached assets.
 | Web frontend | `animewatch-web-<version>.zip` | Unzip to any static host |
 
 No release published yet? Build your own APK in one command
-([details](luffy/INSTALL_MOBILE.md)):
+([details](mobile/INSTALL_MOBILE.md)):
 
 ```bash
-cd luffy
+cd mobile
 EXPO_PUBLIC_API_URL=https://<backend-host> \
   eas build --platform android --profile preview
 ```
@@ -132,7 +132,7 @@ VITE_API_URL=https://<backend-host> npm run build   # production
 
 ```bash
 npm install          # repo root (workspaces)
-cd luffy && npx expo start     # scan QR with Expo Go
+cd mobile && npx expo start     # scan QR with Expo Go
 ```
 
 ## Backend Docker
@@ -160,7 +160,7 @@ docker run -p 8080:8080 -e SPRING_PROFILES_ACTIVE=prod \
 │   ├── httpclient/      # Jikan + provider clients
 │   └── pipeline/        # provider priority, diagnostics, recovery
 ├── frontend/src/        # pages, components, api shims, storage
-├── luffy/src/           # expo-router app, services, SecureStore storage
+├── mobile/src/          # expo-router app, services, SecureStore storage
 ├── packages/            # @anime/api, auth, constants, hooks, types, utils
 └── scripts/             # API smoke test
 ```
