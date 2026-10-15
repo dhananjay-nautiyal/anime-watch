@@ -16,7 +16,7 @@
 
 <p align="center">
 
-[**Download**](#download) · [**Features**](#features) · [**Quick Start**](#quick-start) · [**Releases**](https://github.com/dhani748/anime-watch/releases) · [**Disclaimer**](#disclaimer)
+[**Screenshots**](#screenshots) · [**Download**](#download) · [**Features**](#features) · [**Quick Start**](#quick-start) · [**Releases**](https://github.com/dhani748/anime-watch/releases) · [**Disclaimer**](#disclaimer)
 
 </p>
 
@@ -25,16 +25,15 @@
 > endorsed by, or connected to MyAnimeList, AniList, Jikan, or any anime
 > licensor. Streams resolve via third-party providers — availability varies.
 
-<!--
 ## Screenshots
 
-Drop images into `docs/screenshots/` and remove these comment tags.
-
-| Mobile app | Web app |
+| Home | Browse |
 | --- | --- |
-| ![Mobile home](docs/screenshots/mobile-home.png) | ![Web home](docs/screenshots/web-home.png) |
-| ![Player](docs/screenshots/mobile-player.png) | ![Watchlist](docs/screenshots/web-watchlist.png) |
--->
+| ![AnimeWatch home — hero, trending carousel](docs/screenshots/web-home.webp) | ![Browse anime — filters and poster grid](docs/screenshots/web-browse.webp) |
+
+| Anime detail |
+| --- |
+| ![Anime detail — poster, metadata, watch action](docs/screenshots/web-detail.webp) |
 
 ---
 
