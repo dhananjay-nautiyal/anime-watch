@@ -242,8 +242,28 @@ export default function WatchScreen() {
     }).catch(() => setDownloadStatus(null))
   }, [anime?.slug, currentEpNum])
 
-  const handleDownload = useCallback(async () => {
-    if (!isAuthenticated) {
+  // Open the current stream in an external player (VLC/MX). No new native
+  // deps: ACTION_VIEW intent on Android, plain link elsewhere.
+  const handleExternalPlayer = useCallback(async () => {
+    if (!streamUrl) return
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    try {
+      if (Platform.OS === 'android') {
+        const { startActivityAsync } = await import('expo-intent-launcher')
+        await startActivityAsync('android.intent.action.VIEW', {
+          data: streamUrl,
+          type: 'video/*',
+        })
+      } else {
+        const { openURL } = await import('expo-linking')
+        await openURL(streamUrl)
+      }
+    } catch {
+      Alert.alert('No player found', 'Install VLC or MX Player to play externally.')
+    }
+  }, [streamUrl])
+
+  const handleDownload = useCallback(async () => {    if (!isAuthenticated) {
       Alert.alert('Sign in required', 'Create an account or sign in to download episodes.', [
         { text: 'Later', style: 'cancel' },
         { text: 'Sign In', onPress: () => router.push('/login') },
@@ -774,6 +794,11 @@ export default function WatchScreen() {
             </View>
           </View>
           <View style={sty.infoBarRight}>
+            {streamUrl ? (
+              <TouchableOpacity onPress={handleExternalPlayer} style={sty.epListBtn} accessibilityLabel="Open in external player">
+                <MaterialCommunityIcons name="open-in-new" size={24} color={colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity onPress={handleDownload} style={sty.epListBtn}>
               <MaterialCommunityIcons
                 name={
