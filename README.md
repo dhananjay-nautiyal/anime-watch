@@ -7,6 +7,12 @@
 <p align="center"><b>Track, watch and never miss an anime</b></p>
 
 <p align="center">
+  <a href="https://anime-watch-theta.vercel.app">
+    <img src="https://img.shields.io/badge/Try_it-Live_demo-8A2BE2?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Try the live demo in your browser" />
+  </a>
+</p>
+
+<p align="center">
 
 [![Latest release](https://img.shields.io/github/v/release/dhani748/anime-watch?style=for-the-badge&labelColor=0d1117)](https://github.com/dhani748/anime-watch/releases)
 [![Downloads](https://img.shields.io/github/downloads/dhani748/anime-watch/total?style=for-the-badge&labelColor=0d1117)](https://github.com/dhani748/anime-watch/releases)
@@ -16,7 +22,7 @@
 
 <p align="center">
 
-[**Screenshots**](#screenshots) · [**Download**](#download) · [**Features**](#features) · [**Quick Start**](#quick-start) · [**Releases**](https://github.com/dhani748/anime-watch/releases) · [**Disclaimer**](#disclaimer)
+[**Live Demo**](https://anime-watch-theta.vercel.app) · [**Screenshots**](#screenshots) · [**Download**](#download) · [**Features**](#features) · [**Quick Start**](#quick-start) · [**Releases**](https://github.com/dhani748/anime-watch/releases) · [**Disclaimer**](#disclaimer)
 
 </p>
 
@@ -58,6 +64,10 @@
 [![Backend & Web](https://img.shields.io/badge/Backend_%26_Web-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/dhani748/anime-watch/releases/latest)
 
 </p>
+
+> [!TIP]
+> Just want to try it? The **web app runs entirely in your browser** —
+> no APK, no install: <https://anime-watch-theta.vercel.app>
 
 Grab the latest signed APK from the
 [**Releases**](https://github.com/dhani748/anime-watch/releases/latest) page.
