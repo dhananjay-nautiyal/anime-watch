@@ -1,0 +1,70 @@
+name: Bug report
+description: Something is broken — report it here
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! The more detail you give,
+        the faster it can be fixed.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does it happen?
+      options:
+        - Android app
+        - Web app
+        - Backend / API
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Clear description of the problem.
+      placeholder: The watchlist silently resets after reopening the app…
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exactly what you did, in order.
+      placeholder: |
+        1. Open the app and sign in
+        2. Add an anime to the watchlist
+        3. Force-close and reopen the app
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: App version, device/OS or browser, backend URL if self-hosted.
+      placeholder: |
+        App: v1.0.1 (APK from Releases)
+        Device: Pixel 7, Android 14
+        Browser: Firefox 128 (if web)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Console output, logcat, error messages, or a screen recording.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
