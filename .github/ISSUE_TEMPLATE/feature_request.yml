@@ -1,0 +1,50 @@
+name: Feature request
+description: Suggest an idea or improvement for AnimeWatch
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas welcome! Describe the problem you're trying to solve — that
+        matters more than the proposed solution.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: The pain point or use case, not the feature itself.
+      placeholder: I can't tell which anime in my watchlist has new episodes…
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to happen?
+      placeholder: A badge on watchlist entries with unwatched episode counts.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Other approaches or workarounds you currently use.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where would this live?
+      options:
+        - Android app
+        - Web app
+        - Backend / API
+        - All of them
+        - Not sure
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+        - label: I'd be willing to help implement this
