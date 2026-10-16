@@ -14,15 +14,15 @@
 
 <p align="center">
 
-[![Latest release](https://img.shields.io/github/v/release/dhani748/anime-watch?style=for-the-badge&labelColor=0d1117)](https://github.com/dhani748/anime-watch/releases)
-[![Downloads](https://img.shields.io/github/downloads/dhani748/anime-watch/total?style=for-the-badge&labelColor=0d1117)](https://github.com/dhani748/anime-watch/releases)
+[![Latest release](https://img.shields.io/github/v/release/dhananjay-nautiyal/anime-watch?style=for-the-badge&labelColor=0d1117)](https://github.com/dhananjay-nautiyal/anime-watch/releases)
+[![Downloads](https://img.shields.io/github/downloads/dhananjay-nautiyal/anime-watch/total?style=for-the-badge&labelColor=0d1117)](https://github.com/dhananjay-nautiyal/anime-watch/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green?style=for-the-badge&labelColor=0d1117)](LICENSE)
 
 </p>
 
 <p align="center">
 
-[**Live Demo**](https://anime-watch-theta.vercel.app) · [**Screenshots**](#screenshots) · [**Download**](#download) · [**Features**](#features) · [**Quick Start**](#quick-start) · [**Releases**](https://github.com/dhani748/anime-watch/releases) · [**Disclaimer**](#disclaimer)
+[**Live Demo**](https://anime-watch-theta.vercel.app) · [**Screenshots**](#screenshots) · [**Download**](#download) · [**Features**](#features) · [**Quick Start**](#quick-start) · [**Releases**](https://github.com/dhananjay-nautiyal/anime-watch/releases) · [**Disclaimer**](#disclaimer)
 
 </p>
 
@@ -60,8 +60,8 @@
 
 <p>
 
-[![Download for Android](https://img.shields.io/badge/Download_for_Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/dhani748/anime-watch/releases/latest)
-[![Backend & Web](https://img.shields.io/badge/Backend_%26_Web-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/dhani748/anime-watch/releases/latest)
+[![Download for Android](https://img.shields.io/badge/Download_for_Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/dhananjay-nautiyal/anime-watch/releases/latest)
+[![Backend & Web](https://img.shields.io/badge/Backend_%26_Web-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/dhananjay-nautiyal/anime-watch/releases/latest)
 
 </p>
 
@@ -70,7 +70,7 @@
 > no APK, no install: <https://anime-watch-theta.vercel.app>
 
 Grab the latest signed APK from the
-[**Releases**](https://github.com/dhani748/anime-watch/releases/latest) page.
+[**Releases**](https://github.com/dhananjay-nautiyal/anime-watch/releases/latest) page.
 Sideloading needs **Install unknown apps** allowed for the browser you
 download with. Each release also ships the backend JAR and the web `dist`
 bundle as attached assets.

@@ -17,7 +17,7 @@ every fix, feature and doc improvement helps.
 ## Getting started
 
 ```bash
-git clone https://github.com/dhani748/anime-watch.git
+git clone https://github.com/dhananjay-nautiyal/anime-watch.git
 cd anime-watch
 npm install                 # installs all workspaces
 ```
@@ -84,5 +84,5 @@ Crashes with a stack trace or screen recording are much easier to fix.
 
 ## Good first issues
 
-Look for the [`good first issue`](https://github.com/dhani748/anime-watch/labels/good%20first%20issue)
+Look for the [`good first issue`](https://github.com/dhananjay-nautiyal/anime-watch/labels/good%20first%20issue)
 label — these are scoped, self-contained and a friendly way to start.
