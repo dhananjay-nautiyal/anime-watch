@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Constants from 'expo-constants'
 
-const OWNER = 'dhani748'
+const OWNER = 'dhananjay-nautiyal'
 const REPO = 'anime-watch'
 
 export interface UpdateInfo {
