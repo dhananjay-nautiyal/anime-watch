@@ -127,6 +127,18 @@ export default function WatchScreen() {
     [episodes, currentEpNum],
   )
 
+  // Fetch play data (declared before the effects below: their dep arrays
+  // read playDataQuery during render, so it must exist first).
+  const resolvedMalId = anime?.malId || anime?.id
+
+  const playDataQuery = useQuery({
+    queryKey: ['play', resolvedMalId, currentEpisode?.embedUrl || currentEpNum],
+    queryFn: ({ signal }) => getEpisodePlayData(resolvedMalId!, currentEpisode?.embedUrl || '', signal),
+    enabled: !!resolvedMalId && !!currentEpisode?.embedUrl,
+    staleTime: 120000,
+    retry: 2,
+  })
+
   // Auto-sync when the list is empty: the DB only fills via sync, and nothing
   // else triggers it. One attempt per screen mount, then honest states below.
   const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'failed'>('idle')
@@ -162,17 +174,6 @@ export default function WatchScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [episodesQuery.isLoading, episodesQuery.isFetching, syncState, currentEpisode, playDataQuery.isLoading, playDataQuery.isFetching, playDataQuery.data])
-
-  // Fetch play data
-  const resolvedMalId = anime?.malId || anime?.id
-
-  const playDataQuery = useQuery({
-    queryKey: ['play', resolvedMalId, currentEpisode?.embedUrl || currentEpNum],
-    queryFn: ({ signal }) => getEpisodePlayData(resolvedMalId!, currentEpisode?.embedUrl || '', signal),
-    enabled: !!resolvedMalId && !!currentEpisode?.embedUrl,
-    staleTime: 120000,
-    retry: 2,
-  })
 
   // Process play data
   useEffect(() => {
