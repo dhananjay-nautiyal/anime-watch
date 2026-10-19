@@ -33,6 +33,13 @@ public class ConsumetStreamProvider implements StreamProvider {
     public String getName() { return "Consumet"; }
 
     @Override
+    public boolean healthCheck() {
+        // A blank CONSUMET_BASE_URL means the bridge is intentionally off, not
+        // broken — but it can serve no episodes either way.
+        return client.isConfigured();
+    }
+
+    @Override
     public boolean validate(String episodeUrl) {
         return episodeUrl != null && !episodeUrl.isBlank();
     }

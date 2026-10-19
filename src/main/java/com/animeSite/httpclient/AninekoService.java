@@ -46,6 +46,24 @@ public class AninekoService implements StreamProvider {
     @Override
     public String getName() { return "Anineko"; }
 
+    /**
+     * The site returns HTTP 200 with a PHP stack trace when its own database is
+     * down, so a status-code check is not enough. Treat that page (and a
+     * Cloudflare challenge) as unhealthy.
+     */
+    @Override
+    public boolean healthCheck() {
+        try {
+            String body = fetchWithLogging(BASE_URL + "/", "HEALTH", MAX_RETRIES);
+            if (body == null || body.isBlank()) return false;
+            return !body.contains("SQLSTATE")
+                && !body.contains("Connection refused")
+                && !body.contains("cf-browser-verification");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private String fetchWithLogging(String url, String context) {
         return fetchWithLogging(url, context, 0);
     }
@@ -162,7 +180,9 @@ public class AninekoService implements StreamProvider {
         try {
             Thread.sleep(400);
             String url = JIKAN_BASE + "/anime/" + malId;
-            String json = fetchWithLogging(url, "JIKAN_LOOKUP");
+            // Jikan is metadata-only; never spend retries on it (the slug list still
+            // works without it, and a dead Jikan used to cost ~45s per provider).
+            String json = fetchWithLogging(url, "JIKAN_LOOKUP", MAX_RETRIES);
             if (json == null) return null;
             return objectMapper.readTree(json).get("data");
         } catch (Exception e) {

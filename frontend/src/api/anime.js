@@ -44,7 +44,10 @@ export const getEpisodes = (malId, signal) =>
 
 export const syncEpisodes = (malId) => {
   console.log('[Sync] Request body: null (malId in URL path: ' + malId + ')')
-  return client.post(`/api/anime/${malId}/episodes/sync`, null, { timeout: 60000 }).then((res) => {
+  // Sync walks every provider server-side; keep the client timeout above the
+  // server's provider budget (app.providers.sync-budget-ms, default 30s) so the
+  // browser never aborts a request the backend is still working on.
+  return client.post(`/api/anime/${malId}/episodes/sync`, null, { timeout: 120000 }).then((res) => {
     console.log('[Sync] Response:', res.data)
     const body = res.data
     if (!body?.success) {
@@ -53,7 +56,9 @@ export const syncEpisodes = (malId) => {
       err.data = body?.data
       throw err
     }
-    return body.data ?? []
+    // The sync endpoint returns a flat payload ({episodes: [...]}), while other
+    // endpoints wrap their body in {data}. Accept both.
+    return body.data ?? body.episodes ?? []
   }).catch((err) => {
     if (err.errorCode || err.response?.data?.message) {
       const enhanced = err.errorCode ? err : (() => {
