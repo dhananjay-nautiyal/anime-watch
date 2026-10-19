@@ -48,6 +48,10 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
+                // Destructive/bulk episode maintenance must not be reachable anonymously.
+                // These specific rules have to precede the blanket /api/anime/** permitAll.
+                .requestMatchers(HttpMethod.POST, "/api/anime/episodes/sync-all").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/anime/*/episodes/clear").hasRole("ADMIN")
                 .requestMatchers("/api/anime/**").permitAll()
                 .requestMatchers("/api/image-proxy").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
