@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getAnimeById, getAnimeBySlug, getEpisodes, syncEpisodes, getEpisodeEmbed, getAnimeState, getTrending, searchAnime } from '../api/anime'
 import { getResume, saveResume } from '../api/watchHistory'
 import { extractErrorMessage } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 
 const PROXY_BASE = '/api/stream/proxy'
 
@@ -39,12 +40,20 @@ export function useEpisodes(malId) {
 
 export function useSync(malId, episodes, isLoading) {
   const qc = useQueryClient()
+  const { isAuthenticated, loading: authLoading } = useAuth()
   const attempted = useRef(false)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState(null)
 
   const doSync = useCallback(async () => {
     if (attempted.current) return
+    // Syncing is a server-side write and now requires an account. Don't fire
+    // it for guests, and don't burn the one-shot attempt so that signing in
+    // (or registering) on this page still triggers a sync.
+    if (!isAuthenticated) {
+      setError('Sign in to load episodes for this title.')
+      return
+    }
     attempted.current = true
     setSyncing(true)
     setError(null)
@@ -60,13 +69,14 @@ export function useSync(malId, episodes, isLoading) {
     } finally {
       setSyncing(false)
     }
-  }, [malId, qc])
+  }, [malId, qc, isAuthenticated])
 
   useEffect(() => {
+    if (authLoading) return
     if (episodes?.length === 0 && !isLoading && !syncing && !attempted.current) {
       doSync()
     }
-  }, [episodes, isLoading, syncing, doSync])
+  }, [episodes, isLoading, syncing, doSync, authLoading])
 
   const retry = useCallback(() => {
     attempted.current = false
