@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Hls from 'hls.js'
 import ControlsBar from './ControlsBar'
 import KeyboardShortcutsModal from './KeyboardShortcutsModal'
+import { wrapProxy } from '../../hooks/useWatch'
 
 const STORAGE = {
   volume: 'aw_volume',
@@ -243,7 +244,7 @@ export default function VideoPlayer({
     st({ buffering: true, hasPoster: !autoPlay, qualities: [], currentQuality: -1 })
 
     if (streamType === 'hls' && Hls.isSupported() && embedUrl.includes('.m3u8')) {
-      const hlsUrl = embedUrl.startsWith('/api/stream/proxy') ? embedUrl : `/api/stream/proxy?url=${encodeURIComponent(embedUrl)}&referer=https://anineko.to/`
+      const hlsUrl = wrapProxy(embedUrl, 'https://anineko.to/')
       const hls = new Hls({ enableWorker: true, lowLatencyMode: true, maxBufferLength: 30 })
       hlsRef.current = hls
       hls.loadSource(hlsUrl)
@@ -283,7 +284,7 @@ export default function VideoPlayer({
         }
       })
     } else {
-      const directSrc = embedUrl.startsWith('/api/stream/proxy') ? embedUrl : `/api/stream/proxy?url=${encodeURIComponent(embedUrl)}`
+      const directSrc = wrapProxy(embedUrl)
       v.src = directSrc
       if (autoPlay) v.play().catch(() => {})
     }

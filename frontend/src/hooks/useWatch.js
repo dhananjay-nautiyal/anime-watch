@@ -6,11 +6,19 @@ import { getResume, saveResume } from '../api/watchHistory'
 import { extractErrorMessage } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
-const PROXY_BASE = '/api/stream/proxy'
+const PROXY_PATH = '/api/stream/proxy'
 
+// The proxy lives on the backend, not the web origin. A root-relative URL
+// ("/api/stream/proxy?...") is served by Vercel's SPA rewrite to index.html,
+// which then fails as a media request. Always prefix the configured API base.
+// In dev that base is empty, so Vite's `/api` proxy still handles it.
 export function wrapProxy(url, referer) {
-  if (!url || url.startsWith(PROXY_BASE)) return url
-  return `${PROXY_BASE}?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer || 'https://anineko.to/')}`
+  if (!url) return url
+  const base = getApiBaseURL()
+  const absolute = `${base}${PROXY_PATH}`
+  if (url === absolute || url.startsWith(`${absolute}?`)) return url
+  if (url === PROXY_PATH || url.startsWith(`${PROXY_PATH}?`)) return `${base}${url}`
+  return `${absolute}?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer || 'https://anineko.to/')}`
 }
 
 export function useAnime(malId, slug) {
