@@ -46,6 +46,17 @@ public class AnimeGogoService implements StreamProvider {
     @Override
     public String getName() { return "GoGoAnime"; }
 
+    @Override
+    public boolean healthCheck() {
+        try {
+            String html = fetchWithLogging(BASE_URL + "/", "HEALTH", MAX_RETRIES);
+            if (html == null || html.isBlank()) return false;
+            return html.contains("<title>") && !html.contains("404 Not Found");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private String fetchWithLogging(String url, String context) {
         return fetchWithLogging(url, context, 0);
     }
@@ -162,7 +173,9 @@ public class AnimeGogoService implements StreamProvider {
         try {
             Thread.sleep(400);
             String url = JIKAN_BASE + "/anime/" + malId;
-            String json = fetchWithLogging(url, "JIKAN_LOOKUP");
+            // Jikan is metadata-only; never spend retries on it (the slug list still
+            // works without it, and a dead Jikan used to cost ~45s per provider).
+            String json = fetchWithLogging(url, "JIKAN_LOOKUP", MAX_RETRIES);
             if (json == null) return null;
             return objectMapper.readTree(json).get("data");
         } catch (Exception e) {
@@ -183,14 +196,16 @@ public class AnimeGogoService implements StreamProvider {
 
         for (String slug : allSlugs) {
             if (slug == null || slug.isBlank() || slug.length() < 2) continue;
-            String url = BASE_URL + "/" + slug;
+            String url = BASE_URL + "/anime/" + slug;
             log.info("[GOGO] TRY SLUG | slug='{}' url={}", slug, url);
 
             try {
                 String html = fetchWithLogging(url, "SLUG=" + slug);
                 if (html == null) continue;
 
-                if (html.contains("anime-info")) {
+                // The series page used to carry "anime-info"; it is now
+                // "anime_info_body" (and "anime_info_episodes" on long shows).
+                if (html.contains("anime_info_body") || html.contains("anime_info_episodes")) {
                     if (!verifyPageTitle(html, jikanData, title, slug)) {
                         log.warn("[GOGO] PAGE TITLE MISMATCH | slug='{}' — skipping, likely wrong anime", slug);
                         continue;
@@ -283,7 +298,8 @@ public class AnimeGogoService implements StreamProvider {
         List<Episode> episodes = new ArrayList<>();
         Set<Integer> seen = new LinkedHashSet<>();
         String slugLower = slug.toLowerCase();
-        Pattern epPattern = Pattern.compile("/" + Pattern.quote(slugLower) + "-episode-(\\d+)", Pattern.CASE_INSENSITIVE);
+        // Episode pages moved from "/<slug>-episode-N" to "/episode/<slug>-episode-N".
+        Pattern epPattern = Pattern.compile("/episode/" + Pattern.quote(slugLower) + "-episode-(\\d+)", Pattern.CASE_INSENSITIVE);
         Matcher matcher = epPattern.matcher(html);
         while (matcher.find()) {
             int epNum = Integer.parseInt(matcher.group(1));
@@ -292,7 +308,7 @@ public class AnimeGogoService implements StreamProvider {
                 ep.setAnimeMalId(malId);
                 ep.setEpisodeNumber(epNum);
                 ep.setTitle("Episode " + epNum);
-                ep.setEmbedUrl(BASE_URL + "/" + slugLower + "-episode-" + epNum);
+                ep.setEmbedUrl(BASE_URL + "/episode/" + slugLower + "-episode-" + epNum);
                 episodes.add(ep);
             }
         }
@@ -324,7 +340,7 @@ public class AnimeGogoService implements StreamProvider {
             try {
                 String foundSlug = searchSingle(term);
                 if (foundSlug != null) {
-                    String url = BASE_URL + "/" + foundSlug;
+                    String url = BASE_URL + "/anime/" + foundSlug;
                     String html = fetchWithLogging(url, "SEARCH_HIT=" + foundSlug);
                     if (html != null) {
                         List<Episode> episodes = parseEpisodesFromHtml(html, foundSlug, malId);
@@ -341,13 +357,15 @@ public class AnimeGogoService implements StreamProvider {
     private String searchSingle(String title) {
         try {
             String keywords = java.net.URLEncoder.encode(title, "UTF-8");
-            String searchUrl = BASE_URL + "/search.html?keyword=" + keywords;
+            // The search route moved from "/search.html?keyword=" to "/search?keyword=".
+            String searchUrl = BASE_URL + "/search?keyword=" + keywords;
             log.info("[GOGO] SEARCH | title='{}' url={}", title, searchUrl);
             String html = fetchWithLogging(searchUrl, "SEARCH");
             if (html == null) return null;
 
             Set<String> candidates = new LinkedHashSet<>();
-            Pattern linkPattern = Pattern.compile("/category/([a-z0-9-]+)");
+            // Result links are now "/anime/<slug>" (previously "/category/<slug>").
+            Pattern linkPattern = Pattern.compile("/anime/([a-z0-9-]+)");
             Matcher matcher = linkPattern.matcher(html);
 
             while (matcher.find()) {

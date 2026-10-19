@@ -38,6 +38,14 @@ public class EpisodeSyncService {
 
     private static final int MAX_EPISODE_COUNT_TOLERANCE_PERCENT = 30;
 
+    /**
+     * Hard ceiling for the provider phase. A dead provider that still answers
+     * with an error page can burn its read timeout several times over; without
+     * this the request ran ~72s and the browser gave up first.
+     */
+    static final long PROVIDER_PHASE_BUDGET_MS =
+        Long.getLong("app.providers.sync-budget-ms", 30_000L);
+
     private final ProviderPriorityManager priorityManager;
 
     public EpisodeSyncService(List<StreamProvider> providers,
@@ -92,6 +100,11 @@ public class EpisodeSyncService {
             List<ProviderAttempt> failures = new ArrayList<>();
 
             for (String providerName : providerOrder) {
+                if (System.currentTimeMillis() - start > PROVIDER_PHASE_BUDGET_MS) {
+                    log.warn("[SYNC_SERVICE] PROVIDER_BUDGET_EXCEEDED | malId={} elapsed={}ms — skipping remaining providers",
+                        malId, System.currentTimeMillis() - start);
+                    break;
+                }
                 // Try primary title first
                 ProviderAttempt attempt = tryProvider(malId, anime.getTitle(), providerName);
                 log.info("[SYNC_SERVICE] PROVIDER_ATTEMPT | malId={} provider={} success={} episodes={} duration={}ms error='{}'",
@@ -298,6 +311,11 @@ public class EpisodeSyncService {
 
             for (String providerName : priorityManager.getActiveProviders().stream()
                 .map(StreamProvider::getName).toList()) {
+                if (System.currentTimeMillis() - overallStart > PROVIDER_PHASE_BUDGET_MS) {
+                    log.warn("[SYNC_SERVICE] RECOVERY_BUDGET_EXCEEDED | malId={} elapsed={}ms",
+                        malId, System.currentTimeMillis() - overallStart);
+                    return null;
+                }
                 // Even if provider failed before, retry with alternate titles
                 StreamProvider provider = findProvider(providerName);
                 if (provider == null) continue;
