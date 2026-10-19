@@ -47,6 +47,10 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                // Writing actions need an account; reads stay anonymous.
+                // Kept ahead of the /api/anime/** permitAll rule below.
+                .requestMatchers(HttpMethod.POST, "/api/anime/*/episodes/sync").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/anime/*/review").authenticated()
                 .requestMatchers("/api/auth/**").permitAll()
                 // Destructive/bulk episode maintenance must not be reachable anonymously.
                 // These specific rules have to precede the blanket /api/anime/** permitAll.
