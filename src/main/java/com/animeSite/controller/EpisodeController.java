@@ -158,15 +158,17 @@ public class EpisodeController {
             String userMessage = "Stream is temporarily unavailable. Please try again later.";
 
             log.warn("[EMBED] FAILED | malId={} code={} msg='{}' duration={}ms", malId, code, msg, elapsed);
+            // Map.of rejects null values, and result.provider is null when no
+            // provider claimed the URL — that used to surface as NULL_POINTER.
+            Map<String, Object> failure = new LinkedHashMap<>();
+            failure.put("provider", result.provider != null ? result.provider : "");
+            failure.put("durationMs", elapsed);
+            failure.put("detail", msg != null ? msg : "");
             return ResponseEntity.ok(ApiResponse.builder()
                 .success(false)
                 .message(userMessage)
                 .errorCode(code)
-                .data(Map.of(
-                    "provider", result.provider,
-                    "durationMs", elapsed,
-                    "detail", msg
-                ))
+                .data(failure)
                 .timestamp(Instant.now())
                 .build());
         }
