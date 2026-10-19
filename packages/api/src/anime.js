@@ -53,7 +53,9 @@ export const syncEpisodes = (malId) => {
       err.data = body?.data
       throw err
     }
-    return body.data ?? []
+    // The sync endpoint returns a flat payload ({episodes: [...]}), while other
+    // endpoints wrap their body in {data}. Accept both.
+    return body.data ?? body.episodes ?? []
   }).catch(err => {
     if (err.errorCode || err.response?.data?.message) {
       const enhanced = err.errorCode ? err : (() => {
