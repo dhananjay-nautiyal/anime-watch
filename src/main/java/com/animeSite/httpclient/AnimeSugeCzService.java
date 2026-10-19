@@ -247,8 +247,9 @@ public class AnimeSugeCzService implements StreamProvider {
                     }
                 }
 
-                int currentPage = root.path("meta").path("current_page").asInt(1);
-                int lastPage = root.path("meta").path("last_page").asInt(1);
+                // The API nests paging under "pagination", not "meta".
+                int currentPage = root.path("pagination").path("page").asInt(1);
+                int lastPage = root.path("pagination").path("total_pages").asInt(1);
                 if (currentPage >= lastPage || currentPage < page) break;
 
             } catch (Exception e) {
