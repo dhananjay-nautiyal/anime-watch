@@ -7,12 +7,13 @@ import java.util.List;
 import java.util.UUID;
 
 public interface AnimeService {
-    AnimePage getTrending(int page);
-    AnimePage searchAnime(String query, int page);
-    AnimePage filterAnime(String genres, String genresExclude, String type, String status, String orderBy, String sort, int page);
+    AnimePage getTrending(int page, int size);
+    AnimePage searchAnime(String query, int page, int size);
+    AnimePage filterAnime(String genres, String genresExclude, String type, String status,
+                          Integer year, String orderBy, String sort, int page, int size);
     Anime getAnimeById(int id);
     Anime getAnimeBySlug(String slug);
-    AnimePage getSeasonal(int page);
+    AnimePage getSeasonal(int page, int size);
     Anime updateAffiliateUrl(UUID animeId, String affiliateUrl);
     void deleteAnime(UUID animeId);
 

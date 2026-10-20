@@ -14,9 +14,9 @@ const TYPE_STYLES = {
 function getStatus(anime) {
   if (!anime.status) return null
   const s = anime.status.toLowerCase()
-  if (s === 'currently airing' || s === 'airing') return { label: 'Airing', color: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/25' }
-  if (s === 'finished airing' || s === 'complete') return { label: 'Finished', color: 'text-blue-400 bg-blue-500/15 border-blue-500/25' }
-  if (s === 'not yet aired' || s === 'upcoming') return { label: 'Coming Soon', color: 'text-cyan-400 bg-cyan-500/15 border-cyan-500/25' }
+  if (s === 'airing' || s === 'currently airing') return { label: 'Airing', color: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/25' }
+  if (s === 'finished' || s === 'finished airing' || s === 'complete') return { label: 'Finished', color: 'text-blue-400 bg-blue-500/15 border-blue-500/25' }
+  if (s === 'upcoming' || s === 'not yet aired') return { label: 'Coming Soon', color: 'text-cyan-400 bg-cyan-500/15 border-cyan-500/25' }
   return null
 }
 

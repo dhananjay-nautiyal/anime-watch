@@ -39,9 +39,9 @@ export default function AnimeInfo({ anime, episodes = [] }) {
 
   const statusVariant = useMemo(() => {
     const s = (anime?.status || '').toLowerCase()
-    if (s.includes('airing') || s.includes('ongoing')) return 'green'
-    if (s.includes('finished') || s.includes('complete')) return 'primary'
-    if (s.includes('upcoming') || s.includes('not')) return 'yellow'
+    if (s === 'airing' || s === 'currently airing' || s === 'ongoing') return 'green'
+    if (s === 'finished' || s === 'finished airing' || s === 'complete') return 'primary'
+    if (s === 'upcoming' || s === 'not yet aired') return 'yellow'
     return 'default'
   }, [anime?.status])
 

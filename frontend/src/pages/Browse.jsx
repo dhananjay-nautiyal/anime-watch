@@ -10,7 +10,7 @@ import EmptyState from '../components/EmptyState'
 
 const GENRES = ['Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Horror', 'Romance', 'Sci-Fi', 'Slice of Life', 'Sports', 'Thriller', 'Mystery']
 const YEARS = Array.from({ length: 10 }, (_, i) => 2026 - i)
-const STATUSES = ['airing', 'complete', 'upcoming']
+const STATUSES = ['airing', 'finished', 'upcoming']
 
 export default function Browse() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -25,6 +25,7 @@ export default function Browse() {
   const genre = searchParams.get('genres') || ''
   const year = searchParams.get('year') || ''
   const status = searchParams.get('status') || ''
+  const type = searchParams.get('type') || ''
 
   useEffect(() => {
     const controller = new AbortController()
@@ -35,8 +36,8 @@ export default function Browse() {
 
     const fetchData = q
       ? searchAnime(q, page, 25, signal)
-      : genre || year || status
-        ? filterAnime({ genres: genre, year, status, page, size: 25 }, signal)
+      : genre || year || status || type
+        ? filterAnime({ genres: genre, year, status, type, page, size: 25 }, signal)
         : getTrending(page, 25, signal)
 
     fetchData
@@ -49,7 +50,7 @@ export default function Browse() {
       .finally(() => { if (!signal.aborted) setLoading(false) })
 
     return () => controller.abort()
-  }, [q, genre, year, status, page])
+  }, [q, genre, year, status, type, page])
 
   const updateFilter = (key, value) => {
     const params = new URLSearchParams(searchParams)
@@ -110,7 +111,7 @@ export default function Browse() {
           ))}
         </select>
 
-        {(genre || year || status || q) && (
+        {(genre || year || status || type || q) && (
           <button
             onClick={clearFilters}
             className="text-sm text-muted hover:text-white transition-colors px-4 py-2.5"

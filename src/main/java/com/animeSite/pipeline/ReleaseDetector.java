@@ -1,5 +1,6 @@
 package com.animeSite.pipeline;
 
+import com.animeSite.constant.AnimeStatus;
 import com.animeSite.httpclient.JikanApiClient;
 import com.animeSite.model.JikanAnimeData;
 import com.animeSite.model.JikanSingleResponse;
@@ -41,7 +42,7 @@ public class ReleaseDetector {
     public AnimeState detectStateFromData(int malId, JikanAnimeData data) {
         if (data == null) return AnimeState.UNKNOWN;
 
-        String status = data.getStatus();
+        String status = AnimeStatus.normalize(data.getStatus());
         String airedFrom = data.getAired() != null ? data.getAired().getFrom() : null;
         LocalDate releaseDate = parseDate(airedFrom);
         LocalDate today = LocalDate.now();
@@ -50,7 +51,7 @@ public class ReleaseDetector {
             malId, data.getTitle(), status, airedFrom);
 
         // Check Jikan status
-        if ("Not yet aired".equalsIgnoreCase(status) || "upcoming".equalsIgnoreCase(status)) {
+        if (AnimeStatus.UPCOMING.equals(status) || "Not yet aired".equalsIgnoreCase(status)) {
             if (releaseDate != null) {
                 if (releaseDate.isAfter(today)) {
                     log.info("[STATE] COMING_SOON | malId={} releaseDate={}", malId, releaseDate);
@@ -64,12 +65,12 @@ public class ReleaseDetector {
             return AnimeState.NOT_RELEASED;
         }
 
-        if ("Currently Airing".equalsIgnoreCase(status) || "airing".equalsIgnoreCase(status)) {
+        if (AnimeStatus.AIRING.equals(status) || "Currently Airing".equalsIgnoreCase(status)) {
             log.info("[STATE] AIRING | malId={}", malId);
             return AnimeState.AIRING;
         }
 
-        if ("Finished Airing".equalsIgnoreCase(status) || "complete".equalsIgnoreCase(status)) {
+        if (AnimeStatus.FINISHED.equals(status) || "Finished Airing".equalsIgnoreCase(status)) {
             log.info("[STATE] FINISHED | malId={}", malId);
             return AnimeState.FINISHED;
         }

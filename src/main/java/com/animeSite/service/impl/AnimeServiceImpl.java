@@ -1,5 +1,6 @@
 package com.animeSite.service.impl;
 
+import com.animeSite.constant.AnimeStatus;
 import com.animeSite.core.exception.BusinessException;
 import com.animeSite.core.exception.ErrorCode;
 import com.animeSite.httpclient.JikanApiClient;
@@ -8,19 +9,26 @@ import com.animeSite.importpipeline.MetadataProvider;
 import com.animeSite.model.JikanAnimeData;
 import com.animeSite.model.JikanListResponse;
 import com.animeSite.persist.Anime;
+import com.animeSite.persist.AnimeGenre;
+import com.animeSite.repo.AnimeGenreRepository;
 import com.animeSite.repo.AnimeRepository;
+import com.animeSite.service.AnimeFilters;
 import com.animeSite.service.AnimeService;
 import com.animeSite.service.SlugService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -28,46 +36,99 @@ public class AnimeServiceImpl implements AnimeService {
 
     private final JikanApiClient jikanApiClient;
     private final AnimeRepository animeRepository;
+    private final AnimeGenreRepository animeGenreRepository;
     private final SlugService slugService;
     private final JikanMetadataProvider jikanMetadataProvider;
 
     public AnimeServiceImpl(JikanApiClient jikanApiClient, AnimeRepository animeRepository,
+                             AnimeGenreRepository animeGenreRepository,
                              SlugService slugService, JikanMetadataProvider jikanMetadataProvider) {
         this.jikanApiClient = jikanApiClient;
         this.animeRepository = animeRepository;
+        this.animeGenreRepository = animeGenreRepository;
         this.slugService = slugService;
         this.jikanMetadataProvider = jikanMetadataProvider;
     }
 
-    @Cacheable(value = "trending", key = "'page-'+#page", unless = "#result == null")
-    public AnimePage getTrending(int page) {
+    @Cacheable(value = "trending", key = "'page-'+#page+'-size-'+#size", unless = "#result == null")
+    public AnimePage getTrending(int page, int size) {
         try {
-            return toAnimePage(jikanApiClient.fetchTopAnime(page), page);
+            return toAnimePage(jikanApiClient.fetchTopAnime(page, size), page);
         } catch (Exception e) {
-            Page<Anime> dbPage = animeRepository.findAllByOrderByRatingDesc(PageRequest.of(page, 25));
+            Page<Anime> dbPage = animeRepository.findAllByOrderByRatingDesc(PageRequest.of(page, size));
             return toAnimePageFromDb(dbPage, page);
         }
     }
 
-    @Cacheable(value = "search", key = "'q-'+#query+'-page-'+#page", unless = "#result == null")
-    public AnimePage searchAnime(String query, int page) {
+    @Cacheable(value = "search", key = "'q-'+#query+'-page-'+#page+'-size-'+#size", unless = "#result == null")
+    public AnimePage searchAnime(String query, int page, int size) {
         try {
-            return toAnimePage(jikanApiClient.searchAnime(query, page), page);
+            return toAnimePage(jikanApiClient.searchAnime(query, page, size), page);
         } catch (Exception e) {
-            Page<Anime> dbPage = animeRepository.findByTitleContainingIgnoreCase(query, PageRequest.of(page, 25));
+            Page<Anime> dbPage = animeRepository.findByTitleContainingIgnoreCase(query, PageRequest.of(page, size));
             return toAnimePageFromDb(dbPage, page);
         }
     }
 
-    @Cacheable(value = "search", key = "'filter-'+#genres+'-'+#genresExclude+'-'+#type+'-'+#status+'-'+#orderBy+'-'+#sort+'-'+#page", unless = "#result == null")
-    public AnimePage filterAnime(String genres, String genresExclude, String type, String status, String orderBy, String sort, int page) {
+    @Cacheable(value = "search",
+            key = "'filter-'+#genres+'-'+#genresExclude+'-'+#type+'-'+#status+'-year-'+#year+'-'+#orderBy+'-'+#sort+'-'+#page+'-size-'+#size",
+            unless = "#result == null")
+    public AnimePage filterAnime(String genres, String genresExclude, String type, String status,
+                                 Integer year, String orderBy, String sort, int page, int size) {
+        List<Integer> includeIds = resolveGenreIds(genres);
+        List<Integer> excludeIds = resolveGenreIds(genresExclude);
+
+        // A genre name/id that matches nothing must return nothing. Falling
+        // back to an unfiltered list is what made the filters look broken.
+        if (includeIds != null && includeIds.isEmpty()) {
+            return new AnimePage(List.of(), page, 0);
+        }
+
         try {
-            String url = jikanApiClient.buildFilterUrl("", genres, genresExclude, type, status, orderBy, sort, page);
+            String url = jikanApiClient.buildFilterUrl("", toCsv(includeIds), toCsv(excludeIds),
+                    type == null ? null : type.toLowerCase(),
+                    AnimeStatus.toJikanFilterValue(status),
+                    orderBy, sort, page, year, size);
             return toAnimePage(jikanApiClient.filterAnime(url), page);
         } catch (Exception e) {
-            Page<Anime> dbPage = animeRepository.findAllByOrderByRatingDesc(PageRequest.of(page, 25));
-            return toAnimePageFromDb(dbPage, page);
+            return filterFromDb(includeIds, excludeIds, type, status, year, orderBy, sort, page, size);
         }
+    }
+
+    private AnimePage filterFromDb(List<Integer> includeIds, List<Integer> excludeIds, String type,
+                                   String status, Integer year, String orderBy, String sort,
+                                   int page, int size) {
+        Specification<Anime> spec = AnimeFilters.build(includeIds, excludeIds, type, status, year);
+        Page<Anime> dbPage = animeRepository.findAll(spec,
+                PageRequest.of(page, size, AnimeFilters.sort(orderBy, sort)));
+        return toAnimePageFromDb(dbPage, page);
+    }
+
+    /**
+     * Accepts MAL genre IDs or genre names (the browse UI sends names).
+     * Returns null when there is no filter, an empty list when a name cannot
+     * be resolved, and the resolved IDs otherwise.
+     */
+    private List<Integer> resolveGenreIds(String csv) {
+        if (csv == null || csv.isBlank()) return null;
+        Set<Integer> ids = new LinkedHashSet<>();
+        for (String token : csv.split(",")) {
+            String value = token.trim();
+            if (value.isEmpty()) continue;
+            try {
+                ids.add(Integer.parseInt(value));
+            } catch (NumberFormatException e) {
+                Optional<AnimeGenre> genre = animeGenreRepository.findByNameIgnoreCase(value);
+                if (genre.isEmpty()) return List.of();
+                ids.add(genre.get().getMalId());
+            }
+        }
+        return new ArrayList<>(ids);
+    }
+
+    private String toCsv(List<Integer> ids) {
+        if (ids == null) return null;
+        return ids.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
     }
 
     @Cacheable(value = "anime", key = "'id-'+#id", unless = "#result == null")
@@ -95,12 +156,12 @@ public class AnimeServiceImpl implements AnimeService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with slug: " + slug));
     }
 
-    @Cacheable(value = "seasonal", key = "'page-'+#page", unless = "#result == null")
-    public AnimePage getSeasonal(int page) {
+    @Cacheable(value = "seasonal", key = "'page-'+#page+'-size-'+#size", unless = "#result == null")
+    public AnimePage getSeasonal(int page, int size) {
         try {
-            return toAnimePage(jikanApiClient.fetchSeasonalAnime(page), page);
+            return toAnimePage(jikanApiClient.fetchSeasonalAnime(page, size), page);
         } catch (Exception e) {
-            Page<Anime> dbPage = animeRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, 25));
+            Page<Anime> dbPage = animeRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, size));
             return toAnimePageFromDb(dbPage, page);
         }
     }
@@ -161,7 +222,7 @@ public class AnimeServiceImpl implements AnimeService {
             anime.setScore(data.getScore());
             anime.setEpisodes(data.getEpisodes());
             anime.setType(data.getType());
-            anime.setStatus(data.getStatus());
+            anime.setStatus(AnimeStatus.normalize(data.getStatus()));
             anime.setYear(data.getYear());
             anime.setDuration(data.getDuration());
             if (data.getAired() != null) {
@@ -242,7 +303,7 @@ public class AnimeServiceImpl implements AnimeService {
         anime.setScore(data.getScore());
         anime.setEpisodes(data.getEpisodes());
         anime.setType(data.getType());
-        anime.setStatus(data.getStatus());
+        anime.setStatus(AnimeStatus.normalize(data.getStatus()));
         anime.setYear(data.getYear());
         anime.setDuration(data.getDuration());
         if (data.getAired() != null) {
