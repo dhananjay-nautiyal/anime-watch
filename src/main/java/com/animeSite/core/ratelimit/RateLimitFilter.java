@@ -32,6 +32,12 @@ public class RateLimitFilter implements Filter {
         .expireAfterWrite(GENERAL_WINDOW_SECONDS, TimeUnit.SECONDS)
         .build();
 
+    private final ClientIpResolver clientIpResolver;
+
+    public RateLimitFilter(ClientIpResolver clientIpResolver) {
+        this.clientIpResolver = clientIpResolver;
+    }
+
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
@@ -39,7 +45,7 @@ public class RateLimitFilter implements Filter {
         HttpServletRequest httpReq = (HttpServletRequest) request;
         HttpServletResponse httpRes = (HttpServletResponse) response;
         String path = httpReq.getRequestURI();
-        String ip = getClientIp(httpReq);
+        String ip = clientIpResolver.resolve(httpReq);
 
         if (path.startsWith("/api/auth/")) {
             AtomicInteger count = authRequestCounts.getIfPresent(ip);
@@ -69,13 +75,5 @@ public class RateLimitFilter implements Filter {
         }
 
         chain.doFilter(request, response);
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String xf = request.getHeader("X-Forwarded-For");
-        if (xf != null && !xf.isBlank()) {
-            return xf.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 }

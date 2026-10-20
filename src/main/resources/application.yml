@@ -58,6 +58,12 @@ app:
   base-url: ${APP_BASE_URL}
   frontend-url: ${APP_FRONTEND_URL}
 
+  rate-limit:
+    # Only these peers may supply X-Forwarded-For. Direct clients cannot
+    # spoof their address and rotate around the auth limit. If the deployment
+    # proxy has a public source address, add its CIDR here.
+    trusted-proxies: ${RATE_LIMIT_TRUSTED_PROXIES:127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,169.254.0.0/16,::1/128,fc00::/7,fe80::/10}
+
   consumet:
     # Self-hosted Consumet bridge (see consumet-bridge/). Blank = disabled,
     # other providers still run.
