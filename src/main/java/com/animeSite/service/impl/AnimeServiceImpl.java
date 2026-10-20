@@ -85,6 +85,13 @@ public class AnimeServiceImpl implements AnimeService {
     @Cacheable(value = "anime", key = "'slug-'+#slug", unless = "#result == null")
     public Anime getAnimeBySlug(String slug) {
         return animeRepository.findBySlug(slug)
+                .or(() -> {
+                    try {
+                        return animeRepository.findByMalId(Integer.parseInt(slug));
+                    } catch (NumberFormatException e) {
+                        return Optional.empty();
+                    }
+                })
                 .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with slug: " + slug));
     }
 
