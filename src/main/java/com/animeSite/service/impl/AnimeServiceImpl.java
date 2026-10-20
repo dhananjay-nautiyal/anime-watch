@@ -136,16 +136,17 @@ public class AnimeServiceImpl implements AnimeService {
         try {
             var response = jikanApiClient.fetchAnimeById(id);
             if (response != null && response.getData() != null) {
-                return saveAnime(response.getData());
+                Anime saved = saveAnime(response.getData());
+                return withRelations(animeRepository.findByMalId(saved.getMalId()).orElse(saved));
             }
         } catch (Exception ignored) {}
-        return animeRepository.findByMalId(id)
-                .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with ID: " + id));
+        return withRelations(animeRepository.findByMalId(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with ID: " + id)));
     }
 
     @Cacheable(value = "anime", key = "'slug-'+#slug", unless = "#result == null")
     public Anime getAnimeBySlug(String slug) {
-        return animeRepository.findBySlug(slug)
+        return withRelations(animeRepository.findBySlug(slug)
                 .or(() -> {
                     try {
                         return animeRepository.findByMalId(Integer.parseInt(slug));
@@ -153,7 +154,18 @@ public class AnimeServiceImpl implements AnimeService {
                         return Optional.empty();
                     }
                 })
-                .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with slug: " + slug));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with slug: " + slug)));
+    }
+
+    /**
+     * Detail responses expose genres and studios. Loading them here (two
+     * batched queries) keeps the cached entity fully initialized instead of
+     * caching lazy proxies that later blow up outside a session.
+     */
+    private Anime withRelations(Anime anime) {
+        anime.getAnimeGenres().size();
+        anime.getAnimeStudios().size();
+        return anime;
     }
 
     @Cacheable(value = "seasonal", key = "'page-'+#page+'-size-'+#size", unless = "#result == null")
