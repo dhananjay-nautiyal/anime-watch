@@ -65,7 +65,7 @@ function GridSection({ title, viewAllLink, items = [], isLoading, count = 6, err
         {viewAllLink && (
           <div className="flex items-center gap-3">
             <Link to={viewAllLink} className="text-sm text-[#9CA3AF] hover:text-white transition-colors font-medium">
-              View All \u2192
+              View All →
             </Link>
           </div>
         )}
