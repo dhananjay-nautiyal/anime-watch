@@ -228,7 +228,7 @@ export default function Home() {
         <LazySection placeholder={<div className="h-[320px]" />}>
           <GridSection
             title="Completed Series"
-            viewAllLink="/browse?status=complete"
+            viewAllLink="/browse?status=finished"
             items={filteredCompleted.slice(0, 12)}
             isLoading={isLoading}
             error={isError}

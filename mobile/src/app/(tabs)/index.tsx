@@ -189,7 +189,7 @@ export default function HomeScreen() {
 
     const completedFiltered = filterStreamable(homeData.completed)
     if (completedFiltered.length) {
-      sections.push({ type: 'grid', title: 'Completed Series', data: completedFiltered.slice(0, 12), viewAll: '/browse?status=completed' })
+      sections.push({ type: 'grid', title: 'Completed Series', data: completedFiltered.slice(0, 12), viewAll: '/browse?status=finished' })
     }
 
     const upcomingFiltered = filterStreamable(homeData.upcoming)

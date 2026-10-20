@@ -1,5 +1,6 @@
 package com.animeSite.importpipeline;
 
+import com.animeSite.constant.AnimeStatus;
 import com.animeSite.httpclient.JikanApiClient;
 import com.animeSite.model.JikanListResponse;
 import com.animeSite.persist.*;
@@ -360,15 +361,9 @@ public class ImportPipelineService {
         if (anime.getType() != null) {
             anime.setType(anime.getType().toUpperCase());
         }
-        // Normalize status
+        // Normalize status to the canonical lowercase vocabulary.
         if (anime.getStatus() != null) {
-            String s = anime.getStatus().toLowerCase().replace('_', ' ');
-            switch (s) {
-                case "currently airing" -> anime.setStatus("Currently Airing");
-                case "finished airing" -> anime.setStatus("Finished Airing");
-                case "not yet aired" -> anime.setStatus("Not Yet Aired");
-                default -> anime.setStatus(anime.getStatus());
-            }
+            anime.setStatus(AnimeStatus.normalize(anime.getStatus()));
         }
         // Normalize season
         if (anime.getSeason() != null) {

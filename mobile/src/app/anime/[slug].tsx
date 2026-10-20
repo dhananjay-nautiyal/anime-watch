@@ -340,8 +340,8 @@ export default function AnimeDetailScreen() {
   const posterImage = anime.imageUrl || anime.images?.jpg?.image_url
   const score = typeof anime.score === 'string' ? parseFloat(anime.score) : anime.score
   const animeStatus = anime.status || ''
-  const isAiring = /currently airing/i.test(animeStatus)
-  const isFinished = /finished/i.test(animeStatus)
+  const isAiring = animeStatus?.toLowerCase() === 'airing' || /currently airing/i.test(animeStatus)
+  const isFinished = animeStatus?.toLowerCase() === 'finished' || /finished/i.test(animeStatus)
   const isUpcoming = /not yet aired|upcoming/i.test(animeStatus)
 
   return (
