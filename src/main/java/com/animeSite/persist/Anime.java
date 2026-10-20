@@ -2,8 +2,11 @@ package com.animeSite.persist;
 
 import com.animeSite.core.audit.Auditable;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
+import org.hibernate.annotations.Fetch;
+import org.hibernate.annotations.FetchMode;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -146,6 +149,7 @@ public class Anime extends Auditable implements Serializable {
         joinColumns = @JoinColumn(name = "anime_id"),
         inverseJoinColumns = @JoinColumn(name = "genre_id"))
     @JsonIgnore
+    @Fetch(FetchMode.SUBSELECT)
     @Schema(description = "Persistent genre relations")
     private List<AnimeGenre> animeGenres = new ArrayList<>();
 
@@ -154,8 +158,36 @@ public class Anime extends Auditable implements Serializable {
         joinColumns = @JoinColumn(name = "anime_id"),
         inverseJoinColumns = @JoinColumn(name = "studio_id"))
     @JsonIgnore
+    @Fetch(FetchMode.SUBSELECT)
     @Schema(description = "Persistent studio relations")
     private List<AnimeStudio> animeStudios = new ArrayList<>();
+
+    /**
+     * The relation collections themselves remain @JsonIgnore'd (lazy, and
+     * serializing them directly causes N+1 queries). These projections expose
+     * them under the names the web and mobile clients already read.
+     */
+    @JsonProperty("genres")
+    public List<GenreView> getGenres() {
+        return animeGenres == null ? List.of()
+                : animeGenres.stream()
+                    .map(g -> new GenreView(g.getId(), g.getMalId(), g.getName(), g.getType()))
+                    .toList();
+    }
+
+    @JsonProperty("studios")
+    public List<StudioView> getStudios() {
+        return animeStudios == null ? List.of()
+                : animeStudios.stream()
+                    .map(s -> new StudioView(s.getId(), s.getMalId(), s.getName()))
+                    .toList();
+    }
+
+    public record GenreView(UUID id, Integer malId, String name, String type) {
+    }
+
+    public record StudioView(UUID id, Integer malId, String name) {
+    }
 
     @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE}, fetch = FetchType.LAZY)
     @JoinTable(name = "anime_producers",
