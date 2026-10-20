@@ -103,13 +103,13 @@ const HeroSection = memo(function HeroSection({ items }) {
                 <span className="text-white/50 text-xs font-medium">{episodeCount}</span>
                 {item.status && (
                   <span className={`text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
-                    item.status.toLowerCase().includes('airing')
+                    item.status.toLowerCase() === 'airing'
                       ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
-                      : item.status.toLowerCase().includes('finish') || item.status.toLowerCase().includes('complete')
+                      : item.status.toLowerCase() === 'finished'
                       ? 'text-blue-400 border-blue-500/30 bg-blue-500/10'
                       : 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10'
                   }`}>
-                    {item.status.toLowerCase().includes('airing') && (
+                    {item.status.toLowerCase() === 'airing' && (
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     )}
                     {item.status}

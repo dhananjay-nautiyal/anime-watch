@@ -227,13 +227,13 @@ export default function AnimeDetail() {
               {anime.year && <span className="text-xs text-[#9CA3AF]">{anime.year}</span>}
               {anime.status && (
                 <span className={`text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
-                  anime.status.toLowerCase().includes('airing')
+                  anime.status.toLowerCase() === 'airing'
                     ? 'text-emerald-400 border-emerald-500/25 bg-emerald-500/10'
-                    : anime.status.toLowerCase().includes('finished') || anime.status.toLowerCase().includes('complete')
+                    : anime.status.toLowerCase() === 'finished'
                     ? 'text-blue-400 border-blue-500/25 bg-blue-500/10'
                     : 'text-cyan-400 border-cyan-500/25 bg-cyan-500/10'
                 }`}>
-                  {anime.status.toLowerCase().includes('airing') && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+                  {anime.status.toLowerCase() === 'airing' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
                   {anime.status}
                 </span>
               )}

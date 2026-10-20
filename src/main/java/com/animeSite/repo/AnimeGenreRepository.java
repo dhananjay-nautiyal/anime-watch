@@ -11,5 +11,6 @@ import java.util.UUID;
 @Repository
 public interface AnimeGenreRepository extends JpaRepository<AnimeGenre, UUID> {
     Optional<AnimeGenre> findByMalId(Integer malId);
+    Optional<AnimeGenre> findByNameIgnoreCase(String name);
     List<AnimeGenre> findAllByMalIdIn(java.util.Collection<Integer> malIds);
 }

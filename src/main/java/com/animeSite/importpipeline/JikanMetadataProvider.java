@@ -1,5 +1,6 @@
 package com.animeSite.importpipeline;
 
+import com.animeSite.constant.AnimeStatus;
 import com.animeSite.httpclient.JikanApiClient;
 import com.animeSite.model.*;
 import com.animeSite.persist.*;
@@ -81,7 +82,7 @@ public class JikanMetadataProvider implements MetadataProvider {
         anime.setRating(data.getRating());
         anime.setEpisodes(data.getEpisodes());
         anime.setType(data.getType());
-        anime.setStatus(data.getStatus());
+        anime.setStatus(AnimeStatus.normalize(data.getStatus()));
         anime.setYear(data.getYear());
         anime.setSeason(data.getSeason());
         anime.setDuration(data.getDuration());

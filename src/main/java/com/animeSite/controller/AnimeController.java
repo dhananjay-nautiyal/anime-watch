@@ -52,8 +52,9 @@ public class AnimeController {
     @Operation(summary = "Get trending anime", description = "Fetches top-rated anime with pagination.")
     public ResponseEntity<ApiResponse<java.util.List<Anime>>> getTrending(
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "25") int size) {
-        AnimePage result = animeService.getTrending(page);
+            @Parameter(description = "Page size (1-100)") @RequestParam(defaultValue = "25") int size) {
+        if (invalidSize(size)) return badSize();
+        AnimePage result = animeService.getTrending(page, size);
         return ResponseEntity.ok(ApiResponse.success(result.animeList(), result.page(), result.totalPages()));
     }
 
@@ -62,27 +63,39 @@ public class AnimeController {
     public ResponseEntity<ApiResponse<java.util.List<Anime>>> searchAnime(
             @Parameter(description = "Anime title to search for", required = true) @RequestParam String q,
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "25") int size) {
+            @Parameter(description = "Page size (1-100)") @RequestParam(defaultValue = "25") int size) {
         if (q == null || q.isBlank()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Search query 'q' must not be empty"));
         }
-        AnimePage result = animeService.searchAnime(q, page);
+        if (invalidSize(size)) return badSize();
+        AnimePage result = animeService.searchAnime(q, page, size);
         return ResponseEntity.ok(ApiResponse.success(result.animeList(), result.page(), result.totalPages()));
     }
 
     @GetMapping("/filter")
-    @Operation(summary = "Filter anime", description = "Filter anime by genres, type, status, etc.")
+    @Operation(summary = "Filter anime", description = "Filter anime by genres, type, status, year, etc.")
     public ResponseEntity<ApiResponse<java.util.List<Anime>>> filterAnime(
-            @Parameter(description = "Genre IDs (comma-separated)") @RequestParam(required = false) String genres,
+            @Parameter(description = "Genre IDs or names (comma-separated)") @RequestParam(required = false) String genres,
             @Parameter(description = "Genre IDs to exclude (comma-separated)") @RequestParam(required = false) String genresExclude,
             @Parameter(description = "Type (tv, movie, ova, special, ona, music)") @RequestParam(required = false) String type,
-            @Parameter(description = "Status (airing, complete, upcoming)") @RequestParam(required = false) String status,
+            @Parameter(description = "Status (airing, finished, upcoming)") @RequestParam(required = false) String status,
+            @Parameter(description = "Year (e.g. 1999)") @RequestParam(required = false) Integer year,
             @Parameter(description = "Order by (title, score, episodes, start_date, end_date)") @RequestParam(required = false) String orderBy,
             @Parameter(description = "Sort direction (asc, desc)") @RequestParam(required = false) String sort,
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "25") int size) {
-        AnimePage result = animeService.filterAnime(genres, genresExclude, type, status, orderBy, sort, page);
+            @Parameter(description = "Page size (1-100)") @RequestParam(defaultValue = "25") int size) {
+        if (invalidSize(size)) return badSize();
+        AnimePage result = animeService.filterAnime(genres, genresExclude, type, status, year, orderBy, sort, page, size);
         return ResponseEntity.ok(ApiResponse.success(result.animeList(), result.page(), result.totalPages()));
+    }
+
+    private boolean invalidSize(int size) {
+        return size < 1 || size > 100;
+    }
+
+    private <T> ResponseEntity<ApiResponse<T>> badSize() {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error("INVALID_SIZE", "size must be between 1 and 100"));
     }
 
     @GetMapping("/{id}")
@@ -107,8 +120,9 @@ public class AnimeController {
     @Operation(summary = "Get current seasonal anime", description = "Fetches current season anime with pagination.")
     public ResponseEntity<ApiResponse<java.util.List<Anime>>> getSeasonal(
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "25") int size) {
-        AnimePage result = animeService.getSeasonal(page);
+            @Parameter(description = "Page size (1-100)") @RequestParam(defaultValue = "25") int size) {
+        if (invalidSize(size)) return badSize();
+        AnimePage result = animeService.getSeasonal(page, size);
         return ResponseEntity.ok(ApiResponse.success(result.animeList(), result.page(), result.totalPages()));
     }
 
@@ -199,25 +213,25 @@ public class AnimeController {
         String exclude = "15";
 
         CompletableFuture<List<Anime>> trendingF = CompletableFuture.supplyAsync(() ->
-            animeService.getTrending(0).animeList());
+            animeService.getTrending(0, 25).animeList());
         CompletableFuture<List<Anime>> airingF = CompletableFuture.supplyAsync(() ->
-            animeService.filterAnime(null, exclude, null, "airing", null, null, 0).animeList());
+            animeService.filterAnime(null, exclude, null, "airing", null, null, null, 0, 25).animeList());
         CompletableFuture<List<Anime>> topRatedF = CompletableFuture.supplyAsync(() ->
-            animeService.filterAnime(null, exclude, null, "complete", "score", "desc", 0).animeList());
+            animeService.filterAnime(null, exclude, null, "finished", null, "score", "desc", 0, 25).animeList());
         CompletableFuture<List<Anime>> upcomingF = CompletableFuture.supplyAsync(() ->
-            animeService.filterAnime(null, exclude, null, "upcoming", null, null, 0).animeList());
+            animeService.filterAnime(null, exclude, null, "upcoming", null, null, null, 0, 25).animeList());
         CompletableFuture<List<Anime>> seasonalF = CompletableFuture.supplyAsync(() ->
-            animeService.getSeasonal(0).animeList());
+            animeService.getSeasonal(0, 25).animeList());
         CompletableFuture<List<Anime>> newReleasesF = CompletableFuture.supplyAsync(() ->
-            animeService.filterAnime(null, exclude, null, null, "popularity", "desc", 0).animeList());
+            animeService.filterAnime(null, exclude, null, null, null, "popularity", "desc", 0, 25).animeList());
         CompletableFuture<List<Anime>> completedF = CompletableFuture.supplyAsync(() ->
-            animeService.filterAnime(null, exclude, null, "complete", "popularity", "desc", 0).animeList());
+            animeService.filterAnime(null, exclude, null, "finished", null, "popularity", "desc", 0, 25).animeList());
         CompletableFuture<List<Anime>> popularWeekF = CompletableFuture.supplyAsync(() ->
-            animeService.filterAnime(null, exclude, null, null, "popularity", "desc", 0).animeList());
+            animeService.filterAnime(null, exclude, null, null, null, "popularity", "desc", 0, 25).animeList());
         CompletableFuture<List<Anime>> moviesF = CompletableFuture.supplyAsync(() ->
-            animeService.filterAnime(null, exclude, "Movie", null, "score", "desc", 0).animeList());
+            animeService.filterAnime(null, exclude, "Movie", null, null, "score", "desc", 0, 25).animeList());
         CompletableFuture<List<Anime>> mostViewedF = CompletableFuture.supplyAsync(() ->
-            animeService.filterAnime(null, exclude, null, null, "members", "desc", 0).animeList());
+            animeService.filterAnime(null, exclude, null, null, null, "members", "desc", 0, 25).animeList());
 
         CompletableFuture.allOf(trendingF, airingF, topRatedF, upcomingF, seasonalF,
             newReleasesF, completedF, popularWeekF, moviesF, mostViewedF).join();
