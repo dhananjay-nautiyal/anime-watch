@@ -22,11 +22,19 @@ public class JikanApiClient {
     }
 
     public JikanListResponse fetchTopAnime(int page) {
-        return callApi(BASE_URL + "/top/anime?page={page}", page + 1);
+        return fetchTopAnime(page, 25);
+    }
+
+    public JikanListResponse fetchTopAnime(int page, int size) {
+        return callApi(BASE_URL + "/top/anime?page={page}&limit={limit}", page + 1, clampLimit(size));
     }
 
     public JikanListResponse searchAnime(String query, int page) {
-        return callApi(BASE_URL + "/anime?q={query}&page={page}", query, page + 1);
+        return searchAnime(query, page, 25);
+    }
+
+    public JikanListResponse searchAnime(String query, int page, int size) {
+        return callApi(BASE_URL + "/anime?q={query}&page={page}&limit={limit}", query, page + 1, clampLimit(size));
     }
 
     public JikanListResponse filterAnime(String url) {
@@ -34,7 +42,16 @@ public class JikanApiClient {
     }
 
     public JikanListResponse fetchSeasonalAnime(int page) {
-        return callApi(BASE_URL + "/seasons/now?page={page}", page + 1);
+        return fetchSeasonalAnime(page, 25);
+    }
+
+    public JikanListResponse fetchSeasonalAnime(int page, int size) {
+        return callApi(BASE_URL + "/seasons/now?page={page}&limit={limit}", page + 1, clampLimit(size));
+    }
+
+    /** Jikan accepts at most 25 results per request. */
+    private int clampLimit(int size) {
+        return Math.max(1, Math.min(size, 25));
     }
 
     public JikanSingleResponse fetchAnimeById(int id) {
@@ -71,11 +88,19 @@ public class JikanApiClient {
 
     public String buildFilterUrl(String baseParams, String genres, String genresExclude, String type, String status,
                                   String orderBy, String sort, int page) {
-        StringBuilder url = new StringBuilder(BASE_URL + "/anime?" + baseParams + "page=" + (page + 1));
+        return buildFilterUrl(baseParams, genres, genresExclude, type, status, orderBy, sort, page, null, 25);
+    }
+
+    public String buildFilterUrl(String baseParams, String genres, String genresExclude, String type, String status,
+                                  String orderBy, String sort, int page, Integer year, int size) {
+        StringBuilder url = new StringBuilder(BASE_URL + "/anime?" + baseParams + "page=" + (page + 1)
+                + "&limit=" + clampLimit(size));
         if (genres != null && !genres.isBlank()) url.append("&genres=").append(genres);
         if (genresExclude != null && !genresExclude.isBlank()) url.append("&genres_exclude=").append(genresExclude);
         if (type != null && !type.isBlank()) url.append("&type=").append(type);
         if (status != null && !status.isBlank()) url.append("&status=").append(status);
+        if (year != null) url.append("&start_date=").append(year).append("-01-01&end_date=")
+                .append(year).append("-12-31");
         if (orderBy != null && !orderBy.isBlank()) url.append("&order_by=").append(orderBy);
         if (sort != null && !sort.isBlank()) url.append("&sort=").append(sort);
         return url.toString();

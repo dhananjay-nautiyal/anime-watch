@@ -1,5 +1,6 @@
 package com.animeSite.pipeline;
 
+import com.animeSite.constant.AnimeStatus;
 import com.animeSite.persist.Anime;
 import com.animeSite.repo.AnimeRepository;
 import com.animeSite.service.SlugService;
@@ -74,7 +75,7 @@ public class OfflineCatalogSeeder implements CommandLineRunner {
                         if (r.get("score") instanceof Number n) a.setScore(n.doubleValue());
                         a.setEpisodes(eps);
                         a.setType((String) r.get("type"));
-                        a.setStatus((String) r.get("status"));
+                        a.setStatus(AnimeStatus.normalize((String) r.get("status")));
                         if (r.get("year") instanceof Number n) a.setYear(n.intValue());
                         a.setSeason((String) r.get("season"));
                         a.setImageUrl((String) r.get("imageUrl"));
