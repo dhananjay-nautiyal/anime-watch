@@ -47,7 +47,11 @@ export default function ControlsBar({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
       className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent z-30 flex flex-col justify-end"
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation()
+        // Clicking the bar background dismisses any open menu.
+        if (state.showSettings || state.showVol) st({ showSettings: false, showVol: false })
+      }}
     >
       <div className="px-4 pt-4 pb-2 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">

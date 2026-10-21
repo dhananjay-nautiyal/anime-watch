@@ -35,44 +35,12 @@ public class StreamProxyController {
         long start = System.currentTimeMillis();
         log.info("[PROXY_CONTROLLER] REQUEST | url='{}' referer='{}'", url, referer);
 
-        StreamProxyService.ProxyResult result = streamProxyService.proxyStream(url, referer, acceptHeader);
+        // The service writes headers and body directly so large segments can be
+        // streamed to the browser as they download.
+        streamProxyService.proxyStream(url, referer, acceptHeader, response);
 
-        response.setStatus(result.status());
-        response.setContentType(result.contentType());
-
-        // Third-party player pages (megaplay et al.) load their own scripts,
-        // styles and media from their CDN. The app-wide CSP forbids that, so
-        // override it for proxied HTML or the player never initialises and the
-        // video sits at 0:00 behind a spinner forever.
-        if (result.contentType() != null && result.contentType().contains("text/html")) {
-            response.setHeader("Content-Security-Policy",
-                "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; " +
-                "script-src * 'unsafe-inline' 'unsafe-eval' blob:; " +
-                "style-src * 'unsafe-inline'; img-src * data: blob:; " +
-                "media-src * data: blob:; connect-src *; frame-src *; child-src *;");
-            response.setHeader("X-Frame-Options", "");
-            // Never cache an HTML player page: its headers (CSP) and content
-            // must not survive a code change or a re-resolve.
-            response.setHeader("Cache-Control", "no-store");
-        } else if (result.status() == 200) {
-            response.setHeader("Cache-Control", "public, max-age=300");
-        } else {
-            // Never cache failures: a blocked or broken segment stays broken
-            // for the browser even after the backend is fixed.
-            response.setHeader("Cache-Control", "no-store");
-        }
-        response.setContentLength(result.data().length);
-
-        try {
-            response.getOutputStream().write(result.data());
-            response.getOutputStream().flush();
-        } catch (Exception e) {
-            log.warn("[PROXY_CONTROLLER] WRITE_FAILED | url='{}' error='{}'", url, e.getMessage());
-        }
-
-        long elapsed = System.currentTimeMillis() - start;
-        log.info("[PROXY_CONTROLLER] COMPLETE | url='{}' status={} type='{}' size={} duration={}ms",
-            url, result.status(), result.contentType(), result.data().length, elapsed);
+        log.info("[PROXY_CONTROLLER] COMPLETE | url='{}' status={} duration={}ms",
+            url, response.getStatus(), System.currentTimeMillis() - start);
     }
 
     @GetMapping("/resolve/{malId}")

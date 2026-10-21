@@ -31,7 +31,9 @@ public class StreamVerificationService {
         "text/vtt", "application/octet-stream", "video/MP2T"
     );
 
-    private static final int MAX_SEGMENTS_TO_VERIFY = 2;
+    // One segment is enough to prove the CDN serves media. Downloading a
+    // sample per variant used to add several seconds before playback began.
+    private static final int MAX_SEGMENTS_TO_VERIFY = 1;
     private static final int CONNECT_TIMEOUT_MS = 5000;
     private static final int READ_TIMEOUT_MS = 8000;
 
@@ -100,6 +102,8 @@ public class StreamVerificationService {
 
         // 2. Extract and verify variant playlists
         List<String> variantUrls = extractVariantUrls(master.body, baseUrl);
+        Map<String, String> variantBodies = new LinkedHashMap<>();
+        boolean segmentChecked = false;
         if (!variantUrls.isEmpty()) {
             for (int i = 0; i < variantUrls.size(); i++) {
                 String vUrl = variantUrls.get(i);
@@ -113,7 +117,11 @@ public class StreamVerificationService {
                     warnings.add("Variant " + i + " invalid content");
                     continue;
                 }
-                // 3. Verify a sample media segment from this variant
+                variantBodies.put(vUrl, variant.body);
+                // 3. Verify one sample segment from the first reachable variant.
+                // The player only starts with one rendition, and any other
+                // variant failing later triggers the normal failover path.
+                if (segmentChecked) continue;
                 List<String> segments = extractSegmentUrls(variant.body,
                     HlsPlaylistRewriter.detectBaseUrl(vUrl, vUrl));
                 int verified = 0;
@@ -131,6 +139,7 @@ public class StreamVerificationService {
                     }
                     verified++;
                 }
+                segmentChecked = true;
             }
         } else {
             // No variants — this might be a single-quality playlist. Verify segments directly.
@@ -165,12 +174,9 @@ public class StreamVerificationService {
 
         // 5. Verify encryption keys
         List<String> keyUrls = extractKeyUrls(master.body, baseUrl);
-        for (String variantUrl : variantUrls) {
-            HttpResult vr = fetchUrl(variantUrl, referer);
-            if (vr.success) {
-                String vBase = HlsPlaylistRewriter.detectBaseUrl(variantUrl, variantUrl);
-                keyUrls.addAll(extractKeyUrls(vr.body, vBase));
-            }
+        for (Map.Entry<String, String> entry : variantBodies.entrySet()) {
+            String vBase = HlsPlaylistRewriter.detectBaseUrl(entry.getKey(), entry.getKey());
+            keyUrls.addAll(extractKeyUrls(entry.getValue(), vBase));
         }
         for (String keyUrl : keyUrls) {
             if (!verifiedUrls.add(keyUrl)) continue;
