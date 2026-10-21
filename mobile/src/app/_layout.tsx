@@ -74,7 +74,6 @@ export default function RootLayout() {
   // depending on bundler static handling) — Splash stays up until loaded.
   const [fontsLoaded] = useFonts({
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    'material-community': require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf'),
     ...MaterialCommunityIcons.font,
   })
   // Update prompt: once per cold start until the user updates.

@@ -604,6 +604,25 @@ public class ProviderResolver {
         return cached != null && !cached.isExpired() && cached.isStreamable() && cached.getEpisodeCount() > 0;
     }
 
+    /**
+     * Batch variant of {@link #getCachedProviderForAnime(int)}. The home page
+     * used to run one query per anime id (200+ queries per request).
+     */
+    public java.util.Set<Integer> getStreamableProviderIds(java.util.Collection<Integer> malIds) {
+        java.util.Set<Integer> result = new java.util.LinkedHashSet<>();
+        if (malIds == null || malIds.isEmpty()) return result;
+        try {
+            for (AnimeProviderCache cache : cacheRepository.findByMalIdIn(malIds)) {
+                if (cache != null && !cache.isExpired() && cache.isStreamable() && cache.getEpisodeCount() > 0) {
+                    result.add(cache.getMalId());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[RESOLVER] BATCH_CACHE_LOOKUP_FAILED | size={} error='{}'", malIds.size(), e.getMessage());
+        }
+        return result;
+    }
+
     public String getCachedProviderForAnime(int malId) {
         AnimeProviderCache cached = cacheRepository.findByMalId(malId).orElse(null);
         if (cached != null && !cached.isExpired() && cached.isStreamable() && cached.getEpisodeCount() > 0) {

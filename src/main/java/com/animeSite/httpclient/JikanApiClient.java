@@ -1,11 +1,16 @@
 package com.animeSite.httpclient;
 
 import com.animeSite.model.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import com.google.common.util.concurrent.RateLimiter;
+
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Component
 public class JikanApiClient {
@@ -13,12 +18,83 @@ public class JikanApiClient {
     private static final String BASE_URL = "https://api.jikan.moe/v4";
     private static final long RATE_LIMIT_MS = 1000;
 
+    /**
+     * Jikan allows about 3 requests per second. A slower limiter serialised
+     * the ten home-page sections, so a cold home request spent most of its
+     * time waiting for permits instead of doing work.
+     */
+    private static final double REQUESTS_PER_SECOND = 3.0;
+
+    private static final Logger log = LoggerFactory.getLogger(JikanApiClient.class);
+
     private final RestTemplate restTemplate;
     @SuppressWarnings("UnstableApiUsage")
-    private final RateLimiter rateLimiter = RateLimiter.create(1.0);
+    private final RateLimiter rateLimiter = RateLimiter.create(REQUESTS_PER_SECOND);
 
-    public JikanApiClient(@Qualifier("jikanRestTemplate") RestTemplate restTemplate) {
+    /**
+     * Circuit breaker. Jikan is regularly unreachable from datacenter IPs
+     * (Render, CI, containers). Without a breaker every single request paid
+     * the full connect timeout before falling back to the local database, and
+     * the 1 req/s rate limiter serialised the failures on top of that — the
+     * home page took 24s and every browse request 6s.
+     *
+     * After a few consecutive failures we stop calling Jikan entirely for a
+     * cool-down window and let the database fallback answer instantly.
+     */
+    private final AtomicInteger consecutiveFailures = new AtomicInteger();
+    private volatile long circuitOpenUntil = 0L;
+
+    private final int failureThreshold;
+    private final long openDurationMs;
+
+    public JikanApiClient(@Qualifier("jikanRestTemplate") RestTemplate restTemplate,
+                          @Value("${app.jikan.failure-threshold:3}") int failureThreshold,
+                          @Value("${app.jikan.circuit-open-ms:60000}") long openDurationMs) {
         this.restTemplate = restTemplate;
+        this.failureThreshold = failureThreshold;
+        this.openDurationMs = openDurationMs;
+    }
+
+    /** True while Jikan is considered unreachable. */
+    public boolean isCircuitOpen() {
+        return System.currentTimeMillis() < circuitOpenUntil;
+    }
+
+    private void assertCircuitClosed() {
+        if (isCircuitOpen()) {
+            throw new JikanUnavailableException("Jikan is unreachable, using local data");
+        }
+    }
+
+    private void recordSuccess() {
+        if (consecutiveFailures.getAndSet(0) > 0) {
+            log.info("[JIKAN] recovered, circuit closed");
+        }
+        circuitOpenUntil = 0L;
+    }
+
+    private void recordFailure(Throwable error) {
+        int failures = consecutiveFailures.incrementAndGet();
+        // A network-level failure (connect timeout, unknown host) means Jikan
+        // is unreachable, not busy. Open the circuit right away instead of
+        // paying the timeout several times over.
+        boolean unreachable = error instanceof org.springframework.web.client.ResourceAccessException
+            || (error != null && error.getMessage() != null
+                && (error.getMessage().contains("Connect timed out")
+                    || error.getMessage().contains("UnknownHost")
+                    || error.getMessage().contains("Connection refused")));
+        if ((unreachable || failures >= failureThreshold) && !isCircuitOpen()) {
+            circuitOpenUntil = System.currentTimeMillis() + openDurationMs;
+            log.warn("[JIKAN] circuit OPEN for {}ms after {} failure(s) (unreachable={}, last error='{}')",
+                openDurationMs, failures, unreachable, error != null ? error.getMessage() : "?");
+        }
+    }
+
+    /** Thrown when the breaker is open; callers fall back to the database. */
+    public static class JikanUnavailableException extends RuntimeException {
+        public JikanUnavailableException(String message) {
+            super(message);
+        }
     }
 
     public JikanListResponse fetchTopAnime(int page) {
@@ -110,39 +186,62 @@ public class JikanApiClient {
         rateLimiter.acquire();
     }
 
-    private JikanListResponse callApi(String url, Object... args) {
+    private <T> T guarded(java.util.function.Supplier<T> call) {
+        assertCircuitClosed();
         rateLimit();
-        return restTemplate.getForObject(url, JikanListResponse.class, args);
+        // The circuit may have opened while this call was queued behind the
+        // rate limiter - bail out instead of paying another timeout.
+        assertCircuitClosed();
+        try {
+            T result = call.get();
+            recordSuccess();
+            return result;
+        } catch (RuntimeException e) {
+            recordFailure(e);
+            throw e;
+        }
+    }
+
+    private JikanListResponse callApi(String url, Object... args) {
+        return guarded(() -> {
+            return restTemplate.getForObject(url, JikanListResponse.class, args);
+        });
     }
 
     private JikanSingleResponse callApiSingle(String url, Object... args) {
-        rateLimit();
-        return restTemplate.getForObject(url, JikanSingleResponse.class, args);
+        return guarded(() -> {
+            return restTemplate.getForObject(url, JikanSingleResponse.class, args);
+        });
     }
 
     private JikanFullAnimeResponse callApiFull(String url, Object... args) {
-        rateLimit();
-        return restTemplate.getForObject(url, JikanFullAnimeResponse.class, args);
+        return guarded(() -> {
+            return restTemplate.getForObject(url, JikanFullAnimeResponse.class, args);
+        });
     }
 
     private JikanCharactersResponse callApiCharacters(String url, Object... args) {
-        rateLimit();
-        return restTemplate.getForObject(url, JikanCharactersResponse.class, args);
+        return guarded(() -> {
+            return restTemplate.getForObject(url, JikanCharactersResponse.class, args);
+        });
     }
 
     private JikanStaffResponse callApiStaff(String url, Object... args) {
-        rateLimit();
-        return restTemplate.getForObject(url, JikanStaffResponse.class, args);
+        return guarded(() -> {
+            return restTemplate.getForObject(url, JikanStaffResponse.class, args);
+        });
     }
 
     private JikanRecommendationsResponse callApiRecommendations(String url, Object... args) {
-        rateLimit();
-        return restTemplate.getForObject(url, JikanRecommendationsResponse.class, args);
+        return guarded(() -> {
+            return restTemplate.getForObject(url, JikanRecommendationsResponse.class, args);
+        });
     }
 
     private JikanExternalResponse callApiExternal(String url, Object... args) {
-        rateLimit();
-        return restTemplate.getForObject(url, JikanExternalResponse.class, args);
+        return guarded(() -> {
+            return restTemplate.getForObject(url, JikanExternalResponse.class, args);
+        });
     }
 
     public JikanEpisodeListResponse fetchAnimeEpisodes(int id, int page) {
@@ -150,7 +249,8 @@ public class JikanApiClient {
     }
 
     private JikanEpisodeListResponse callApiEpisodes(String url, Object... args) {
-        rateLimit();
-        return restTemplate.getForObject(url, JikanEpisodeListResponse.class, args);
+        return guarded(() -> {
+            return restTemplate.getForObject(url, JikanEpisodeListResponse.class, args);
+        });
     }
 }

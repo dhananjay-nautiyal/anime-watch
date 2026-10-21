@@ -10,6 +10,8 @@ declare module '@anime/api' {
   }
 
   export const client: AxiosInstance
+  export function getApiBaseURL(): string
+  export function setApiBaseURL(url: string): void
   export function configureTokenStorage(store: TokenStore): void
   export function extractErrorMessage(err: any): string
   export function extractErrorCode(err: any): string | null

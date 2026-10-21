@@ -4,7 +4,6 @@ import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { useColorScheme } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
-import * as Haptics from 'expo-haptics'
 import { Palette, DarkPalette, Typography, Spacing, BorderRadius } from '@/constants/theme'
 
 const PLACEHOLDER = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="300" viewBox="0 0 200 300"><rect fill="#e0e0e0" width="200" height="300"/><text x="100" y="150" text-anchor="middle" fill="#aaa" font-size="14">No Image</text></svg>')
@@ -64,13 +63,14 @@ function AnimeCard({ anime, index = 0, width = 140, showScore = true, showType =
   const isHd = score != null && score >= 7.5
 
   const handlePressIn = () => {
+    // No haptics here: firing on every touch-down made the whole grid buzz
+    // while scrolling and dragging between cards.
     Animated.spring(pressScale, {
       toValue: 0.95,
       friction: 8,
       tension: 200,
       useNativeDriver: true,
     }).start()
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
   }
 
   const handlePressOut = () => {

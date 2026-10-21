@@ -29,10 +29,12 @@ public class AppConfig {
 
     @Bean
     @Qualifier("jikanRestTemplate")
-    public RestTemplate jikanRestTemplate() {
+    public RestTemplate jikanRestTemplate(
+            @org.springframework.beans.factory.annotation.Value("${app.jikan.connect-timeout-ms:2500}") int connectTimeout,
+            @org.springframework.beans.factory.annotation.Value("${app.jikan.read-timeout-ms:6000}") int readTimeout) {
         var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(5000);
-        factory.setReadTimeout(10000);
+        factory.setConnectTimeout(connectTimeout);
+        factory.setReadTimeout(readTimeout);
         return new RestTemplate(factory);
     }
 

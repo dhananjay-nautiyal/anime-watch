@@ -55,6 +55,15 @@ jwt:
   refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
 
 app:
+  # Jikan is regularly unreachable from datacenter IPs. After a few failed
+  # calls the client stops trying for a minute and the local database answers
+  # immediately instead of every request paying the connect timeout.
+  jikan:
+    connect-timeout-ms: ${JIKAN_CONNECT_TIMEOUT_MS:2500}
+    read-timeout-ms: ${JIKAN_READ_TIMEOUT_MS:6000}
+    failure-threshold: ${JIKAN_FAILURE_THRESHOLD:3}
+    circuit-open-ms: ${JIKAN_CIRCUIT_OPEN_MS:60000}
+
   base-url: ${APP_BASE_URL}
   frontend-url: ${APP_FRONTEND_URL}
 

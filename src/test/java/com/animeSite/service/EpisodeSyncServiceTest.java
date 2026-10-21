@@ -484,14 +484,64 @@ class EpisodeSyncServiceTest {
         when(aninekoProvider.fetchEpisodes(21, "One Piece")).thenReturn(episodes);
         when(validationService.validateEpisodes(anyList(), anyString())).thenReturn(episodes);
 
+        // The sync merges into the existing rows, so the failure now happens
+        // while inserting the new episodes.
         doThrow(new RuntimeException("Database connection lost"))
-            .when(episodeRepository).deleteByAnimeMalId(21);
+            .when(episodeRepository).saveAll(anyList());
 
         EpisodeSyncService.SyncResult result = syncService.syncEpisodes(21);
 
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.isTemporaryFailure()).isTrue();
         assertThat(result.message()).contains("Failed to save");
+    }
+
+    // ========================================================================
+    // DUPLICATE EPISODES — merge instead of delete + insert
+    // ========================================================================
+
+    @Test
+    @DisplayName("Should not create duplicate episodes when the same numbers already exist")
+    void syncEpisodes_existingDuplicates_mergesInsteadOfDuplicating() {
+        when(animeRepository.findByMalId(21)).thenReturn(Optional.of(testAnime));
+        when(releaseDetector.shouldSkipProviderLookup(21)).thenReturn(false);
+
+        List<Episode> episodes = createEpisodes(21, 3);
+        when(aninekoProvider.fetchEpisodes(21, "One Piece")).thenReturn(episodes);
+        when(validationService.validateEpisodes(anyList(), anyString())).thenReturn(episodes);
+
+        // The database already holds episode 1 twice (left over by an older
+        // build) and episode 2 once.
+        Episode first = new Episode();
+        first.setAnimeMalId(21);
+        first.setEpisodeNumber(1);
+        first.setEmbedUrl("https://example.com/1");
+        Episode duplicate = new Episode();
+        duplicate.setAnimeMalId(21);
+        duplicate.setEpisodeNumber(1);
+        duplicate.setEmbedUrl("https://example.com/1");
+        Episode second = new Episode();
+        second.setAnimeMalId(21);
+        second.setEpisodeNumber(2);
+        second.setEmbedUrl("https://example.com/2");
+        when(episodeRepository.findByAnimeMalIdOrderByEpisodeNumberAsc(21))
+            .thenReturn(new ArrayList<>(List.of(first, duplicate, second)));
+
+        EpisodeSyncService.SyncResult result = syncService.syncEpisodes(21);
+
+        assertThat(result.isSuccess()).isTrue();
+        // The duplicate row is deleted, nothing new is inserted for 1 and 2.
+        verify(episodeRepository).deleteAll(argThat(rows -> {
+            List<Episode> list = new ArrayList<>();
+            rows.forEach(list::add);
+            return list.size() == 1;
+        }));
+        verify(episodeRepository, never()).deleteByAnimeMalId(anyInt());
+        verify(episodeRepository).saveAll(argThat(rows -> {
+            List<Episode> list = new ArrayList<>();
+            rows.forEach(list::add);
+            return list.size() == 1 && list.get(0).getEpisodeNumber() == 3;
+        }));
     }
 
     // ========================================================================
