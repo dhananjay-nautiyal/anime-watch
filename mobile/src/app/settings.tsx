@@ -18,7 +18,7 @@ import PressableScale from '@/components/PressableScale'
 
 const NOTIFICATION_TYPE_LABELS: Record<string, { label: string; desc: string; icon: string }> = {
   new_episode: { label: 'New Episodes', desc: 'When a new episode of anime in your watchlist is available', icon: 'play-circle-outline' },
-  watch_reminder: { label: 'Watch Reminders', desc: 'Periodic reminders to catch up on your watchlist', icon: 'alarm-outline' },
+  watch_reminder: { label: 'Watch Reminders', desc: 'Periodic reminders to catch up on your watchlist', icon: 'alarm' },
   continue_watching: { label: 'Continue Watching', desc: "Reminders for episodes you haven't finished", icon: 'clock-outline' },
   announcement: { label: 'Announcements', desc: 'Important updates and new features', icon: 'bullhorn-outline' },
   promotion: { label: 'Promotions', desc: 'Special offers and promotional content', icon: 'tag-outline' },
