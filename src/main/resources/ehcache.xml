@@ -26,6 +26,10 @@
         <expiry><ttl unit="seconds">3600</ttl></expiry>
     </cache>
 
+    <cache alias="home" uses-template="default">
+        <expiry><ttl unit="seconds">300</ttl></expiry>
+    </cache>
+
     <cache alias="codeCache" uses-template="default">
         <expiry><ttl unit="seconds">86400</ttl></expiry>
         <heap unit="entries">50</heap>

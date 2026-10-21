@@ -20,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -46,7 +48,18 @@ public class EpisodeSyncService {
     static final long PROVIDER_PHASE_BUDGET_MS =
         Long.getLong("app.providers.sync-budget-ms", 30_000L);
 
+    /** How long a successful sync is trusted before the providers are asked again. */
+    static final long REFRESH_WINDOW_SECONDS = 600L;
+
     private final ProviderPriorityManager priorityManager;
+
+    /**
+     * One sync per title at a time. Two concurrent syncs (two browser tabs, a
+     * retry racing the original request) used to delete-and-insert in
+     * parallel, which left every episode number in the database twice —
+     * One Piece showed up as 2360 episodes instead of 1180.
+     */
+    private final Map<Integer, java.util.concurrent.locks.ReentrantLock> syncLocks = new ConcurrentHashMap<>();
 
     public EpisodeSyncService(List<StreamProvider> providers,
                                ValidationService validationService,
@@ -72,6 +85,23 @@ public class EpisodeSyncService {
     public SyncResult syncEpisodes(int malId) {
         long start = System.currentTimeMillis();
         log.info("[SYNC_SERVICE] START | malId={}", malId);
+
+        java.util.concurrent.locks.ReentrantLock lock =
+            syncLocks.computeIfAbsent(malId, k -> new java.util.concurrent.locks.ReentrantLock());
+        boolean locked = false;
+        try {
+            locked = lock.tryLock(60, TimeUnit.SECONDS);
+            if (!locked) {
+                log.warn("[SYNC_SERVICE] LOCK_TIMEOUT | malId={}", malId);
+                return SyncResult.temporaryFailure("Another sync for this title is already running", System.currentTimeMillis() - start);
+            }
+            // Another tab may have finished the sync while we were waiting.
+            SyncResult cached = returnFreshEpisodesIfPresent(malId, start);
+            if (cached != null) return cached;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return SyncResult.temporaryFailure("Sync interrupted", System.currentTimeMillis() - start);
+        }
 
         try {
             Optional<Anime> animeOpt = animeRepository.findByMalId(malId);
@@ -185,6 +215,35 @@ public class EpisodeSyncService {
             long elapsed = System.currentTimeMillis() - start;
             log.error("[SYNC_SERVICE] CATASTROPHIC_FAILURE | malId={} error='{}' type='{}'", malId, e.getMessage(), e.getClass().getName(), e);
             return SyncResult.temporaryFailure("Unexpected error during sync: " + e.getMessage(), elapsed);
+        } finally {
+            if (locked) {
+                try { lock.unlock(); } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    /**
+     * If the title was synced very recently, return the stored episodes
+     * instead of hammering the providers again. Two tabs opening the same
+     * episode used to trigger two full provider syncs.
+     */
+    private SyncResult returnFreshEpisodesIfPresent(int malId, long start) {
+        try {
+            Optional<AnimeProviderCache> cached = cacheRepository.findByMalId(malId);
+            if (cached.isEmpty()) return null;
+            AnimeProviderCache cache = cached.get();
+            if (!cache.isStreamable() || cache.getEpisodeCount() <= 0) return null;
+            Instant lastSuccess = cache.getLastSuccessTime();
+            if (lastSuccess == null || lastSuccess.isBefore(Instant.now().minusSeconds(REFRESH_WINDOW_SECONDS))) {
+                return null;
+            }
+            List<Episode> existing = episodeRepository.findByAnimeMalIdOrderByEpisodeNumberAsc(malId);
+            if (existing.isEmpty()) return null;
+            log.info("[SYNC_SERVICE] FRESH_HIT | malId={} episodes={} (skipped provider lookup)", malId, existing.size());
+            return SyncResult.success(cache.getProvider() != null ? cache.getProvider() : "cached", existing.size(), existing);
+        } catch (Exception e) {
+            log.warn("[SYNC_SERVICE] FRESH_HIT_FAILED | malId={} error='{}'", malId, e.getMessage());
+            return null;
         }
     }
 
@@ -440,15 +499,42 @@ public class EpisodeSyncService {
             log.info("[SYNC_SERVICE] SAVE: deduplicated {} -> {} | malId={}", validEpisodes.size(), deduplicated.size(), malId);
 
             deduplicated.sort(Comparator.comparingInt(Episode::getEpisodeNumber));
-            log.info("[SYNC_SERVICE] SAVE: deleting old episodes | malId={}", malId);
+            // Merge instead of delete-all + insert. The old approach opened a
+            // window where the title had no episodes at all, took seconds for
+            // long series and let two concurrent syncs both insert their copy
+            // of every episode.
+            List<Episode> existing = episodeRepository.findByAnimeMalIdOrderByEpisodeNumberAsc(malId);
+            Map<Integer, Episode> keep = new LinkedHashMap<>();
+            List<Episode> duplicates = new ArrayList<>();
+            for (Episode e : existing) {
+                Episode previous = keep.putIfAbsent(e.getEpisodeNumber(), e);
+                if (previous != null) duplicates.add(e);
+            }
 
-            episodeRepository.deleteByAnimeMalId(malId);
-            episodeRepository.flush();
-            log.info("[SYNC_SERVICE] SAVE: old episodes deleted, saving {} new episodes | malId={}", deduplicated.size(), malId);
+            List<Episode> toInsert = new ArrayList<>();
+            for (Episode ep : deduplicated) {
+                Episode current = keep.remove(ep.getEpisodeNumber());
+                if (current == null) {
+                    toInsert.add(ep);
+                } else {
+                    current.setTitle(ep.getTitle());
+                    current.setEmbedUrl(ep.getEmbedUrl());
+                    current.setVideoUrl(ep.getVideoUrl());
+                }
+            }
+            // Anything left in the map is no longer part of the series.
+            List<Episode> toDelete = new ArrayList<>(keep.values());
+            toDelete.addAll(duplicates);
 
-            episodeRepository.saveAll(deduplicated);
+            if (!toDelete.isEmpty()) {
+                episodeRepository.deleteAll(toDelete);
+            }
+            if (!toInsert.isEmpty()) {
+                episodeRepository.saveAll(toInsert);
+            }
             episodeRepository.flush();
-            log.info("[SYNC_SERVICE] SAVE: saved {} episodes | malId={}", deduplicated.size(), malId);
+            log.info("[SYNC_SERVICE] SAVE: merged | malId={} updated={} inserted={} removed={} duplicatesCleaned={}",
+                malId, deduplicated.size() - toInsert.size(), toInsert.size(), keep.size(), duplicates.size());
 
             updateCacheIndependent(malId, providerName, deduplicated.size());
             log.info("[SYNC_SERVICE] SAVE: cache updated | malId={}", malId);

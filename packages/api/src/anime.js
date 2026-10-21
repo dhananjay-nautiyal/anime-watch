@@ -12,10 +12,10 @@ export const createStreamToken = (embedUrl, signal) =>
   client.post('/api/stream/token', { url: embedUrl }, { timeout: 5000, signal }).then(res => res.data?.data ?? null)
 
 export const getTrending = (page = 0, size = 25, signal) =>
-  client.get('/api/anime/trending', { params: { page, size }, signal }).then(unwrapPaged)
+  client.get('/api/anime/trending', { params: { page, size }, signal, timeout: 45000 }).then(unwrapPaged)
 
 export const searchAnime = (q, page = 0, size = 25, signal) =>
-  client.get('/api/anime/search', { params: { q, page, size }, signal }).then(unwrapPaged)
+  client.get('/api/anime/search', { params: { q, page, size }, signal, timeout: 45000 }).then(unwrapPaged)
 
 export const filterAnime = (params, signal) =>
   client.get('/api/anime/filter', { params, signal }).then(unwrapPaged)
@@ -27,7 +27,7 @@ export const getAnimeBySlug = (slug, signal) =>
   client.get(`/api/anime/slug/${slug}`, { signal }).then(res => res.data?.data ?? null)
 
 export const getSeasonal = (page = 0, size = 25, signal) =>
-  client.get('/api/anime/seasonal', { params: { page, size }, signal }).then(unwrapPaged)
+  client.get('/api/anime/seasonal', { params: { page, size }, signal, timeout: 45000 }).then(unwrapPaged)
 
 export const addReview = (animeId, starRating, comment) =>
   client.post(`/api/anime/${animeId}/review`, { starRating, comment }).then(res => res.data?.data ?? null)
@@ -40,7 +40,7 @@ export const getReviews = (animeId, page = 0, size = 10, signal) =>
   }))
 
 export const getEpisodes = (malId, signal) =>
-  client.get(`/api/anime/${malId}/episodes`, { signal }).then(unwrapData)
+  client.get(`/api/anime/${malId}/episodes`, { signal, timeout: 45000 }).then(unwrapData)
 
 export const syncEpisodes = (malId) => {
   // Providers alone can burn ~70s before the Jikan fallback runs; keep the
@@ -121,7 +121,9 @@ export const getAnimeStates = (ids, signal) => {
 }
 
 export const getHomePage = (signal) =>
-  client.get('/api/anime/home', { signal }).then(res => res.data?.data ?? {})
+  // The home payload fans out to ten sections; on a cold server it can take
+  // longer than the 25s default client timeout.
+  client.get('/api/anime/home', { signal, timeout: 60000 }).then(res => res.data?.data ?? {})
 
 export const getComingSoonAnime = (page = 0, size = 25, signal) =>
   client.get('/api/anime/filter', { params: { status: 'upcoming', page, size }, signal }).then(unwrapPaged)

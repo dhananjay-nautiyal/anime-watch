@@ -21,6 +21,7 @@ import {
 import { startDownload, cancelDownload, getDownload, formatBytes } from '@/services/downloadManager'
 import type { DownloadRecord } from '@/services/downloadDB'
 import { Palette, DarkPalette, Typography, Spacing, BorderRadius } from '@/constants/theme'
+import { absoluteApiUrl } from '@/utils/apiUrl'
 import PlayerControls from '@/components/player/PlayerControls'
 import PressableScale from '@/components/PressableScale'
 
@@ -395,7 +396,7 @@ export default function WatchScreen() {
 
       if (next) {
         serverFailoverIdx.current = servers.indexOf(next)
-        setStreamUrl(next.proxyUrl || next.url)
+        setStreamUrl(absoluteApiUrl(next.proxyUrl || next.url))
         setEmbedErr(null)
         setEmbedLoading(true)
         setStreamKey(k => k + 1)
@@ -428,7 +429,7 @@ export default function WatchScreen() {
       const langGroup = cache.languages.find((g: any) => g.language === lang)
       if (langGroup?.servers?.length) {
         const server = langGroup.servers.find((s: any) => s.verified && s.status === 'online') || langGroup.servers[0]
-        const url = server.proxyUrl || server.url
+        const url = absoluteApiUrl(server.proxyUrl || server.url)
         if (url) {
           setStreamUrl(url)
           setEmbedLoading(false)
@@ -522,51 +523,58 @@ export default function WatchScreen() {
   }, [playerTime, playerDuration, playerPlaying, playerStatus, nextEpisode])
 
   // Setup expo-video player
+  //
+  // NOTE: `useVideoPlayer` is a hook, so it may only be called while React is
+  // rendering. Calling it from an async callback inside an effect is a rules-of-
+  // hooks violation and it threw "Invalid hook call", which surfaced as
+  // "Failed to initialize player" on every episode. `createVideoPlayer` is the
+  // imperative counterpart and is safe to use here.
   useEffect(() => {
     if (!streamUrl) return
 
     let mounted = true
     let player: any = null
+    const cleanupFns: any[] = []
 
     const setupPlayer = async () => {
       try {
-        const { useVideoPlayer } = await import('expo-video')
-
-        const p = useVideoPlayer(
-          { uri: streamUrl, contentType: 'hls' },
-          (playerInstance: any) => {
-            playerInstance.timeUpdateEventInterval = 0.5
-            playerInstance.keepScreenOnWhilePlaying = true
-
-            const subs = playerInstance.addListener?.('timeUpdate', onTimeUpdate) ?? null
-            const statusListener = playerInstance.addListener?.('statusChange', onStatusChange) ?? null
-            const playingListener = playerInstance.addListener?.('playingChange', onPlayingChange) ?? null
-            const rateListener = playerInstance.addListener?.('playbackRateChange', onPlaybackRateChange) ?? null
-
-            if (subs) cleanupFns.push(subs)
-            if (statusListener) cleanupFns.push(statusListener)
-            if (playingListener) cleanupFns.push(playingListener)
-            if (rateListener) cleanupFns.push(rateListener)
-
-            // Track available subtitle/audio/video tracks
-            const subTrackListener = playerInstance.addListener?.('availableSubtitleTracksChange', (e: any) => {
-              setAvailableSubs(e?.availableSubtitleTracks || [])
-            })
-            const videoTrackListener = playerInstance.addListener?.('availableVideoTracksChange', (e: any) => {
-              setAvailableVideo(e?.availableVideoTracks || [])
-            })
-            const audioTrackListener = playerInstance.addListener?.('availableAudioTracksChange', (e: any) => {
-              setAvailableAudio(e?.availableAudioTracks || [])
-            })
-            if (subTrackListener) cleanupFns.push(subTrackListener)
-            if (videoTrackListener) cleanupFns.push(videoTrackListener)
-            if (audioTrackListener) cleanupFns.push(audioTrackListener)
-          },
-        )
-
+        const { createVideoPlayer } = await import('expo-video')
         if (!mounted) return
-        playerRef.current = p
-        setExpoPlayer(p)
+
+        player = createVideoPlayer({ uri: streamUrl, contentType: 'hls' })
+        player.timeUpdateEventInterval = 0.5
+        player.keepScreenOnWhilePlaying = true
+
+        const subs = player.addListener?.('timeUpdate', onTimeUpdate) ?? null
+        const statusListener = player.addListener?.('statusChange', onStatusChange) ?? null
+        const playingListener = player.addListener?.('playingChange', onPlayingChange) ?? null
+        const rateListener = player.addListener?.('playbackRateChange', onPlaybackRateChange) ?? null
+
+        if (subs) cleanupFns.push(subs)
+        if (statusListener) cleanupFns.push(statusListener)
+        if (playingListener) cleanupFns.push(playingListener)
+        if (rateListener) cleanupFns.push(rateListener)
+
+        // Track available subtitle/audio/video tracks
+        const subTrackListener = player.addListener?.('availableSubtitleTracksChange', (e: any) => {
+          setAvailableSubs(e?.availableSubtitleTracks || [])
+        })
+        const videoTrackListener = player.addListener?.('availableVideoTracksChange', (e: any) => {
+          setAvailableVideo(e?.availableVideoTracks || [])
+        })
+        const audioTrackListener = player.addListener?.('availableAudioTracksChange', (e: any) => {
+          setAvailableAudio(e?.availableAudioTracks || [])
+        })
+        if (subTrackListener) cleanupFns.push(subTrackListener)
+        if (videoTrackListener) cleanupFns.push(videoTrackListener)
+        if (audioTrackListener) cleanupFns.push(audioTrackListener)
+
+        if (!mounted) {
+          try { player.release?.() } catch {}
+          return
+        }
+        playerRef.current = player
+        setExpoPlayer(player)
         setEmbedLoading(false)
       } catch (err: any) {
         console.warn('Failed to create player:', err)
@@ -577,12 +585,16 @@ export default function WatchScreen() {
       }
     }
 
-    const cleanupFns: any[] = []
     setupPlayer()
 
     return () => {
       mounted = false
       cleanupFns.forEach((fn: any) => { try { fn.remove?.() } catch {} })
+      try { player?.release?.() } catch {}
+      if (playerRef.current === player) {
+        playerRef.current = null
+        setExpoPlayer(null)
+      }
     }
   }, [streamKey, streamUrl])
 
@@ -607,7 +619,7 @@ export default function WatchScreen() {
         <View style={playerStyle.videoContainer}>
           <VideoView
             style={playerStyle.video}
-            player={playerRef.current}
+            player={expoPlayer}
             nativeControls={false}
             contentFit="contain"
             allowsPictureInPicture={Platform.OS === 'ios'}
@@ -618,7 +630,7 @@ export default function WatchScreen() {
           />
         </View>
       )
-  }, [streamUrl, playerRef.current])
+  }, [streamUrl, expoPlayer])
 
   // Loading state
   if (animeQuery.isLoading) {

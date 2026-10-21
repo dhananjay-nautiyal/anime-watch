@@ -7,7 +7,6 @@ import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { useColorScheme } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
-import * as Haptics from 'expo-haptics'
 import { Palette, DarkPalette, Typography, Spacing, BorderRadius } from '@/constants/theme'
 import type { AnimeItem } from './AnimeCard'
 
@@ -37,7 +36,8 @@ function HeroBanner({ items }: Props) {
   const onMomentumEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH)
     setActiveIndex(idx)
-    Haptics.selectionAsync()
+    // No haptic on auto-advance: the banner rotates on its own, so the phone
+    // used to buzz every few seconds while the user was just browsing.
   }, [])
 
   useEffect(() => {
@@ -61,7 +61,6 @@ function HeroBanner({ items }: Props) {
   }, [activeIndex, items.length])
 
   const handlePress = useCallback((item: AnimeItem) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     router.push(`/anime/${item.slug || item.malId || item.id}/ep/1`)
   }, [router])
 
