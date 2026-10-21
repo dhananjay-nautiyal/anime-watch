@@ -2,7 +2,7 @@
   "expo": {
     "name": "Vega",
     "slug": "anime-watch",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "animewatch",
@@ -49,7 +49,7 @@
     },
     "android": {
       "package": "com.animewatch.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#1C1B1F",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
