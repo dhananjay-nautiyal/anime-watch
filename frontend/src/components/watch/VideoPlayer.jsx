@@ -16,6 +16,13 @@ const CONTROLS_HIDE_DELAY = 3000
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
 const SWIPE_THRESHOLD = 50
 
+function formatTime(sec) {
+  if (!sec || !isFinite(sec)) return '0:00'
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60)
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
 export default function VideoPlayer({
   embedUrl, poster, animeTitle, episodeNumber, animeId,
   onRetry, streamType = 'hls', onEnded, onTimeUpdate, autoNext = true, autoPlay = true,
@@ -30,6 +37,8 @@ export default function VideoPlayer({
   const hlsRef = useRef(null)
   const seeking = useRef(false)
   const readyFired = useRef(false)
+  const lastSaveRef = useRef(0)
+  const [resumeAt, setResumeAt] = useState(0)
 
   const [state, setState] = useState({
     playing: false, currentTime: 0, duration: 0,
@@ -213,9 +222,18 @@ export default function VideoPlayer({
 
   const showSkipIntro = state.currentTime > 0 && state.currentTime < 90 && state.duration > 120
 
+  // Where the viewer left off in this exact episode, so the player can offer
+  // to jump back in instead of always restarting at 00:00.
+  const progressKey = useMemo(
+    () => (animeId && episodeNumber ? `aw_progress_${animeId}_${episodeNumber}` : null),
+    [animeId, episodeNumber]
+  )
+
   useEffect(() => {
     readyFired.current = false
-  }, [embedUrl, streamKey])
+    setResumeAt(0)
+    lastSaveRef.current = 0
+  }, [embedUrl, streamKey, progressKey])
 
   useEffect(() => {
     const v = videoRef.current
@@ -231,13 +249,33 @@ export default function VideoPlayer({
     const onT = () => {
       st({ currentTime: v.currentTime, duration: v.duration || 0 })
       if (onTimeUpdate) onTimeUpdate({ currentTime: v.currentTime, duration: v.duration || 0 })
+      if (progressKey && v.currentTime > 0) {
+        const now = Date.now()
+        if (now - lastSaveRef.current > 5000) {
+          lastSaveRef.current = now
+          try { localStorage.setItem(progressKey, String(Math.floor(v.currentTime))) } catch {}
+        }
+      }
+    }
+    const onMeta = () => {
+      st({ duration: v.duration || 0 })
+      if (!progressKey) return
+      try {
+        const saved = parseFloat(localStorage.getItem(progressKey) || '0')
+        if (saved > 30 && v.duration && v.duration - saved > 20) setResumeAt(saved)
+      } catch {}
     }
     const onW = () => st({ buffering: true })
     const onC = () => st({ buffering: false })
-    const onE = () => { st({ playing: false }); if (autoNext && onEnded) onEnded() }
+    const onE = () => {
+      st({ playing: false })
+      if (progressKey) { try { localStorage.removeItem(progressKey) } catch {} }
+      if (autoNext && onEnded) onEnded()
+    }
     v.addEventListener('play', onP)
     v.addEventListener('pause', onPa)
     v.addEventListener('timeupdate', onT)
+    v.addEventListener('loadedmetadata', onMeta)
     v.addEventListener('waiting', onW)
     v.addEventListener('canplay', onC)
     v.addEventListener('ended', onE)
@@ -251,11 +289,12 @@ export default function VideoPlayer({
       v.removeEventListener('play', onP)
       v.removeEventListener('pause', onPa)
       v.removeEventListener('timeupdate', onT)
+      v.removeEventListener('loadedmetadata', onMeta)
       v.removeEventListener('waiting', onW)
       v.removeEventListener('canplay', onC)
       v.removeEventListener('ended', onE)
     }
-  }, [autoNext, onEnded, onTimeUpdate, st, onReady, onError])
+  }, [autoNext, onEnded, onTimeUpdate, st, onReady, onError, progressKey])
 
   useEffect(() => {
     const v = videoRef.current
@@ -602,6 +641,31 @@ export default function VideoPlayer({
             <div className="w-14 h-14 border-[3px] border-primary/30 border-t-primary rounded-full animate-spin" />
             <p className="text-white/60 text-xs font-medium">Buffering...</p>
           </div>
+        </div>
+      )}
+
+      {resumeAt > 0 && (
+        <div className="absolute bottom-24 left-4 z-40 flex items-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              const v = videoRef.current
+              if (v) v.currentTime = Math.min(v.duration || resumeAt, resumeAt)
+              setResumeAt(0)
+            }}
+            className="glass text-white text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all hover:bg-white/[0.12]"
+          >
+            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+            </svg>
+            Resume from {formatTime(resumeAt)}
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setResumeAt(0) }}
+            className="text-white/60 hover:text-white text-xs font-medium px-2.5 py-1.5 rounded-lg bg-black/40 backdrop-blur-xl border border-white/10 transition-all"
+          >
+            Start over
+          </button>
         </div>
       )}
 

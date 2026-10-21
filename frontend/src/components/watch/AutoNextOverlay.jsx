@@ -27,7 +27,7 @@ export default function AutoNextOverlay({ visible, nextEpisode, animeTitle, onPl
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 80, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          className="absolute bottom-20 right-4 z-40 w-72 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden shadow-2xl"
+          className="glass-panel absolute bottom-20 right-4 z-40 w-72 rounded-2xl overflow-hidden"
         >
           <div className="p-3 space-y-2">
             <p className="text-white/50 text-[10px] font-semibold uppercase tracking-wider">Up Next</p>

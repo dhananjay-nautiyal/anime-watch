@@ -48,7 +48,7 @@ export default function AnimeInfo({ anime, episodes = [] }) {
   if (!anime) return null
 
   return (
-    <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5">
+    <div className="glass rounded-2xl p-5">
       <div className="flex gap-5">
         <div className="w-28 h-40 rounded-xl overflow-hidden flex-shrink-0 ring-1 ring-white/10 hidden sm:block">
           <ImageWithFallback

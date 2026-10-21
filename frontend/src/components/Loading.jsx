@@ -1,7 +1,7 @@
 export default function Loading({ fullScreen = false }) {
   if (fullScreen) {
     return (
-      <div className="fixed inset-0 bg-body z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-body/60 backdrop-blur-2xl z-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
           <p className="text-muted text-sm font-medium">Loading...</p>

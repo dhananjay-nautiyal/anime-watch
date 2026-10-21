@@ -370,7 +370,7 @@ export default function AnimeDetail() {
           <h2 className="text-white text-xl font-bold font-display mb-6">Reviews</h2>
 
           {isAuthenticated && (
-            <motion.form initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onSubmit={handleReview} className="bg-card/50 backdrop-blur-sm p-6 rounded-2xl mb-8 border border-white/[0.04]">
+            <motion.form initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onSubmit={handleReview} className="glass rounded-2xl p-6 mb-8">
               {reviewMsg && (
                 <p className={`text-sm mb-4 ${reviewMsg.includes('Failed') || reviewMsg.includes('already') ? 'text-red-400' : 'text-green-400'}`}>
                   {reviewMsg}
@@ -394,7 +394,7 @@ export default function AnimeDetail() {
           ) : (
             <div className="space-y-4">
               {reviews.map((review) => (
-                <motion.div key={review.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-card/30 backdrop-blur-sm p-5 rounded-2xl border border-white/[0.04]">
+                <motion.div key={review.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white/[0.035] backdrop-blur-sm p-5 rounded-2xl border border-white/[0.04]">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold">

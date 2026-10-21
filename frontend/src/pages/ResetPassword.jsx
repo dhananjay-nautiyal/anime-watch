@@ -27,7 +27,7 @@ export default function ResetPassword() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <h1 className="text-white text-2xl font-bold font-display text-center mb-8">Set New Password</h1>
-        <form onSubmit={handleSubmit} className="bg-surface/50 border border-white/5 rounded-2xl p-8 space-y-5">
+        <form onSubmit={handleSubmit} className="glass-strong rounded-2xl p-8 space-y-5">
           {message && (
             <p className={`text-sm ${message.includes('Failed') ? 'text-red-400' : 'text-green-400'}`}>{message}</p>
           )}
@@ -42,7 +42,7 @@ export default function ResetPassword() {
               minLength={8}
             />
           </div>
-          <button type="submit" disabled={loading} className="w-full bg-primary hover:bg-primary/90 text-white py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-50">
+          <button type="submit" disabled={loading} className="glass-cta w-full text-white py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-50">
             {loading ? 'Resetting...' : 'Reset Password'}
           </button>
           <p className="text-center text-sm text-muted">

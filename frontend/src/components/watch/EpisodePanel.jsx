@@ -108,7 +108,7 @@ export default function EpisodePanel({
   const showList = !syncing && !error && episodes.length > 0
 
   return (
-    <div className="bg-white/[0.03] border border-white/5 rounded-xl overflow-hidden">
+    <div className="glass-strong rounded-2xl overflow-hidden">
       <div className="p-4 border-b border-white/5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-white text-sm font-bold flex items-center gap-2">
@@ -163,7 +163,7 @@ export default function EpisodePanel({
               aria-label="Episode range"
             >
               {ranges.map((r, i) => (
-                <option key={i} value={i} className="bg-[#0a0a0f]">{r.label}</option>
+                <option key={i} value={i} className="bg-[#0b1020]">{r.label}</option>
               ))}
             </select>
             <div className="relative flex-1">

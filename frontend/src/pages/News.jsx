@@ -51,7 +51,7 @@ export default function News() {
                 viewport={{ once: true }}
                 transition={{ duration: 0.4 }}
               >
-                <Link to={`/news/${article.id}`} className="group block bg-surface/30 backdrop-blur-sm border border-white/5 rounded-2xl overflow-hidden hover:bg-surface/50 transition-all hover:-translate-y-1">
+                <Link to={`/news/${article.id}`} className="group block bg-white/[0.035] backdrop-blur-sm border border-white/5 rounded-2xl overflow-hidden hover:bg-white/[0.06] transition-all hover:-translate-y-1">
                   {article.imageUrl ? (
                     <div className="aspect-video overflow-hidden">
                       <ImageWithFallback

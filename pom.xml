@@ -13,7 +13,7 @@
 
     <groupId>com.animeSite</groupId>
     <artifactId>anime-backend</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
     <name>anime-backend</name>
     <description>Legal anime info and news website backend</description>
 

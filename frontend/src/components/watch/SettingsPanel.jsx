@@ -67,7 +67,7 @@ export default function SettingsPanel({
           exit={{ opacity: 0, y: 8, scale: 0.98 }}
           transition={{ duration: 0.14 }}
           onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-9 right-0 w-[232px] bg-[#0d0d14]/95 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl z-40 overflow-hidden"
+          className="glass-panel absolute bottom-9 right-0 w-[232px] rounded-2xl z-40 overflow-hidden"
         >
           <AnimatePresence mode="wait" initial={false}>
             {section ? (

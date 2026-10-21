@@ -22,7 +22,7 @@ export default function KeyboardShortcutsModal({ show, onClose }) {
           className="absolute inset-0 z-40 flex items-center justify-center bg-black/80 backdrop-blur-sm"
           onClick={(e) => { e.stopPropagation(); onClose() }}
         >
-          <div className="bg-surface/95 border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+          <div className="glass-panel rounded-2xl p-6 max-w-sm w-full mx-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-white text-sm font-bold">Keyboard Shortcuts</h3>
               <button onClick={onClose} className="text-muted hover:text-white transition-colors">

@@ -78,8 +78,8 @@ const HeroSection = memo(function HeroSection({ items }) {
           </motion.div>
         </AnimatePresence>
 
-        <div className="absolute inset-0 bg-gradient-to-t from-[#080A16] via-[#080A16]/60 to-[#080A16]/5" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#080A16]/90 via-[#080A16]/30 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-body via-body/55 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-body/90 via-body/25 to-transparent" />
       </div>
 
       <div className="absolute inset-0 flex items-center">
@@ -96,7 +96,7 @@ const HeroSection = memo(function HeroSection({ items }) {
             >
               <div className="flex flex-wrap items-center gap-2.5 mb-4">
                 {item.type && (
-                  <span className="bg-primary/15 text-primary text-[11px] font-bold px-3 py-1 rounded-lg border border-primary/20">
+                  <span className="bg-white/10 backdrop-blur-xl text-white text-[11px] font-bold px-3 py-1 rounded-lg border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]">
                     {item.type}
                   </span>
                 )}
@@ -136,7 +136,7 @@ const HeroSection = memo(function HeroSection({ items }) {
               <motion.div className="flex items-center gap-3 flex-wrap">
                 <Link
                   to={`/anime/${item.slug || item.malId || item.id}/ep/1`}
-                  className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-semibold text-sm transition-all hover:shadow-glow hover:-translate-y-0.5 active:scale-95 flex items-center gap-2"
+                  className="glass-cta text-white px-8 py-3 rounded-xl font-semibold text-sm transition-all hover:shadow-glow hover:-translate-y-0.5 active:scale-95 flex items-center gap-2"
                 >
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
@@ -145,7 +145,7 @@ const HeroSection = memo(function HeroSection({ items }) {
                 </Link>
                 <Link
                   to={`/anime/${item.slug || item.malId || item.id}`}
-                  className="text-[#D1D5DB] hover:text-white px-6 py-3 rounded-xl text-sm font-medium transition-all hover:bg-white/[0.08] active:scale-95 backdrop-blur-md border border-white/[0.08] hover:border-white/[0.15]"
+                  className="glass text-white/85 hover:text-white px-6 py-3 rounded-xl text-sm font-medium transition-all hover:bg-white/[0.1] active:scale-95"
                 >
                   More Info
                 </Link>

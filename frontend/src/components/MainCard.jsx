@@ -13,7 +13,7 @@ export default function MainCard({ anime, index = 0 }) {
       className="group"
     >
       <Link to={`/anime/${anime.slug || anime.malId}/ep/1`} className="block">
-        <div className="relative rounded-xl overflow-hidden bg-surface/50 shadow-card" style={{ paddingBottom: '140%' }}>
+        <div className="relative rounded-xl overflow-hidden bg-white/[0.05] shadow-card" style={{ paddingBottom: '140%' }}>
           <ImageWithFallback
             src={anime.imageUrl}
             alt={anime.title}

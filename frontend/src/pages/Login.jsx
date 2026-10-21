@@ -58,7 +58,7 @@ export default function Login() {
           <p className="text-muted text-sm mt-2">Sign in to your account</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-surface/50 backdrop-blur-sm border border-white/5 rounded-2xl p-8 space-y-5">
+        <form onSubmit={handleSubmit} className="glass-strong rounded-2xl p-8 space-y-5">
           {error && (
             <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
               <p className="text-red-400 text-sm">{error}</p>
@@ -100,7 +100,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary hover:bg-primary/90 text-white py-3 rounded-xl text-sm font-semibold transition-all hover:shadow-glow disabled:opacity-50"
+            className="glass-cta w-full text-white py-3 rounded-xl text-sm font-semibold transition-all hover:shadow-glow disabled:opacity-50"
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>

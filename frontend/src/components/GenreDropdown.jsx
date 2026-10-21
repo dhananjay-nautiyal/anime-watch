@@ -7,7 +7,7 @@ export default function GenreDropdown({ genres, genresOpen, setGenresOpen, genre
       <button
         onClick={() => setGenresOpen(!genresOpen)}
         className={`flex items-center gap-1 px-3.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-          genresOpen ? 'text-white' : 'text-[#9CA3AF] hover:text-white'
+          genresOpen ? 'text-white bg-white/10 border border-white/10' : 'text-white/55 hover:text-white border border-transparent hover:bg-white/[0.06] hover:border-white/10'
         }`}
       >
         Genres
@@ -22,7 +22,7 @@ export default function GenreDropdown({ genres, genresOpen, setGenresOpen, genre
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.96 }}
             transition={{ duration: 0.15 }}
-            className="absolute top-full left-0 mt-2 w-52 bg-[#141827]/95 backdrop-blur-xl border border-white/[0.06] rounded-2xl shadow-2xl overflow-hidden"
+            className="glass-panel absolute top-full left-0 mt-2 w-52 rounded-2xl overflow-hidden"
           >
             <div className="py-2 max-h-[320px] overflow-y-auto">
               {genres.map(g => (

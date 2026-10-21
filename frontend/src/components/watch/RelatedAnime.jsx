@@ -7,7 +7,7 @@ function ScrollButton({ direction, onClick, hidden }) {
   return (
     <button
       onClick={onClick}
-      className="absolute top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 border border-white/10 flex items-center justify-center text-white/80 hover:text-white transition-all backdrop-blur-sm"
+      className="glass absolute top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-all"
       style={{ [direction === 'left' ? 'left' : 'right']: '-12px' }}
       aria-label={`Scroll ${direction}`}
     >
@@ -52,7 +52,7 @@ function AnimeCard({ item, compact }) {
   return (
     <Link
       to={`/anime/${item.slug || id}/ep/1`}
-      className="group flex gap-3 flex-shrink-0 w-[260px] p-2.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-white/10 transition-all"
+      className="group flex gap-3 flex-shrink-0 w-[260px] p-2.5 rounded-xl bg-white/[0.045] hover:bg-white/[0.08] border border-white/10 hover:border-primary/30 transition-all backdrop-blur-xl"
     >
       <div className="w-16 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-black/40">
         <ImageWithFallback
