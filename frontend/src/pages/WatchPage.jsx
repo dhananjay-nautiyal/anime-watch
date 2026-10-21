@@ -5,7 +5,7 @@ import { getEpisodePlayData, getEpisodeLanguages, getEpisodeStreams, getTrending
 import { extractErrorMessage } from '../api/client'
 import { getResume, saveResume } from '../api/watchHistory'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
-import { useAnime, useEpisodes, useSync } from '../hooks/useWatch'
+import { useAnime, useEpisodes, useSync, wrapProxy } from '../hooks/useWatch'
 import EpisodePanel from '../components/watch/EpisodePanel'
 import AnimeInfo from '../components/watch/AnimeInfo'
 import AutoNextOverlay from '../components/watch/AutoNextOverlay'
@@ -15,6 +15,21 @@ import { useAuth } from '../context/AuthContext'
 const VideoPlayer = lazy(() => import('../components/watch/VideoPlayer'))
 
 const LANG_KEY = 'aw_language'
+
+// Anti-hotlinkhosts (megaplay and friends) return HTTP 410 unless the request
+// carries their own site as Referer. Loading the embed directly from our origin
+// therefore yields a dead player, so route it through the backend proxy with the
+// provider's referer. Other servers are used as-is.
+const PROVIDER_REFERERS = [
+  { match: /megaplay\.buzz/i, referer: 'https://anikototv.to/' },
+]
+
+function toEmbedUrl(server) {
+  if (!server?.url) return ''
+  const hit = PROVIDER_REFERERS.find(p => p.match.test(server.url))
+  if (hit) return wrapProxy(server.url, hit.referer)
+  return server.proxyUrl || server.url
+}
 
 function LoadingSkeleton() {
   return (
@@ -76,6 +91,7 @@ export default function WatchPage() {
   const [embedLoading, setEmbedLoading] = useState(false)
   const [embedErr, setEmbedErr] = useState(null)
   const [selectedLanguage, setSelectedLanguage] = useState(null)
+  const [langNotice, setLangNotice] = useState(null)
   const [autoNextVisible, setAutoNextVisible] = useState(false)
   const [showComments, setShowComments] = useState(false)
   const [streamKey, setStreamKey] = useState(0)
@@ -164,7 +180,7 @@ export default function WatchPage() {
     const best = servers.find(s => s.verified && s.status === 'online') || servers[0]
 
     if (best) {
-      setEmbedUrl(best.proxyUrl || best.url)
+      setEmbedUrl(toEmbedUrl(best))
       setStreamKey(k => k + 1)
       setEmbedLoading(false)
       setEmbedErr(null)
@@ -199,7 +215,7 @@ export default function WatchPage() {
     const next = servers.slice(nextIdx).find(s => s.verified && s.status === 'online')
     if (next) {
       serverFailoverIdx.current = servers.indexOf(next)
-      setEmbedUrl(next.proxyUrl || next.url)
+      setEmbedUrl(toEmbedUrl(next))
       setEmbedErr(null)
       setEmbedLoading(true)
       setStreamKey(k => k + 1)
@@ -236,7 +252,7 @@ export default function WatchPage() {
       const servers = langGroup?.servers || []
       const best = servers.find(s => s.verified && s.status === 'online') || servers[0]
       if (best) {
-        setEmbedUrl(best.proxyUrl || best.url)
+        setEmbedUrl(toEmbedUrl(best))
         setEmbedErr(null)
         setStreamKey(k => k + 1)
       }
@@ -432,13 +448,23 @@ export default function WatchPage() {
                 return (
                   <button
                     key={lang}
-                    onClick={() => available && handleLanguageChange(lang)}
-                    disabled={!available || loadingLangs}
+                    onClick={() => {
+                      if (loadingLangs) return
+                      if (!available) {
+                        setLangNotice(`${lang} audio is not available for this episode.`)
+                        return
+                      }
+                      setLangNotice(null)
+                      handleLanguageChange(lang)
+                    }}
+                    disabled={loadingLangs}
+                    aria-disabled={!available}
+                    title={!available && languagesLoaded ? `${lang} audio not available` : `${lang} audio`}
                     className={`relative px-5 py-2 text-xs font-bold rounded-full transition-all duration-200 ${
                       loadingLangs
                         ? 'text-white/15 bg-white/[0.02] border border-white/[0.04] cursor-wait'
                         : !available
-                          ? 'text-white/15 bg-white/[0.02] border border-white/[0.04] cursor-not-allowed'
+                          ? 'text-white/25 bg-white/[0.02] border border-white/[0.04] cursor-help'
                           : selectedLanguage === lang
                             ? 'bg-primary/25 text-primary shadow-lg shadow-primary/10 border border-primary/30 scale-105'
                             : 'text-white/60 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:text-white hover:border-white/20 hover:scale-105'
@@ -451,6 +477,9 @@ export default function WatchPage() {
                   </button>
                 )
               })}
+              {langNotice && (
+                <span className="self-center text-[11px] text-amber-400/90">{langNotice}</span>
+              )}
             </div>
 
             {/* Prev / Current / Next */}

@@ -13,5 +13,18 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.0"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n backend,web,bridge -c blue,green,magenta \"npm:dev:backend\" \"npm:dev:web\" \"npm:dev:bridge\"",
+    "dev:backend": "SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run",
+    "dev:web": "npm run dev -w animewatch-web",
+    "dev:bridge": "npm start --prefix consumet-bridge",
+    "dev:mobile": "npm start -w animewatch-mobile",
+    "build": "npm run build:backend && npm run build:web",
+    "build:backend": "mvn clean package -DskipTests",
+    "build:web": "npm run build -w animewatch-web"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
   }
 }

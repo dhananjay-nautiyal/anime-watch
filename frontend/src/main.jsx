@@ -6,8 +6,6 @@ import { AuthProvider } from '@anime/auth'
 import { client } from '@anime/api'
 import { webStorage } from './storage/webStorage'
 
-console.log('API URL:', import.meta.env.VITE_API_URL || '(empty — using Vite proxy)')
-
 import App from './App'
 import ErrorBoundary from './components/ErrorBoundary'
 import './index.css'

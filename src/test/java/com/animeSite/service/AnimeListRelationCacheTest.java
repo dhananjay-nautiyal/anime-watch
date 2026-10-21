@@ -8,6 +8,7 @@ import com.animeSite.persist.AnimeStudio;
 import com.animeSite.repo.AnimeGenreRepository;
 import com.animeSite.repo.AnimeRepository;
 import com.animeSite.service.AnimeService.AnimePage;
+import com.animeSite.service.impl.AnimeMetadataEnricher;
 import com.animeSite.service.impl.AnimeServiceImpl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -75,7 +76,8 @@ class AnimeListRelationCacheTest {
         when(jikan.fetchTopAnime(anyInt(), anyInt())).thenThrow(new RuntimeException("offline"));
 
         AnimeServiceImpl service = new AnimeServiceImpl(jikan, animeRepository, animeGenreRepository,
-                mock(SlugService.class), mock(JikanMetadataProvider.class), transactionManager);
+                mock(SlugService.class), mock(JikanMetadataProvider.class),
+                mock(AnimeMetadataEnricher.class), transactionManager);
 
         AnimePage page = service.getTrending(0, 10);
 

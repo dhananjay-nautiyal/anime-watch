@@ -116,6 +116,38 @@ gh release create v1.0.0 \
 
 # Quick Start
 
+## One command (backend + web + stream bridge)
+
+From the repo root:
+
+```bash
+npm install          # root deps incl. concurrently
+npm run dev
+```
+
+That starts all three services with prefixed, colour-coded logs:
+
+| Service | URL | Notes |
+|---------|-----|-------|
+| Backend | <http://localhost:8080> | `dev` profile, H2 in-memory |
+| Web | <http://localhost:5173> | proxies `/api` → `:8080`; uses the next free port if 5173 is busy |
+| Stream bridge | <http://localhost:3000> | Consumet wrapper |
+
+Watching is anonymous — no account is needed to browse or play an episode.
+Signing in is only required for reviews, watchlist, favourites and profile.
+
+`Ctrl+C` stops everything. Ports must be free; if one is taken the child
+process exits and the rest are shut down.
+
+Run pieces individually when you only need one:
+
+```bash
+npm run dev:backend   # Spring Boot only
+npm run dev:web       # Vite only
+npm run dev:bridge    # Consumet bridge only (needs consumet-bridge deps)
+npm run dev:mobile    # Expo dev server (separate, needs mobile deps)
+```
+
 ## Backend (zero-config dev, H2 in-memory)
 
 ```bash

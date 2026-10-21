@@ -28,6 +28,7 @@ public class ProviderResolver {
     private final AnimeProviderCacheRepository cacheRepository;
     private final RecoveryEngine recoveryEngine;
     private final JikanApiClient jikanApiClient;
+    private final MegaPlayResolver megaPlayResolver;
 
     @Value("${app.providers.identity-confidence-threshold:0.90}")
     private double identityConfidenceThreshold;
@@ -41,7 +42,8 @@ public class ProviderResolver {
                             ProviderHealthMonitor healthMonitor,
                             AnimeProviderCacheRepository cacheRepository,
                             RecoveryEngine recoveryEngine,
-                            JikanApiClient jikanApiClient) {
+                            JikanApiClient jikanApiClient,
+                            MegaPlayResolver megaPlayResolver) {
         this.priorityManager = priorityManager;
         this.retryEngine = RetryEngine.builder()
             .maxRetries(2)
@@ -55,6 +57,7 @@ public class ProviderResolver {
         this.cacheRepository = cacheRepository;
         this.recoveryEngine = recoveryEngine;
         this.jikanApiClient = jikanApiClient;
+        this.megaPlayResolver = megaPlayResolver;
     }
 
     // ========================================================================
@@ -188,7 +191,7 @@ public class ProviderResolver {
                 continue;
             }
 
-            StreamResult sr = result.get();
+            StreamResult sr = upgradeToHls(result.get());
             if (sr.getPrimaryUrl() == null) {
                 errors.add(provider.getName() + ": no primary URL");
                 healthMonitor.recordFailure(provider.getName(), System.currentTimeMillis() - start);
@@ -252,6 +255,20 @@ public class ProviderResolver {
                     }
                 }
 
+                // Providers often expose SUB only, even when the host also has a
+                // DUB track. Probe the sibling URL so the DUB pill reflects
+                // reality instead of always being disabled.
+                if (!langs.contains("DUB")) {
+                    for (StreamResult.ServerOption server : sr.getServers()) {
+                        String dubUrl = MegaPlayResolver.withLanguage(server.url, "dub");
+                        if (dubUrl != null && megaPlayResolver.isAvailable(dubUrl)) {
+                            langs.add("DUB");
+                            log.info("[RESOLVER] DUB_AVAILABLE | provider={} url={}", provider.getName(), dubUrl);
+                            break;
+                        }
+                    }
+                }
+
                 if (!langs.isEmpty()) {
                     List<String> result = new ArrayList<>(langs);
                     if (result.contains("SUB") && result.contains("DUB") && result.get(0).equals("DUB")) {
@@ -271,6 +288,40 @@ public class ProviderResolver {
         long elapsed = System.currentTimeMillis() - start;
         log.warn("[RESOLVER] ALL_LANGUAGES_FAILED | malId={} duration={}ms", malId, elapsed);
         return PipelineResult.failure("No languages could be determined", "LANGUAGES_RESOLVE_FAILED", elapsed);
+    }
+
+    // ========================================================================
+    // MEGAPLAY IFRAME -> DIRECT HLS UPGRADE
+    // ========================================================================
+
+    /**
+     * Providers such as AnimeSuge hand back a MegaPlay embed page. That page is
+     * hotlink protected and cannot be embedded from our origin, so we trade it
+     * for the real HLS playlist through {@link MegaPlayResolver}. When the
+     * upgrade fails we keep the iframe result so behaviour is unchanged.
+     */
+    private StreamResult upgradeToHls(StreamResult sr) {
+        if (sr == null || !sr.isSuccess() || !"iframe".equalsIgnoreCase(sr.getType())) {
+            return sr;
+        }
+
+        List<StreamResult.ServerOption> upgraded = new ArrayList<>();
+        for (StreamResult.ServerOption server : sr.getServers()) {
+            Optional<String> hls = megaPlayResolver.resolve(server.url);
+            if (hls.isPresent()) {
+                upgraded.add(new StreamResult.ServerOption(hls.get(), server.label, server.isBackup, server.referer));
+            }
+        }
+
+        if (upgraded.isEmpty()) {
+            log.info("[RESOLVER] HLS_UPGRADE_SKIPPED | provider={} servers={}",
+                sr.getProvider(), sr.getServers().size());
+            return sr;
+        }
+
+        log.info("[RESOLVER] HLS_UPGRADE_OK | provider={} upgraded={}/{}",
+            sr.getProvider(), upgraded.size(), sr.getServers().size());
+        return StreamResult.success(sr.getProvider(), "hls", upgraded);
     }
 
     // ========================================================================

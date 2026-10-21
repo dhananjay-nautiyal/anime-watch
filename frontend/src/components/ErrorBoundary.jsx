@@ -1,5 +1,4 @@
 import { Component } from 'react'
-import { Link } from 'react-router-dom'
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -9,6 +8,12 @@ export default class ErrorBoundary extends Component {
 
   static getDerivedStateFromError(error) {
     return { hasError: true, error }
+  }
+
+  componentDidCatch(error, info) {
+    // The fallback renders outside the router, so keep the real failure in the
+    // console instead of letting an unrelated <Link> crash mask it.
+    console.error('[ErrorBoundary]', error, info?.componentStack)
   }
 
   render() {
@@ -30,9 +35,9 @@ export default class ErrorBoundary extends Component {
               >
                 Refresh Page
               </button>
-              <Link to="/" className="text-muted hover:text-white text-sm font-medium transition-colors">
+              <a href="/" className="text-muted hover:text-white text-sm font-medium transition-colors">
                 Go Home
-              </Link>
+              </a>
             </div>
           </div>
         </div>
