@@ -21,6 +21,7 @@ export default function VideoPlayer({
   onRetry, streamType = 'hls', onEnded, onTimeUpdate, autoNext = true, autoPlay = true,
   onSwipeUp, onSwipeDown,
   currentLanguage, onReady, onError, streamKey,
+  externalSubtitles = [],
 }) {
   const videoRef = useRef(null)
   const containerRef = useRef(null)
@@ -67,6 +68,23 @@ export default function VideoPlayer({
       setState(prev => (prev.showSettings || prev.showVol ? prev : { ...prev, showControls: false }))
     }, CONTROLS_HIDE_DELAY)
   }, [])
+
+  // Provider subtitles live outside the HLS manifest, so they are rendered as
+  // native <track> elements and merged into the same Caption menu.
+  const externalTracks = useMemo(() => (externalSubtitles || []).map((track, i) => ({
+    index: 10000 + i,
+    label: track.label || 'Subtitles',
+    lang: track.language || 'und',
+    url: wrapProxy(track.url, 'https://megaplay.buzz/'),
+    external: true,
+  })), [externalSubtitles])
+
+  useEffect(() => {
+    if (externalTracks.length === 0) return
+    st({ subtitles: externalTracks, currentSubtitle: -1 })
+    const v = videoRef.current
+    if (v) for (const track of v.textTracks) track.mode = 'disabled'
+  }, [externalTracks, st])
 
   const togglePlay = useCallback(() => {
     const v = videoRef.current
@@ -160,12 +178,27 @@ export default function VideoPlayer({
   }, [animeTitle, notify])
 
   const handleSubtitleChange = useCallback((idx) => {
+    const v = videoRef.current
     const hls = hlsRef.current
-    if (hls && hls.subtitleTrack !== undefined) {
+    const selected = state.subtitles.find(t => t.index === idx)
+
+    if (v) for (const track of v.textTracks) track.mode = 'disabled'
+
+    if (selected?.external) {
+      // Native <track> elements are matched by label; hls.js embedded tracks
+      // are not touched here.
+      if (hls) {
+        hls.subtitleTrack = -1
+        hls.subtitleDisplay = false
+      }
+      const native = v ? [...v.textTracks].find(t => t.label === selected.label) : null
+      if (native) native.mode = 'showing'
+    } else if (hls && hls.subtitleTrack !== undefined) {
       hls.subtitleTrack = idx
+      hls.subtitleDisplay = idx >= 0
     }
     st({ currentSubtitle: idx })
-  }, [st])
+  }, [st, state.subtitles])
 
   const seek = useCallback((dir) => {
     const v = videoRef.current
@@ -278,15 +311,23 @@ export default function VideoPlayer({
     }
     st({ buffering: true, hasPoster: !autoPlay, qualities: [], currentQuality: -1 })
 
-    // A dead CDN otherwise leaves the player spinning forever: if no media
-    // data arrives within the grace period, surface an error so the user can
-    // retry or pick another server.
-    const stallTimer = setTimeout(() => {
-      if (v.readyState < 2) {
-        st({ buffering: false })
-        onError?.('Stream is not responding. Try another server.')
+    // A dead CDN otherwise leaves the player spinning forever. Give a slow
+    // first segment one recovery attempt before surfacing an error, so a
+    // momentary CDN hiccup doesn't show "stream unavailable".
+    let stallTimer
+    let stallRetried = false
+    const checkStall = () => {
+      if (v.readyState >= 2) return
+      if (!stallRetried && hlsRef.current) {
+        stallRetried = true
+        hlsRef.current.startLoad()
+        stallTimer = setTimeout(checkStall, 20000)
+        return
       }
-    }, 30000)
+      st({ buffering: false })
+      onError?.('Stream is not responding. Try another server.')
+    }
+    stallTimer = setTimeout(checkStall, 30000)
     const clearStall = () => clearTimeout(stallTimer)
     v.addEventListener('loadeddata', clearStall)
     v.addEventListener('canplay', clearStall)
@@ -332,15 +373,29 @@ export default function VideoPlayer({
       })
       hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, (_, data) => {
         const subtitleTracks = data.subtitleTracks || []
+        // An empty event would otherwise wipe the provider's external tracks.
+        if (subtitleTracks.length === 0) return
         st({ subtitles: subtitleTracks.map((t, i) => ({ index: i, label: t.label, lang: t.lang })) })
       })
+      let networkRetries = 0
+      let mediaRetries = 0
       hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) {
-          st({ buffering: false })
-          onError?.(`HLS error: ${data.type} - ${data.details}`)
-          hls.destroy()
-          hlsRef.current = null
+        if (!data.fatal) return
+        // Recover from transient segment/CDN failures before giving up.
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && networkRetries < 2) {
+          networkRetries++
+          hls.startLoad()
+          return
         }
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRetries < 1) {
+          mediaRetries++
+          hls.recoverMediaError()
+          return
+        }
+        st({ buffering: false })
+        onError?.(`HLS error: ${data.type} - ${data.details}`)
+        hls.destroy()
+        hlsRef.current = null
       })
     } else {
       const directSrc = wrapProxy(embedUrl)
@@ -431,11 +486,23 @@ export default function VideoPlayer({
     const sections = []
 
     const qualityOptions = [{ label: 'Auto', value: -1 }]
+    const availableHeights = new Set()
     if (state.qualities.length > 0) {
       state.qualities.forEach(q => {
         qualityOptions.push({ label: q.label, value: q.index })
+        if (q.height) availableHeights.add(q.height)
       })
     }
+    // Keep the familiar tier list even when the provider only encodes one
+    // rendition: unavailable tiers are disabled rather than silently absent.
+    ;[1080, 720, 480, 360].forEach(height => {
+      if (availableHeights.has(height)) return
+      qualityOptions.push({
+        label: `${height}p`,
+        value: `unavailable-${height}`,
+        disabled: true,
+      })
+    })
     sections.push({
       title: 'Video Quality',
       options: qualityOptions,
@@ -446,7 +513,8 @@ export default function VideoPlayer({
     const captionOptions = [{ label: 'Off', value: -1 }]
     if (state.subtitles.length > 0) {
       state.subtitles.forEach(s => {
-        captionOptions.push({ label: `${s.label} (${s.lang || 'unknown'})`, value: s.index })
+        const label = state.subtitles.length === 1 && s.external ? `On (${s.label})` : s.label
+        captionOptions.push({ label, value: s.index })
       })
     }
     sections.push({
@@ -510,7 +578,17 @@ export default function VideoPlayer({
         preload="auto"
         onClick={togglePlay}
         onDoubleClick={toggleFullscreen}
-      />
+      >
+        {externalTracks.map(track => (
+          <track
+            key={track.url}
+            kind="subtitles"
+            src={track.url}
+            srcLang={track.lang}
+            label={track.label}
+          />
+        ))}
+      </video>
 
       {state.buffering && state.playing && !state.hasPoster && (
         <div className="absolute inset-x-0 bottom-0 z-20 pointer-events-none">

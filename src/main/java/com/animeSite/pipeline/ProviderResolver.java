@@ -307,9 +307,14 @@ public class ProviderResolver {
 
         List<StreamResult.ServerOption> upgraded = new ArrayList<>();
         for (StreamResult.ServerOption server : sr.getServers()) {
-            Optional<String> hls = megaPlayResolver.resolve(server.url);
-            if (hls.isPresent()) {
-                upgraded.add(new StreamResult.ServerOption(hls.get(), server.label, server.isBackup, server.referer));
+            Optional<MegaPlayResolver.Resolved> resolved = megaPlayResolver.resolveWithTracks(server.url);
+            if (resolved.isPresent()) {
+                MegaPlayResolver.Resolved r = resolved.get();
+                List<StreamResult.SubtitleTrack> subtitles = r.subtitles().stream()
+                    .map(s -> new StreamResult.SubtitleTrack(s.url(), s.label(), s.language()))
+                    .toList();
+                upgraded.add(new StreamResult.ServerOption(
+                    r.hlsUrl(), server.label, server.isBackup, server.referer, subtitles));
             }
         }
 

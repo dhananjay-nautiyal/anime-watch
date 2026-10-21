@@ -89,6 +89,11 @@ public class StreamProxyService {
                     int status = resp.getStatusCode().value();
                     MediaType mediaType = resp.getHeaders().getContentType();
                     String contentType = mediaType != null ? mediaType.toString() : "application/octet-stream";
+                    // Browser <track> elements refuse WebVTT served as
+                    // application/octet-stream, so trust the .vtt extension.
+                    if (isWebVtt(url, contentType)) {
+                        contentType = "text/vtt; charset=utf-8";
+                    }
                     long contentLength = resp.getHeaders().getContentLength();
                     InputStream body = resp.getBody();
 
@@ -241,6 +246,13 @@ public class StreamProxyService {
 
     private static void writeText(HttpServletResponse response, int status, String message) {
         writeBody(response, status, "text/plain", message.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static boolean isWebVtt(String url, String contentType) {
+        if (contentType != null && contentType.toLowerCase(Locale.ROOT).contains("text/vtt")) return true;
+        int query = url.indexOf('?');
+        String path = query >= 0 ? url.substring(0, query) : url;
+        return path.toLowerCase(Locale.ROOT).endsWith(".vtt");
     }
 
     private static void logResponse(String url, int status, String contentType, long size, long duration) {

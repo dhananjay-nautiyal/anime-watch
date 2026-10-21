@@ -88,6 +88,7 @@ export default function WatchPage() {
   const [currentEp, setCurrentEp] = useState(initialEp)
   const [embedUrl, setEmbedUrl] = useState('')
   const [embedType, setEmbedType] = useState('hls')
+  const [activeSubtitles, setActiveSubtitles] = useState([])
   const [embedLoading, setEmbedLoading] = useState(false)
   const [embedErr, setEmbedErr] = useState(null)
   const [selectedLanguage, setSelectedLanguage] = useState(null)
@@ -181,6 +182,7 @@ export default function WatchPage() {
 
     if (best) {
       setEmbedUrl(toEmbedUrl(best))
+      setActiveSubtitles(best.subtitles || [])
       setStreamKey(k => k + 1)
       setEmbedLoading(false)
       setEmbedErr(null)
@@ -216,6 +218,7 @@ export default function WatchPage() {
     if (next) {
       serverFailoverIdx.current = servers.indexOf(next)
       setEmbedUrl(toEmbedUrl(next))
+      setActiveSubtitles(next.subtitles || [])
       setEmbedErr(null)
       setEmbedLoading(true)
       setStreamKey(k => k + 1)
@@ -253,6 +256,7 @@ export default function WatchPage() {
       const best = servers.find(s => s.verified && s.status === 'online') || servers[0]
       if (best) {
         setEmbedUrl(toEmbedUrl(best))
+        setActiveSubtitles(best.subtitles || [])
         setEmbedErr(null)
         setStreamKey(k => k + 1)
       }
@@ -284,6 +288,7 @@ export default function WatchPage() {
     serverFailoverIdx.current = 0
     retryCount.current = 0
     setEmbedUrl('')
+    setActiveSubtitles([])
     setEmbedErr(null)
     const targetSlug = resolvedSlug || resolvedMalId
     navigate(`/anime/${targetSlug}/ep/${ep.episodeNumber}`, { replace: true })
@@ -397,6 +402,7 @@ export default function WatchPage() {
               onReady={handlePlayerReady}
               onError={handlePlayerError}
               streamKey={streamKey}
+              externalSubtitles={activeSubtitles}
             />
             </Suspense>
 
