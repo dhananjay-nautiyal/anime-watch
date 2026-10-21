@@ -243,6 +243,19 @@ export default function VideoPlayer({
     }
     st({ buffering: true, hasPoster: !autoPlay, qualities: [], currentQuality: -1 })
 
+    // A dead CDN otherwise leaves the player spinning forever: if no media
+    // data arrives within the grace period, surface an error so the user can
+    // retry or pick another server.
+    const stallTimer = setTimeout(() => {
+      if (v.readyState < 2) {
+        st({ buffering: false })
+        onError?.('Stream is not responding. Try another server.')
+      }
+    }, 30000)
+    const clearStall = () => clearTimeout(stallTimer)
+    v.addEventListener('loadeddata', clearStall)
+    v.addEventListener('canplay', clearStall)
+
     if (streamType === 'hls' && Hls.isSupported() && embedUrl.includes('.m3u8')) {
       const hlsUrl = wrapProxy(embedUrl, 'https://anineko.to/')
       const hls = new Hls({ enableWorker: true, lowLatencyMode: true, maxBufferLength: 30 })
@@ -287,6 +300,12 @@ export default function VideoPlayer({
       const directSrc = wrapProxy(embedUrl)
       v.src = directSrc
       if (autoPlay) v.play().catch(() => {})
+    }
+
+    return () => {
+      clearTimeout(stallTimer)
+      v.removeEventListener('loadeddata', clearStall)
+      v.removeEventListener('canplay', clearStall)
     }
   }, [embedUrl, streamType, animeId, episodeNumber, autoPlay, st, streamKey, onError])
 

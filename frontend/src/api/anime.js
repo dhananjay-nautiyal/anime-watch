@@ -43,12 +43,10 @@ export const getEpisodes = (malId, signal) =>
   client.get(`/api/anime/${malId}/episodes`, { signal }).then(unwrapData)
 
 export const syncEpisodes = (malId) => {
-  console.log('[Sync] Request body: null (malId in URL path: ' + malId + ')')
   // Sync walks every provider server-side; keep the client timeout above the
   // server's provider budget (app.providers.sync-budget-ms, default 30s) so the
   // browser never aborts a request the backend is still working on.
   return client.post(`/api/anime/${malId}/episodes/sync`, null, { timeout: 120000 }).then((res) => {
-    console.log('[Sync] Response:', res.data)
     const body = res.data
     if (!body?.success) {
       const err = new Error(body?.message || 'Sync failed')

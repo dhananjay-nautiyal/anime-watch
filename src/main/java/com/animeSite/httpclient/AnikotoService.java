@@ -36,13 +36,17 @@ public class AnikotoService implements StreamProvider {
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final MegaPlayResolver megaPlayResolver;
 
     private final Map<Integer, String> seriesIdCache = new ConcurrentHashMap<>();
     private final Map<String, LanguagePair> languageCache = new ConcurrentHashMap<>();
 
-    public AnikotoService(@Qualifier("aninekoRestTemplate") RestTemplate restTemplate, ObjectMapper objectMapper) {
+    public AnikotoService(@Qualifier("aninekoRestTemplate") RestTemplate restTemplate,
+                          ObjectMapper objectMapper,
+                          MegaPlayResolver megaPlayResolver) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
+        this.megaPlayResolver = megaPlayResolver;
     }
 
     @Override
@@ -134,6 +138,15 @@ public class AnikotoService implements StreamProvider {
             }
             if (pair.dubUrl != null) {
                 servers.add(new StreamResult.ServerOption(pair.dubUrl, "MegaPlay-DUB", servers.isEmpty()));
+            } else if (pair.subUrl != null) {
+                // The catalog API frequently exposes only the SUB embed even
+                // when the host has a DUB track. Probe the sibling URL once
+                // (cached) so the DUB option is offered when it really exists.
+                String dubCandidate = MegaPlayResolver.withLanguage(pair.subUrl, "dub");
+                if (dubCandidate != null && megaPlayResolver.isAvailable(dubCandidate)) {
+                    servers.add(new StreamResult.ServerOption(dubCandidate, "MegaPlay-DUB", true));
+                    log.info("[ANIKOTO] DUB FOUND | url={}", dubCandidate);
+                }
             }
         } else {
             log.warn("[ANIKOTO] UNRECOGNIZED URL | url={} — not a megaplay URL, skipping", episodePageUrl);

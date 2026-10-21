@@ -11,5 +11,6 @@ import java.util.UUID;
 @Repository
 public interface AnimeStudioRepository extends JpaRepository<AnimeStudio, UUID> {
     Optional<AnimeStudio> findByMalId(Integer malId);
+    Optional<AnimeStudio> findByNameIgnoreCase(String name);
     List<AnimeStudio> findAllByMalIdIn(java.util.Collection<Integer> malIds);
 }

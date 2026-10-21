@@ -39,17 +39,21 @@ public class AnimeServiceImpl implements AnimeService {
     private final AnimeGenreRepository animeGenreRepository;
     private final SlugService slugService;
     private final JikanMetadataProvider jikanMetadataProvider;
+    private final AnimeMetadataEnricher metadataEnricher;
 
     public AnimeServiceImpl(JikanApiClient jikanApiClient, AnimeRepository animeRepository,
                              AnimeGenreRepository animeGenreRepository,
-                             SlugService slugService, JikanMetadataProvider jikanMetadataProvider) {
+                             SlugService slugService, JikanMetadataProvider jikanMetadataProvider,
+                             AnimeMetadataEnricher metadataEnricher) {
         this.jikanApiClient = jikanApiClient;
         this.animeRepository = animeRepository;
         this.animeGenreRepository = animeGenreRepository;
         this.slugService = slugService;
         this.jikanMetadataProvider = jikanMetadataProvider;
+        this.metadataEnricher = metadataEnricher;
     }
 
+    @Transactional
     @Cacheable(value = "trending", key = "'page-'+#page+'-size-'+#size", unless = "#result == null")
     public AnimePage getTrending(int page, int size) {
         try {
@@ -60,6 +64,7 @@ public class AnimeServiceImpl implements AnimeService {
         }
     }
 
+    @Transactional
     @Cacheable(value = "search", key = "'q-'+#query+'-page-'+#page+'-size-'+#size", unless = "#result == null")
     public AnimePage searchAnime(String query, int page, int size) {
         try {
@@ -70,6 +75,7 @@ public class AnimeServiceImpl implements AnimeService {
         }
     }
 
+    @Transactional
     @Cacheable(value = "search",
             key = "'filter-'+#genres+'-'+#genresExclude+'-'+#type+'-'+#status+'-year-'+#year+'-'+#orderBy+'-'+#sort+'-'+#page+'-size-'+#size",
             unless = "#result == null")
@@ -133,20 +139,27 @@ public class AnimeServiceImpl implements AnimeService {
 
     @Cacheable(value = "anime", key = "'id-'+#id", unless = "#result == null")
     public Anime getAnimeById(int id) {
+        // Prefer the local catalog: the Jikan API is slow or unreachable on
+        // some networks, and blocking the detail page for 15 s on every view
+        // is far worse than a slightly stale record.
+        Optional<Anime> local = animeRepository.findByMalId(id);
+        if (local.isPresent()) {
+            return enrich(withRelations(local.get()));
+        }
+
         try {
             var response = jikanApiClient.fetchAnimeById(id);
             if (response != null && response.getData() != null) {
                 Anime saved = saveAnime(response.getData());
-                return withRelations(animeRepository.findByMalId(saved.getMalId()).orElse(saved));
+                return enrich(withRelations(animeRepository.findByMalId(saved.getMalId()).orElse(saved)));
             }
         } catch (Exception ignored) {}
-        return withRelations(animeRepository.findByMalId(id)
-                .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with ID: " + id)));
+        throw new BusinessException(ErrorCode.ANIME_0001, "Anime not found with ID: " + id);
     }
 
     @Cacheable(value = "anime", key = "'slug-'+#slug", unless = "#result == null")
     public Anime getAnimeBySlug(String slug) {
-        return withRelations(animeRepository.findBySlug(slug)
+        Anime anime = animeRepository.findBySlug(slug)
                 .or(() -> {
                     try {
                         return animeRepository.findByMalId(Integer.parseInt(slug));
@@ -154,7 +167,20 @@ public class AnimeServiceImpl implements AnimeService {
                         return Optional.empty();
                     }
                 })
-                .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with slug: " + slug)));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with slug: " + slug));
+        return enrich(withRelations(anime));
+    }
+
+    /**
+     * Detail responses are the only place the full metadata is shown, so this
+     * is where the MAL enrichment runs. It is persisted, making subsequent
+     * lookups free.
+     */
+    private Anime enrich(Anime anime) {
+        if (metadataEnricher.needsEnrichment(anime)) {
+            metadataEnricher.enrich(anime);
+        }
+        return anime;
     }
 
     /**
@@ -168,6 +194,7 @@ public class AnimeServiceImpl implements AnimeService {
         return anime;
     }
 
+    @Transactional
     @Cacheable(value = "seasonal", key = "'page-'+#page+'-size-'+#size", unless = "#result == null")
     public AnimePage getSeasonal(int page, int size) {
         try {
@@ -288,11 +315,30 @@ public class AnimeServiceImpl implements AnimeService {
                 totalPages = response.getPagination().getLastVisiblePage();
             }
         }
+        initRelations(animeList);
         return new AnimePage(animeList, page, totalPages);
     }
 
     private AnimePage toAnimePageFromDb(Page<Anime> dbPage, int page) {
+        initRelations(dbPage.getContent());
         return new AnimePage(dbPage.getContent(), page, dbPage.getTotalPages());
+    }
+
+    /**
+     * Home/trending/seasonal are loaded on worker threads (see HomeController's
+     * CompletableFutures) where open-in-view cannot keep a session alive. If the
+     * lazy relations stay uninitialized, Jackson's getGenres()/getStudios()
+     * projections blow up with LazyInitializationException while writing the
+     * response. Touch them here, inside the transaction, so the returned
+     * entities are safe to serialize on any thread.
+     */
+    private void initRelations(List<Anime> animeList) {
+        if (animeList == null) return;
+        for (Anime anime : animeList) {
+            if (anime == null) continue;
+            anime.getAnimeGenres().size();
+            anime.getAnimeStudios().size();
+        }
     }
 
     private Anime saveAnime(JikanAnimeData data) {

@@ -3,8 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getAnimeById, getAnimeBySlug, getEpisodes, syncEpisodes, getEpisodeEmbed, getAnimeState, getTrending, searchAnime } from '../api/anime'
 import { getResume, saveResume } from '../api/watchHistory'
-import { extractErrorMessage } from '../api/client'
-import { useAuth } from '../context/AuthContext'
+import { extractErrorMessage, getApiBaseURL } from '../api/client'
 
 const PROXY_PATH = '/api/stream/proxy'
 
@@ -48,20 +47,16 @@ export function useEpisodes(malId) {
 
 export function useSync(malId, episodes, isLoading) {
   const qc = useQueryClient()
-  const { isAuthenticated, loading: authLoading } = useAuth()
   const attempted = useRef(false)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState(null)
 
   const doSync = useCallback(async () => {
     if (attempted.current) return
-    // Syncing is a server-side write and now requires an account. Don't fire
-    // it for guests, and don't burn the one-shot attempt so that signing in
-    // (or registering) on this page still triggers a sync.
-    if (!isAuthenticated) {
-      setError('Sign in to load episodes for this title.')
-      return
-    }
+    // Episode sync is a read-through cache fill (resolve the provider episode
+    // list for this title and store it), not a user-owned write. Watching is
+    // anonymous, so guests trigger it too — an account is only needed for
+    // reviews, watchlist, favourites and progress tracking.
     attempted.current = true
     setSyncing(true)
     setError(null)
@@ -77,14 +72,13 @@ export function useSync(malId, episodes, isLoading) {
     } finally {
       setSyncing(false)
     }
-  }, [malId, qc, isAuthenticated])
+  }, [malId, qc])
 
   useEffect(() => {
-    if (authLoading) return
     if (episodes?.length === 0 && !isLoading && !syncing && !attempted.current) {
       doSync()
     }
-  }, [episodes, isLoading, syncing, doSync, authLoading])
+  }, [episodes, isLoading, syncing, doSync])
 
   const retry = useCallback(() => {
     attempted.current = false
@@ -115,7 +109,8 @@ export function useEmbed(malId, episodes, currentEp) {
       const payload = await getEpisodeEmbed(malId, ep.embedUrl)
       if (!mounted.current) return
       if (payload?.embedUrl) {
-        const ref = payload.referer || 'https://anineko.to/'
+        const ref = payload.referer
+          || (/megaplay\.buzz/i.test(payload.embedUrl) ? 'https://anikototv.to/' : 'https://anineko.to/')
         setEmbedUrl(wrapProxy(payload.embedUrl, ref))
         setEmbedType(payload.type || 'hls')
         setServers((payload.servers || []).map(s => ({ ...s, url: wrapProxy(s.url, ref) })))
