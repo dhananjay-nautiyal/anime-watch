@@ -3,6 +3,25 @@
 All notable changes to AnimeWatch are documented here. Versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] — 2026-10-21
+
+### Fixed
+- **Deployed API was slow**: Jikan is unreachable from datacenter IPs, so every
+  request paid the full connect timeout before falling back to the local
+  database. A circuit breaker now skips the dead upstream for a minute, the
+  home payload is cached for 5 minutes and `streamableIds` uses one batch
+  query. Home page: 24s → 4.6s cold / 8ms warm; browse and search: ~6s → ~50ms.
+- **Every episode was listed twice** (One Piece showed 2360 instead of 1180).
+  Episode sync deleted and re-inserted the whole list, so two concurrent
+  syncs stored two copies. Syncs are now serialised per title, merge into the
+  existing rows and reuse a fresh result; a start-up job removes duplicates
+  left by older builds.
+- **Android app**: renamed from “Vega” to “AnimeWatch”, removed the haptics
+  that fired on every touch and on every hero slide, replaced the invalid
+  `useVideoPlayer` hook call that made the player fail with “Failed to
+  initialize player”, and resolved the root-relative proxy URLs against the
+  API base so playback works.
+
 ## [1.1.0] — 2026-10-21
 
 ### Added
