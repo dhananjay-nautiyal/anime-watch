@@ -33,6 +33,8 @@
 
 ## Screenshots
 
+### Web
+
 | Home | Browse |
 | --- | --- |
 | ![AnimeWatch home — hero, trending carousel](docs/screenshots/web-home.webp) | ![Browse anime — filters and poster grid](docs/screenshots/web-browse.webp) |
@@ -40,6 +42,12 @@
 | Anime detail |
 | --- |
 | ![Anime detail — poster, metadata, watch action](docs/screenshots/web-detail.webp) |
+
+### Android
+
+| Home | Search | Settings |
+| --- | --- | --- |
+| ![Android home — hero carousel and trending row](docs/screenshots/mobile-home.webp) | ![Android search — results for naruto](docs/screenshots/mobile-search.webp) | ![Android settings — notification preferences](docs/screenshots/mobile-settings.webp) |
 
 ---
 

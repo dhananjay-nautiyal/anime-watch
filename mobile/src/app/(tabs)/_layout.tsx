@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router'
 import { useColorScheme, Platform } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { Palette, DarkPalette, BottomTabHeight } from '@/constants/theme'
 
@@ -17,6 +18,7 @@ export default function TabLayout() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
   const colors = isDark ? DarkPalette : Palette
+  const insets = useSafeAreaInsets()
 
   return (
     <Tabs
@@ -26,8 +28,8 @@ export default function TabLayout() {
           backgroundColor: colors.surfaceContainer,
           borderTopWidth: 0,
           elevation: 0,
-          height: Platform.OS === 'android' ? BottomTabHeight : BottomTabHeight + 12,
-          paddingBottom: Platform.OS === 'android' ? 8 : 0,
+          height: Platform.OS === 'android' ? BottomTabHeight + insets.bottom : BottomTabHeight + 12,
+          paddingBottom: Platform.OS === 'android' ? 8 + insets.bottom : 0,
           paddingTop: 8,
         },
         tabBarActiveTintColor: colors.primary,
