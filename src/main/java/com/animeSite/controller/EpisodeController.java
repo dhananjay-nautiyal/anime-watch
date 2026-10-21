@@ -276,7 +276,7 @@ public class EpisodeController {
             verifiedServers.add(new StreamsResponse.ServerInfo(
                 server.label, server.url, proxyUrl,
                 List.of("1080p", "720p", "480p"),
-                List.of(),
+                toSubtitleInfos(server),
                 List.of(),
                 status, latencyMs, verified
             ));
@@ -371,7 +371,7 @@ public class EpisodeController {
                 verifiedServers.add(new StreamsResponse.ServerInfo(
                     server.label, server.url, proxyUrl,
                     List.of("1080p", "720p", "480p"),
-                    List.of(), List.of(), "online", 0, true
+                    toSubtitleInfos(server), List.of(), "online", 0, true
                 ));
             }
 
@@ -442,6 +442,13 @@ public class EpisodeController {
         } catch (UnsupportedEncodingException e) {
             return url;
         }
+    }
+
+    private List<StreamsResponse.SubtitleInfo> toSubtitleInfos(StreamResult.ServerOption server) {
+        if (server.subtitles == null || server.subtitles.isEmpty()) return List.of();
+        return server.subtitles.stream()
+            .map(s -> new StreamsResponse.SubtitleInfo(s.label(), s.language(), s.url()))
+            .toList();
     }
 
     private String getProviderBaseUrl(String providerName) {

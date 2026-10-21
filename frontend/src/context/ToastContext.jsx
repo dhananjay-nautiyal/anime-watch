@@ -40,7 +40,7 @@ export function ToastProvider({ children }) {
                 t.type === 'success' ? 'bg-green-900/80 border-green-500/30' :
                 t.type === 'error' ? 'bg-red-900/80 border-red-500/30' :
                 t.type === 'warning' ? 'bg-amber-900/80 border-amber-500/30' :
-                'bg-[#141827]/90 border-white/[0.08]'
+                'glass-strong'
               }`}
             >
               <span className="flex-shrink-0 mt-0.5">

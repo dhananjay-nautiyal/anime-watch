@@ -17,8 +17,11 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
@@ -59,9 +62,15 @@ public class MegaPlayResolver {
     private final ObjectMapper objectMapper;
     private final ConcurrentHashMap<String, CacheEntry> cache = new ConcurrentHashMap<>();
 
-    private record CacheEntry(String hlsUrl, long expiresAt) {
+    /** A subtitle/caption track returned alongside the HLS manifest. */
+    public record Subtitle(String url, String label, String language) {}
+
+    /** The resolved HLS URL plus any external subtitle tracks. */
+    public record Resolved(String hlsUrl, List<Subtitle> subtitles) {}
+
+    private record CacheEntry(Resolved resolved, long expiresAt) {
         boolean expired() { return System.currentTimeMillis() > expiresAt; }
-        boolean valid() { return hlsUrl != null && !expired(); }
+        boolean valid() { return resolved != null && resolved.hlsUrl() != null && !expired(); }
     }
 
     public MegaPlayResolver(@Qualifier("aninekoRestTemplate") RestTemplate restTemplate,
@@ -80,11 +89,20 @@ public class MegaPlayResolver {
      * dead (HTTP 410 / "Error - MegaPlay") or the payload cannot be decrypted.
      */
     public Optional<String> resolve(String embedUrl) {
+        return resolveWithTracks(embedUrl).map(Resolved::hlsUrl);
+    }
+
+    /**
+     * Same as {@link #resolve(String)} but also returns the external subtitle
+     * tracks MegaPlay ships next to the manifest. Those tracks are not part of
+     * the HLS playlist, so without this the player has no captions to offer.
+     */
+    public Optional<Resolved> resolveWithTracks(String embedUrl) {
         if (!supports(embedUrl)) return Optional.empty();
 
         CacheEntry cached = cache.get(embedUrl);
         if (cached != null && !cached.expired()) {
-            return cached.hlsUrl() != null ? Optional.of(cached.hlsUrl()) : Optional.empty();
+            return cached.resolved() != null ? Optional.of(cached.resolved()) : Optional.empty();
         }
 
         try {
@@ -109,15 +127,16 @@ public class MegaPlayResolver {
                 return Optional.empty();
             }
 
-            String hlsUrl = decryptFile(payload);
-            if (hlsUrl == null) {
+            Resolved resolved = parseSources(payload);
+            if (resolved == null) {
                 cache.put(embedUrl, new CacheEntry(null, System.currentTimeMillis() + FAILURE_TTL_MS));
                 return Optional.empty();
             }
 
-            cache.put(embedUrl, new CacheEntry(hlsUrl, System.currentTimeMillis() + SUCCESS_TTL_MS));
-            log.info("[MEGAPLAY] RESOLVED | fileId={} hls={}", fileId, hlsUrl);
-            return Optional.of(hlsUrl);
+            cache.put(embedUrl, new CacheEntry(resolved, System.currentTimeMillis() + SUCCESS_TTL_MS));
+            log.info("[MEGAPLAY] RESOLVED | fileId={} hls={} subtitles={}",
+                fileId, resolved.hlsUrl(), resolved.subtitles().size());
+            return Optional.of(resolved);
 
         } catch (Exception e) {
             log.warn("[MEGAPLAY] RESOLVE_FAILED | url={} error='{}'", embedUrl, e.getMessage());
@@ -165,24 +184,58 @@ public class MegaPlayResolver {
         return response.getBody();
     }
 
-    private String decryptFile(String json) throws Exception {
+    /**
+     * Decrypts the {@code enc} payload and collects the manifest URL plus the
+     * external caption tracks. The tracks live outside the encrypted blob in
+     * the getSources JSON (e.g. {@code tracks:[{file,label,kind}]}).
+     */
+    private Resolved parseSources(String json) throws Exception {
         JsonNode root = objectMapper.readTree(json);
+
+        String file = null;
         String encrypted = root.path("enc").asText(null);
-        if (encrypted == null || encrypted.isBlank()) {
+        if (encrypted != null && !encrypted.isBlank()) {
+            byte[] key = Arrays.copyOf(AES_KEY.getBytes(StandardCharsets.UTF_8), 32);
+            byte[] iv = Arrays.copyOf(AES_IV.getBytes(StandardCharsets.UTF_8), 16);
+            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new IvParameterSpec(iv));
+
+            byte[] plainBytes = cipher.doFinal(Base64.getUrlDecoder().decode(encrypted));
+            JsonNode payload = objectMapper.readTree(new String(plainBytes, StandardCharsets.UTF_8));
+            file = payload.path("file").asText(null);
+        } else {
             // Some responses already carry the plain file URL.
-            String plain = root.path("file").asText(null);
-            return plain != null && !plain.isBlank() ? plain : null;
+            file = root.path("file").asText(null);
         }
+        if (file == null || file.isBlank()) return null;
 
-        byte[] key = Arrays.copyOf(AES_KEY.getBytes(StandardCharsets.UTF_8), 32);
-        byte[] iv = Arrays.copyOf(AES_IV.getBytes(StandardCharsets.UTF_8), 16);
-        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new IvParameterSpec(iv));
+        List<Subtitle> subtitles = new ArrayList<>();
+        JsonNode tracks = root.path("tracks");
+        if (tracks.isArray()) {
+            for (JsonNode track : tracks) {
+                String url = track.path("file").asText(null);
+                String kind = track.path("kind").asText("").toLowerCase(Locale.ROOT);
+                if (url == null || url.isBlank()) continue;
+                if (!kind.isEmpty() && !kind.contains("caption") && !kind.contains("subtitle")) continue;
+                String label = track.path("label").asText("Subtitles");
+                subtitles.add(new Subtitle(url, label, languageCode(label)));
+            }
+        }
+        return new Resolved(file, subtitles);
+    }
 
-        byte[] plainBytes = cipher.doFinal(Base64.getUrlDecoder().decode(encrypted));
-        JsonNode payload = objectMapper.readTree(new String(plainBytes, StandardCharsets.UTF_8));
-        String file = payload.path("file").asText(null);
-        return file != null && !file.isBlank() ? file : null;
+    private static String languageCode(String label) {
+        String value = label == null ? "" : label.toLowerCase(Locale.ROOT);
+        if (value.contains("english")) return "en";
+        if (value.contains("spanish")) return "es";
+        if (value.contains("french")) return "fr";
+        if (value.contains("portuguese")) return "pt";
+        if (value.contains("german")) return "de";
+        if (value.contains("italian")) return "it";
+        if (value.contains("arabic")) return "ar";
+        if (value.contains("russian")) return "ru";
+        if (value.contains("japanese")) return "ja";
+        return "und";
     }
 
     private String hostOf(String url) {

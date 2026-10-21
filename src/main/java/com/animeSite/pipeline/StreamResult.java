@@ -36,6 +36,7 @@ public class StreamResult {
         public final String label;
         public final boolean isBackup;
         public final String referer;
+        public final List<SubtitleTrack> subtitles;
 
         public ServerOption(String url, String label, boolean isBackup) {
             this(url, label, isBackup, null);
@@ -48,10 +49,19 @@ public class StreamResult {
         }
 
         public ServerOption(String url, String label, boolean isBackup, String referer) {
+            this(url, label, isBackup, referer, List.of());
+        }
+
+        public ServerOption(String url, String label, boolean isBackup, String referer,
+                            List<SubtitleTrack> subtitles) {
             this.url = url;
             this.label = label;
             this.isBackup = isBackup;
             this.referer = referer;
+            this.subtitles = subtitles == null ? List.of() : subtitles;
         }
     }
+
+    /** External subtitle track (not embedded in the HLS manifest). */
+    public record SubtitleTrack(String url, String label, String language) {}
 }

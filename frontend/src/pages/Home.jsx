@@ -106,7 +106,7 @@ function GenreQuickLinks() {
           <Link
             key={g.label}
             to={g.to}
-            className="bg-card/50 backdrop-blur-sm border border-white/[0.04] hover:border-primary/20 flex items-center gap-3 px-4 py-3 rounded-[14px] hover:bg-white/[0.04] transition-all group"
+            className="bg-white/[0.05] backdrop-blur-sm border border-white/[0.04] hover:border-primary/20 flex items-center gap-3 px-4 py-3 rounded-[14px] hover:bg-white/[0.04] transition-all group"
           >
             <span className="text-lg">{g.icon}</span>
             <span className="text-sm text-[#D1D5DB] group-hover:text-white transition-colors font-medium">{g.label}</span>

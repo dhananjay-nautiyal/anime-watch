@@ -22,7 +22,7 @@ public class HomeController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> home() {
         return ResponseEntity.ok(ApiResponse.success(Map.of(
                 "application", appName,
-                "version", "1.0.0",
+                "version", "1.1.0",
                 "status", "running"
         )));
     }
@@ -33,7 +33,7 @@ public class HomeController {
         String commit = System.getenv().getOrDefault("RENDER_GIT_COMMIT", "local");
         return ResponseEntity.ok(ApiResponse.success(Map.of(
                 "application", appName,
-                "version", "1.0.0",
+                "version", "1.1.0",
                 "commit", commit,
                 "status", "running"
         )));

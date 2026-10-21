@@ -84,7 +84,7 @@ export default function Watchlist() {
                 key={entry.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-surface/30 backdrop-blur-sm border border-white/5 p-4 rounded-2xl flex items-center gap-4 hover:bg-surface/50 transition-colors"
+                className="bg-white/[0.035] backdrop-blur-sm border border-white/5 p-4 rounded-2xl flex items-center gap-4 hover:bg-white/[0.06] transition-colors"
               >
                 <Link to={`/anime/${entry.anime?.slug || entry.anime?.malId || entry.anime?.id}`} className="flex-shrink-0 w-16 h-20 rounded-lg overflow-hidden">
                   <ImageWithFallback

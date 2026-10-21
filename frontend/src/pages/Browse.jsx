@@ -74,11 +74,11 @@ export default function Browse() {
         <p className="text-muted text-sm">Discover your next favorite anime</p>
       </div>
 
-      <div className="flex flex-wrap gap-3 mb-8">
+      <div className="glass rounded-2xl p-3 flex flex-wrap gap-3 mb-8">
         <select
           value={genre}
           onChange={(e) => updateFilter('genres', e.target.value)}
-          className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/50 transition"
+          className="glass-input rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/50 transition"
           aria-label="Filter by genre"
         >
           <option value="">All Genres</option>
@@ -90,7 +90,7 @@ export default function Browse() {
         <select
           value={year}
           onChange={(e) => updateFilter('year', e.target.value)}
-          className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/50 transition"
+          className="glass-input rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/50 transition"
           aria-label="Filter by year"
         >
           <option value="">All Years</option>
@@ -102,7 +102,7 @@ export default function Browse() {
         <select
           value={status}
           onChange={(e) => updateFilter('status', e.target.value)}
-          className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/50 transition"
+          className="glass-input rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-primary/50 transition"
           aria-label="Filter by status"
         >
           <option value="">All Status</option>

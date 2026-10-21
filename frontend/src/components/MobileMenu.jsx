@@ -11,7 +11,7 @@ export default function MobileMenu({ menuOpen, navLinks, genres, isAuthenticated
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-md lg:hidden"
             onClick={onClose}
           />
           <motion.div
@@ -19,7 +19,7 @@ export default function MobileMenu({ menuOpen, navLinks, genres, isAuthenticated
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2, ease: 'easeInOut' }}
-            className="relative z-50 lg:hidden border-t border-white/[0.04] bg-body/95 backdrop-blur-xl"
+            className="relative z-50 lg:hidden border-t border-white/10 bg-white/[0.06] backdrop-blur-3xl"
           >
             <div className="px-4 py-4 space-y-3 max-h-[80vh] overflow-y-auto">
               {navLinks.map(l => (

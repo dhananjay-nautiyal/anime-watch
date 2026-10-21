@@ -30,7 +30,7 @@ export default function SearchOverlay({
           transition={{ duration: 0.2 }}
           className="fixed inset-0 z-[60] flex flex-col"
         >
-          <div className="bg-body/98 backdrop-blur-2xl flex-1 flex flex-col">
+          <div className="bg-body/70 backdrop-blur-3xl flex-1 flex flex-col">
             <div className="max-w-4xl mx-auto w-full px-4 pt-20 pb-4">
               <form onSubmit={handleFormSubmit} ref={suggestRef}>
                 <div className="relative group">
@@ -43,7 +43,7 @@ export default function SearchOverlay({
                     placeholder="Search anime, genres, years..."
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-2xl py-5 pl-14 pr-14 text-xl text-white placeholder-[#9CA3AF]/40 outline-none focus:border-primary/50 focus:bg-white/[0.06] transition-all duration-300"
+                    className="glass-input w-full rounded-2xl py-5 pl-14 pr-14 text-xl text-white placeholder-white/30 outline-none focus:border-primary/50 focus:bg-white/[0.06] transition-all duration-300"
                     aria-label="Search anime"
                   />
                   {query && (
@@ -71,7 +71,7 @@ export default function SearchOverlay({
 
             <div className="flex-1 overflow-y-auto max-w-4xl mx-auto w-full px-4 pb-8">
               {showSuggestions && suggestions.length > 0 ? (
-                <div className="rounded-2xl bg-white/[0.02] border border-white/[0.06] overflow-hidden">
+                <div className="glass-strong rounded-2xl overflow-hidden">
                   <div className="px-4 py-3 border-b border-white/[0.06]">
                     <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wider font-semibold">Suggestions</p>
                   </div>
@@ -165,7 +165,7 @@ export default function SearchOverlay({
 
           <button
             onClick={onClose}
-            className="absolute top-6 right-6 text-[#9CA3AF] hover:text-white p-2 rounded-full hover:bg-white/[0.04] transition-all"
+            className="absolute top-6 right-6 text-white/60 hover:text-white p-2.5 rounded-full border border-white/10 bg-white/[0.05] backdrop-blur-xl hover:bg-white/[0.1] transition-all"
             aria-label="Close search"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

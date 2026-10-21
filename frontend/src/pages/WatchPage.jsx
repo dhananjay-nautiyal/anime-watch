@@ -88,6 +88,7 @@ export default function WatchPage() {
   const [currentEp, setCurrentEp] = useState(initialEp)
   const [embedUrl, setEmbedUrl] = useState('')
   const [embedType, setEmbedType] = useState('hls')
+  const [activeSubtitles, setActiveSubtitles] = useState([])
   const [embedLoading, setEmbedLoading] = useState(false)
   const [embedErr, setEmbedErr] = useState(null)
   const [selectedLanguage, setSelectedLanguage] = useState(null)
@@ -181,6 +182,7 @@ export default function WatchPage() {
 
     if (best) {
       setEmbedUrl(toEmbedUrl(best))
+      setActiveSubtitles(best.subtitles || [])
       setStreamKey(k => k + 1)
       setEmbedLoading(false)
       setEmbedErr(null)
@@ -216,6 +218,7 @@ export default function WatchPage() {
     if (next) {
       serverFailoverIdx.current = servers.indexOf(next)
       setEmbedUrl(toEmbedUrl(next))
+      setActiveSubtitles(next.subtitles || [])
       setEmbedErr(null)
       setEmbedLoading(true)
       setStreamKey(k => k + 1)
@@ -253,6 +256,7 @@ export default function WatchPage() {
       const best = servers.find(s => s.verified && s.status === 'online') || servers[0]
       if (best) {
         setEmbedUrl(toEmbedUrl(best))
+        setActiveSubtitles(best.subtitles || [])
         setEmbedErr(null)
         setStreamKey(k => k + 1)
       }
@@ -284,6 +288,7 @@ export default function WatchPage() {
     serverFailoverIdx.current = 0
     retryCount.current = 0
     setEmbedUrl('')
+    setActiveSubtitles([])
     setEmbedErr(null)
     const targetSlug = resolvedSlug || resolvedMalId
     navigate(`/anime/${targetSlug}/ep/${ep.episodeNumber}`, { replace: true })
@@ -397,12 +402,13 @@ export default function WatchPage() {
               onReady={handlePlayerReady}
               onError={handlePlayerError}
               streamKey={streamKey}
+              externalSubtitles={activeSubtitles}
             />
             </Suspense>
 
             {/* Stream error overlay */}
             {embedErr && !embedLoading && (
-              <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/80 backdrop-blur-sm rounded-xl">
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-2xl rounded-2xl">
                 <div className="text-center max-w-sm px-6">
                   <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-3">
                     <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -420,7 +426,7 @@ export default function WatchPage() {
 
             {/* Loading overlay */}
             {embedLoading && !embedErr && (
-              <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 rounded-xl pointer-events-none">
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/45 backdrop-blur-xl rounded-2xl pointer-events-none">
                 <div className="flex flex-col items-center gap-3">
                   <div className="w-10 h-10 border-[3px] border-primary/30 border-t-primary rounded-full animate-spin" />
                   <p className="text-white/60 text-xs">Resolving stream...</p>
@@ -464,10 +470,10 @@ export default function WatchPage() {
                       loadingLangs
                         ? 'text-white/15 bg-white/[0.02] border border-white/[0.04] cursor-wait'
                         : !available
-                          ? 'text-white/25 bg-white/[0.02] border border-white/[0.04] cursor-help'
+                          ? 'text-white/25 bg-white/[0.03] border border-white/[0.06] backdrop-blur-xl cursor-help'
                           : selectedLanguage === lang
                             ? 'bg-primary/25 text-primary shadow-lg shadow-primary/10 border border-primary/30 scale-105'
-                            : 'text-white/60 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:text-white hover:border-white/20 hover:scale-105'
+                            : 'text-white/65 bg-white/[0.06] border border-white/10 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] hover:bg-white/[0.1] hover:text-white hover:border-white/20 hover:scale-105'
                     }`}
                   >
                     {lang}
@@ -485,19 +491,19 @@ export default function WatchPage() {
             {/* Prev / Current / Next */}
             <div className="flex items-center gap-2">
               {prevEpisode && (
-                <button onClick={handlePrev} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-xs text-muted hover:text-white transition-all">
+                <button onClick={handlePrev} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] backdrop-blur-xl hover:bg-white/10 border border-white/10 hover:border-white/20 text-xs text-muted hover:text-white transition-all">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                   Ep {currentEp - 1}
                 </button>
               )}
-              <span className="text-xs text-muted px-3 py-1.5 bg-white/5 rounded-lg border border-white/5">
+              <span className="text-xs text-muted px-3 py-1.5 bg-white/[0.06] backdrop-blur-xl rounded-xl border border-white/10">
                 Episode {currentEp}
                 {episodes.length > 0 && <span className="text-muted/50 ml-1">/ {episodes.length}</span>}
               </span>
               {nextEpisode && (
-                <button onClick={handleNext} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-xs text-muted hover:text-white transition-all">
+                <button onClick={handleNext} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] backdrop-blur-xl hover:bg-white/10 border border-white/10 hover:border-white/20 text-xs text-muted hover:text-white transition-all">
                   Ep {currentEp + 1}
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -544,7 +550,7 @@ export default function WatchPage() {
           {/* ---- COMMENTS ---- */}
           <div
             onClick={() => setShowComments(!showComments)}
-            className="bg-white/[0.03] border border-white/5 rounded-xl p-6 text-center cursor-pointer hover:bg-white/[0.05] transition-all"
+            className="glass rounded-2xl p-6 text-center cursor-pointer hover:bg-white/[0.08] transition-all"
           >
             <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-2">
               <svg className="w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">

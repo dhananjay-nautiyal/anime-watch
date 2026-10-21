@@ -174,7 +174,7 @@ export default function ComingSoon() {
   const formattedDate = formatDate(releaseDate)
 
   return (
-    <div className="min-h-screen bg-body">
+    <div className="min-h-screen">
       {/* Hero Banner */}
       <div className="relative h-[60vh] min-h-[400px] md:min-h-[500px] overflow-hidden">
         <BannerImage src={anime.imageUrl} alt={anime.title} className="scale-110" />

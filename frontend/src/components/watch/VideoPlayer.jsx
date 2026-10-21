@@ -16,11 +16,19 @@ const CONTROLS_HIDE_DELAY = 3000
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
 const SWIPE_THRESHOLD = 50
 
+function formatTime(sec) {
+  if (!sec || !isFinite(sec)) return '0:00'
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60)
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
 export default function VideoPlayer({
   embedUrl, poster, animeTitle, episodeNumber, animeId,
   onRetry, streamType = 'hls', onEnded, onTimeUpdate, autoNext = true, autoPlay = true,
   onSwipeUp, onSwipeDown,
   currentLanguage, onReady, onError, streamKey,
+  externalSubtitles = [],
 }) {
   const videoRef = useRef(null)
   const containerRef = useRef(null)
@@ -29,6 +37,8 @@ export default function VideoPlayer({
   const hlsRef = useRef(null)
   const seeking = useRef(false)
   const readyFired = useRef(false)
+  const lastSaveRef = useRef(0)
+  const [resumeAt, setResumeAt] = useState(0)
 
   const [state, setState] = useState({
     playing: false, currentTime: 0, duration: 0,
@@ -67,6 +77,23 @@ export default function VideoPlayer({
       setState(prev => (prev.showSettings || prev.showVol ? prev : { ...prev, showControls: false }))
     }, CONTROLS_HIDE_DELAY)
   }, [])
+
+  // Provider subtitles live outside the HLS manifest, so they are rendered as
+  // native <track> elements and merged into the same Caption menu.
+  const externalTracks = useMemo(() => (externalSubtitles || []).map((track, i) => ({
+    index: 10000 + i,
+    label: track.label || 'Subtitles',
+    lang: track.language || 'und',
+    url: wrapProxy(track.url, 'https://megaplay.buzz/'),
+    external: true,
+  })), [externalSubtitles])
+
+  useEffect(() => {
+    if (externalTracks.length === 0) return
+    st({ subtitles: externalTracks, currentSubtitle: -1 })
+    const v = videoRef.current
+    if (v) for (const track of v.textTracks) track.mode = 'disabled'
+  }, [externalTracks, st])
 
   const togglePlay = useCallback(() => {
     const v = videoRef.current
@@ -160,12 +187,27 @@ export default function VideoPlayer({
   }, [animeTitle, notify])
 
   const handleSubtitleChange = useCallback((idx) => {
+    const v = videoRef.current
     const hls = hlsRef.current
-    if (hls && hls.subtitleTrack !== undefined) {
+    const selected = state.subtitles.find(t => t.index === idx)
+
+    if (v) for (const track of v.textTracks) track.mode = 'disabled'
+
+    if (selected?.external) {
+      // Native <track> elements are matched by label; hls.js embedded tracks
+      // are not touched here.
+      if (hls) {
+        hls.subtitleTrack = -1
+        hls.subtitleDisplay = false
+      }
+      const native = v ? [...v.textTracks].find(t => t.label === selected.label) : null
+      if (native) native.mode = 'showing'
+    } else if (hls && hls.subtitleTrack !== undefined) {
       hls.subtitleTrack = idx
+      hls.subtitleDisplay = idx >= 0
     }
     st({ currentSubtitle: idx })
-  }, [st])
+  }, [st, state.subtitles])
 
   const seek = useCallback((dir) => {
     const v = videoRef.current
@@ -180,9 +222,18 @@ export default function VideoPlayer({
 
   const showSkipIntro = state.currentTime > 0 && state.currentTime < 90 && state.duration > 120
 
+  // Where the viewer left off in this exact episode, so the player can offer
+  // to jump back in instead of always restarting at 00:00.
+  const progressKey = useMemo(
+    () => (animeId && episodeNumber ? `aw_progress_${animeId}_${episodeNumber}` : null),
+    [animeId, episodeNumber]
+  )
+
   useEffect(() => {
     readyFired.current = false
-  }, [embedUrl, streamKey])
+    setResumeAt(0)
+    lastSaveRef.current = 0
+  }, [embedUrl, streamKey, progressKey])
 
   useEffect(() => {
     const v = videoRef.current
@@ -198,13 +249,33 @@ export default function VideoPlayer({
     const onT = () => {
       st({ currentTime: v.currentTime, duration: v.duration || 0 })
       if (onTimeUpdate) onTimeUpdate({ currentTime: v.currentTime, duration: v.duration || 0 })
+      if (progressKey && v.currentTime > 0) {
+        const now = Date.now()
+        if (now - lastSaveRef.current > 5000) {
+          lastSaveRef.current = now
+          try { localStorage.setItem(progressKey, String(Math.floor(v.currentTime))) } catch {}
+        }
+      }
+    }
+    const onMeta = () => {
+      st({ duration: v.duration || 0 })
+      if (!progressKey) return
+      try {
+        const saved = parseFloat(localStorage.getItem(progressKey) || '0')
+        if (saved > 30 && v.duration && v.duration - saved > 20) setResumeAt(saved)
+      } catch {}
     }
     const onW = () => st({ buffering: true })
     const onC = () => st({ buffering: false })
-    const onE = () => { st({ playing: false }); if (autoNext && onEnded) onEnded() }
+    const onE = () => {
+      st({ playing: false })
+      if (progressKey) { try { localStorage.removeItem(progressKey) } catch {} }
+      if (autoNext && onEnded) onEnded()
+    }
     v.addEventListener('play', onP)
     v.addEventListener('pause', onPa)
     v.addEventListener('timeupdate', onT)
+    v.addEventListener('loadedmetadata', onMeta)
     v.addEventListener('waiting', onW)
     v.addEventListener('canplay', onC)
     v.addEventListener('ended', onE)
@@ -218,11 +289,12 @@ export default function VideoPlayer({
       v.removeEventListener('play', onP)
       v.removeEventListener('pause', onPa)
       v.removeEventListener('timeupdate', onT)
+      v.removeEventListener('loadedmetadata', onMeta)
       v.removeEventListener('waiting', onW)
       v.removeEventListener('canplay', onC)
       v.removeEventListener('ended', onE)
     }
-  }, [autoNext, onEnded, onTimeUpdate, st, onReady, onError])
+  }, [autoNext, onEnded, onTimeUpdate, st, onReady, onError, progressKey])
 
   useEffect(() => {
     const v = videoRef.current
@@ -278,15 +350,23 @@ export default function VideoPlayer({
     }
     st({ buffering: true, hasPoster: !autoPlay, qualities: [], currentQuality: -1 })
 
-    // A dead CDN otherwise leaves the player spinning forever: if no media
-    // data arrives within the grace period, surface an error so the user can
-    // retry or pick another server.
-    const stallTimer = setTimeout(() => {
-      if (v.readyState < 2) {
-        st({ buffering: false })
-        onError?.('Stream is not responding. Try another server.')
+    // A dead CDN otherwise leaves the player spinning forever. Give a slow
+    // first segment one recovery attempt before surfacing an error, so a
+    // momentary CDN hiccup doesn't show "stream unavailable".
+    let stallTimer
+    let stallRetried = false
+    const checkStall = () => {
+      if (v.readyState >= 2) return
+      if (!stallRetried && hlsRef.current) {
+        stallRetried = true
+        hlsRef.current.startLoad()
+        stallTimer = setTimeout(checkStall, 20000)
+        return
       }
-    }, 30000)
+      st({ buffering: false })
+      onError?.('Stream is not responding. Try another server.')
+    }
+    stallTimer = setTimeout(checkStall, 30000)
     const clearStall = () => clearTimeout(stallTimer)
     v.addEventListener('loadeddata', clearStall)
     v.addEventListener('canplay', clearStall)
@@ -332,15 +412,29 @@ export default function VideoPlayer({
       })
       hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, (_, data) => {
         const subtitleTracks = data.subtitleTracks || []
+        // An empty event would otherwise wipe the provider's external tracks.
+        if (subtitleTracks.length === 0) return
         st({ subtitles: subtitleTracks.map((t, i) => ({ index: i, label: t.label, lang: t.lang })) })
       })
+      let networkRetries = 0
+      let mediaRetries = 0
       hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) {
-          st({ buffering: false })
-          onError?.(`HLS error: ${data.type} - ${data.details}`)
-          hls.destroy()
-          hlsRef.current = null
+        if (!data.fatal) return
+        // Recover from transient segment/CDN failures before giving up.
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && networkRetries < 2) {
+          networkRetries++
+          hls.startLoad()
+          return
         }
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRetries < 1) {
+          mediaRetries++
+          hls.recoverMediaError()
+          return
+        }
+        st({ buffering: false })
+        onError?.(`HLS error: ${data.type} - ${data.details}`)
+        hls.destroy()
+        hlsRef.current = null
       })
     } else {
       const directSrc = wrapProxy(embedUrl)
@@ -431,11 +525,23 @@ export default function VideoPlayer({
     const sections = []
 
     const qualityOptions = [{ label: 'Auto', value: -1 }]
+    const availableHeights = new Set()
     if (state.qualities.length > 0) {
       state.qualities.forEach(q => {
         qualityOptions.push({ label: q.label, value: q.index })
+        if (q.height) availableHeights.add(q.height)
       })
     }
+    // Keep the familiar tier list even when the provider only encodes one
+    // rendition: unavailable tiers are disabled rather than silently absent.
+    ;[1080, 720, 480, 360].forEach(height => {
+      if (availableHeights.has(height)) return
+      qualityOptions.push({
+        label: `${height}p`,
+        value: `unavailable-${height}`,
+        disabled: true,
+      })
+    })
     sections.push({
       title: 'Video Quality',
       options: qualityOptions,
@@ -446,7 +552,8 @@ export default function VideoPlayer({
     const captionOptions = [{ label: 'Off', value: -1 }]
     if (state.subtitles.length > 0) {
       state.subtitles.forEach(s => {
-        captionOptions.push({ label: `${s.label} (${s.lang || 'unknown'})`, value: s.index })
+        const label = state.subtitles.length === 1 && s.external ? `On (${s.label})` : s.label
+        captionOptions.push({ label, value: s.index })
       })
     }
     sections.push({
@@ -510,7 +617,17 @@ export default function VideoPlayer({
         preload="auto"
         onClick={togglePlay}
         onDoubleClick={toggleFullscreen}
-      />
+      >
+        {externalTracks.map(track => (
+          <track
+            key={track.url}
+            kind="subtitles"
+            src={track.url}
+            srcLang={track.lang}
+            label={track.label}
+          />
+        ))}
+      </video>
 
       {state.buffering && state.playing && !state.hasPoster && (
         <div className="absolute inset-x-0 bottom-0 z-20 pointer-events-none">
@@ -524,6 +641,31 @@ export default function VideoPlayer({
             <div className="w-14 h-14 border-[3px] border-primary/30 border-t-primary rounded-full animate-spin" />
             <p className="text-white/60 text-xs font-medium">Buffering...</p>
           </div>
+        </div>
+      )}
+
+      {resumeAt > 0 && (
+        <div className="absolute bottom-24 left-4 z-40 flex items-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              const v = videoRef.current
+              if (v) v.currentTime = Math.min(v.duration || resumeAt, resumeAt)
+              setResumeAt(0)
+            }}
+            className="glass text-white text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all hover:bg-white/[0.12]"
+          >
+            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+            </svg>
+            Resume from {formatTime(resumeAt)}
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setResumeAt(0) }}
+            className="text-white/60 hover:text-white text-xs font-medium px-2.5 py-1.5 rounded-lg bg-black/40 backdrop-blur-xl border border-white/10 transition-all"
+          >
+            Start over
+          </button>
         </div>
       )}
 

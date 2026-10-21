@@ -12,7 +12,7 @@ const ScrollArrow = memo(function ScrollArrow({ direction, onClick, visible }) {
       } ${visible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       aria-label={`Scroll ${direction}`}
     >
-      <div className={`w-[38px] h-[38px] rounded-full bg-[#141827]/90 backdrop-blur-md flex items-center justify-center text-white hover:bg-primary/80 hover:text-white transition-all border border-white/[0.06]`}>
+      <div className={`glass w-[38px] h-[38px] rounded-full flex items-center justify-center text-white hover:bg-primary/80 hover:text-white transition-all`}>
         <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={direction === 'left' ? 'M15 19l-7-7 7-7' : 'M9 5l7 7-7 7'} />
         </svg>
@@ -151,8 +151,8 @@ const SectionRow = memo(function SectionRow({ title, viewAllLink, items = [], is
           <div className="hidden sm:flex items-center gap-1.5">
             <button
               onClick={() => scroll('left')}
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                canScrollLeft ? 'bg-white/[0.06] text-white hover:bg-white/[0.12]' : 'bg-white/[0.03] text-white/20 cursor-default'
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all border ${
+                canScrollLeft ? 'bg-white/[0.07] border-white/10 text-white hover:bg-white/[0.14]' : 'bg-white/[0.03] border-white/5 text-white/20 cursor-default'
               }`}
               aria-label="Scroll left"
             >
@@ -162,8 +162,8 @@ const SectionRow = memo(function SectionRow({ title, viewAllLink, items = [], is
             </button>
             <button
               onClick={() => scroll('right')}
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                canScrollRight ? 'bg-white/[0.06] text-white hover:bg-white/[0.12]' : 'bg-white/[0.03] text-white/20 cursor-default'
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all border ${
+                canScrollRight ? 'bg-white/[0.07] border-white/10 text-white hover:bg-white/[0.14]' : 'bg-white/[0.03] border-white/5 text-white/20 cursor-default'
               }`}
               aria-label="Scroll right"
             >

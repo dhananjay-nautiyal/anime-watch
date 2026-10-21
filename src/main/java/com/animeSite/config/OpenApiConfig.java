@@ -19,7 +19,7 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Anime Backend API")
-                        .version("1.0.0")
+                        .version("1.1.0")
                         .description("REST API for browsing trending, seasonal, and searchable anime data sourced from Jikan API (MyAnimeList).")
                         .contact(new Contact()
                                 .name("Anime Site")

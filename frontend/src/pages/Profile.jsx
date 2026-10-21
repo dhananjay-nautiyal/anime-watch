@@ -36,7 +36,7 @@ export default function Profile() {
         <h1 className="text-white text-3xl font-bold font-display mb-2">Profile</h1>
         <p className="text-muted text-sm mb-8">Manage your account settings</p>
 
-        <div className="bg-surface/50 backdrop-blur-sm border border-white/5 rounded-2xl p-6 mb-6">
+        <div className="glass-strong rounded-2xl p-6 mb-6">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white text-2xl font-bold">
               {user?.name?.charAt(0)?.toUpperCase() || 'U'}
@@ -48,7 +48,7 @@ export default function Profile() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-surface/50 backdrop-blur-sm border border-white/5 rounded-2xl p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="glass-strong rounded-2xl p-6 space-y-4">
           {message && (
             <p className={`text-sm ${message.includes('Failed') ? 'text-red-400' : 'text-green-400'}`}>{message}</p>
           )}

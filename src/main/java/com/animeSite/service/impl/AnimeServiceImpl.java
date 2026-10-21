@@ -78,7 +78,11 @@ public class AnimeServiceImpl implements AnimeService {
         try {
             return toAnimePage(jikanApiClient.searchAnime(query, page, size), page);
         } catch (Exception e) {
-            return fromDb(() -> animeRepository.findByTitleContainingIgnoreCase(query, PageRequest.of(page, size)), page);
+            String trimmed = query == null ? "" : query.trim();
+            if (trimmed.isEmpty()) {
+                return new AnimePage(List.of(), page, 0);
+            }
+            return fromDb(() -> animeRepository.searchByTitle(trimmed, PageRequest.of(page, size)), page);
         }
     }
 

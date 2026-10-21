@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import SettingsPanel from './SettingsPanel'
 
@@ -21,21 +21,86 @@ export default function ControlsBar({
   const [hoverTime, setHoverTime] = useState(null)
   const [hoverPos, setHoverPos] = useState(0)
 
-  const handleSeek = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const pos = (e.clientX - rect.left) / rect.width
+  // --- Scrubbing ---------------------------------------------------------
+  // The visible bar is only a few pixels tall, so the whole control has a
+  // tall transparent hit area. Pointer events give us click, drag and touch
+  // scrubbing with a single code path.
+  const seekRef = useRef(null)
+  const lastSeekAt = useRef(0)
+  const [dragging, setDragging] = useState(false)
+
+  const positionFromEvent = (e) => {
+    const el = seekRef.current
+    if (!el) return null
+    const rect = el.getBoundingClientRect()
+    if (!rect.width) return null
+    const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
     const v = videoRef.current
-    if (v && v.duration) {
-      v.currentTime = pos * v.duration
-    }
+    const duration = v && Number.isFinite(v.duration) && v.duration > 0
+      ? v.duration
+      : (Number.isFinite(state.duration) ? state.duration : 0)
+    return { pos, time: pos * duration }
+  }
+
+  const applySeek = (pos, force = false) => {
+    const v = videoRef.current
+    if (!v || !Number.isFinite(v.duration) || v.duration <= 0) return
+    const now = performance.now()
+    if (!force && now - lastSeekAt.current < 90) return
+    lastSeekAt.current = now
+    v.currentTime = Math.max(0, Math.min(v.duration - 0.1, pos * v.duration))
+  }
+
+  const handleSeekDown = (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    const p = positionFromEvent(e)
+    if (!p) return
+    setDragging(true)
+    setHoverPos(p.pos)
+    setHoverTime(p.time)
+    applySeek(p.pos, true)
+    try { e.currentTarget.setPointerCapture(e.pointerId) } catch {}
   }
 
   const handleSeekMove = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-    setHoverPos(pos)
+    const p = positionFromEvent(e)
+    if (!p) return
+    setHoverPos(p.pos)
+    setHoverTime(p.time)
+    if (dragging) {
+      e.preventDefault()
+      applySeek(p.pos)
+    }
+  }
+
+  const handleSeekUp = (e) => {
+    if (!dragging) return
+    const p = positionFromEvent(e)
+    if (p) {
+      setHoverPos(p.pos)
+      setHoverTime(p.time)
+      applySeek(p.pos, true)
+    }
+    setDragging(false)
+    try { e.currentTarget.releasePointerCapture(e.pointerId) } catch {}
+  }
+
+  const handleSeekKeyDown = (e) => {
     const v = videoRef.current
-    if (v?.duration) setHoverTime(pos * v.duration)
+    if (!v || !Number.isFinite(v.duration)) return
+    const step = e.shiftKey ? 30 : 5
+    let handled = true
+    if (e.key === 'ArrowRight') v.currentTime = Math.min(v.duration, v.currentTime + step)
+    else if (e.key === 'ArrowLeft') v.currentTime = Math.max(0, v.currentTime - step)
+    else if (e.key === 'Home') v.currentTime = 0
+    else if (e.key === 'End') v.currentTime = Math.max(0, v.duration - 0.1)
+    else handled = false
+    if (handled) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
   }
 
   const volumeIcon = state.muted || state.volume === 0 ? 'Muted' : state.volume < 0.5 ? 'Low' : 'High'
@@ -67,7 +132,7 @@ export default function ControlsBar({
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <button
             onClick={(e) => { e.stopPropagation(); st(p => ({ showShortcuts: !p.showShortcuts })) }}
-            className="text-white/60 hover:text-white bg-black/30 hover:bg-black/50 backdrop-blur-sm rounded-lg p-1.5 transition-all"
+            className="text-white/65 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/10 rounded-lg p-1.5 transition-all"
             aria-label="Keyboard shortcuts"
             title="Keyboard shortcuts"
           >
@@ -77,7 +142,7 @@ export default function ControlsBar({
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); handleShare() }}
-            className="text-white/60 hover:text-white bg-black/30 hover:bg-black/50 backdrop-blur-sm rounded-lg p-1.5 transition-all"
+            className="text-white/65 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/10 rounded-lg p-1.5 transition-all"
             aria-label="Share"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -87,7 +152,7 @@ export default function ControlsBar({
           {onRetry && (
             <button
               onClick={(e) => { e.stopPropagation(); onRetry() }}
-              className="text-white/60 hover:text-white bg-black/30 hover:bg-black/50 backdrop-blur-sm rounded-lg p-1.5 transition-all"
+              className="text-white/65 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/10 rounded-lg p-1.5 transition-all"
               aria-label="Retry"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -100,18 +165,46 @@ export default function ControlsBar({
 
       <div className="px-4 pb-3 space-y-2">
         <div
-          className="relative h-1 bg-white/20 rounded-full cursor-pointer group/seek"
-          onClick={handleSeek}
-          onMouseMove={handleSeekMove}
-          onMouseLeave={() => setHoverTime(null)}
+          ref={seekRef}
+          role="slider"
+          tabIndex={0}
+          aria-label="Seek"
+          aria-valuemin={0}
+          aria-valuemax={Math.round(state.duration || 0)}
+          aria-valuenow={Math.round(state.currentTime || 0)}
+          className="relative py-2 -my-2 cursor-pointer group/seek touch-none select-none focus:outline-none"
+          onPointerDown={handleSeekDown}
+          onPointerMove={handleSeekMove}
+          onPointerUp={handleSeekUp}
+          onPointerCancel={handleSeekUp}
+          onPointerLeave={() => { if (!dragging) setHoverTime(null) }}
+          onKeyDown={handleSeekKeyDown}
         >
-          <div className="h-full bg-primary/50 rounded-full" style={{ width: `${progress}%` }} />
-          <div className="absolute top-0 left-0 h-full bg-primary rounded-full" style={{ width: `${progress}%` }} />
-          <div className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-primary rounded-full shadow-lg opacity-0 group-hover/seek:opacity-100 transition" style={{ left: `calc(${progress}% - 7px)` }} />
+          <div className={`relative rounded-full bg-white/20 transition-all ${dragging ? 'h-1.5' : 'h-1 group-hover/seek:h-1.5'}`}>
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-primary to-cyan-400"
+              style={{ width: `${progress}%` }}
+            />
+            <div
+              className={`absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-white ring-2 ring-primary shadow-[0_0_14px_rgba(139,92,246,0.9)] transition-transform ${
+                dragging ? 'scale-125' : 'group-hover/seek:scale-110'
+              }`}
+              style={{ left: `calc(${progress}% - 7px)` }}
+            />
+          </div>
           {hoverTime !== null && (
-            <div className="absolute -top-8 -translate-x-1/2 bg-black/90 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap" style={{ left: `${hoverPos * 100}%` }}>
-              {fmt(hoverTime)} / {fmt(state.duration)}
-            </div>
+            <>
+              <div
+                className="absolute top-1/2 -translate-y-1/2 w-px h-3 bg-white/40 pointer-events-none"
+                style={{ left: `${hoverPos * 100}%` }}
+              />
+              <div
+                className="absolute -top-7 -translate-x-1/2 bg-black/70 backdrop-blur-xl border border-white/10 text-white text-[10px] px-2 py-1 rounded-lg whitespace-nowrap pointer-events-none"
+                style={{ left: `${hoverPos * 100}%` }}
+              >
+                {fmt(hoverTime)} / {fmt(state.duration)}
+              </div>
+            </>
           )}
         </div>
 
@@ -163,7 +256,7 @@ export default function ControlsBar({
           <div className="relative">
             <button
               onClick={(e) => { e.stopPropagation(); st(p => ({ showSettings: !p.showSettings })) }}
-              className="text-white/80 hover:text-white transition-colors bg-white/10 hover:bg-white/20 p-1.5 rounded-lg"
+              className="text-white/80 hover:text-white transition-colors bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/10 p-1.5 rounded-lg"
               aria-label="Settings"
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.488.488 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81a.48.48 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.488.488 0 00-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.611 3.611 0 0112 15.6z"/></svg>
@@ -180,7 +273,7 @@ export default function ControlsBar({
             />
           </div>
 
-          <button onClick={(e) => { e.stopPropagation(); toggleFullscreen() }} className="text-white/80 hover:text-white transition-colors bg-white/10 hover:bg-white/20 p-1.5 rounded-lg" aria-label="Fullscreen">
+          <button onClick={(e) => { e.stopPropagation(); toggleFullscreen() }} className="text-white/80 hover:text-white transition-colors bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/10 p-1.5 rounded-lg" aria-label="Fullscreen">
             {state.fullscreen ? (
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>
             ) : (
