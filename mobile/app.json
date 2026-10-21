@@ -2,7 +2,7 @@
   "expo": {
     "name": "AnimeWatch",
     "slug": "anime-watch",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "animewatch",
@@ -31,7 +31,7 @@
     "ios": {
       "bundleIdentifier": "com.animewatch.app",
       "supportsTablet": true,
-      "buildNumber": "2",
+      "buildNumber": "3",
       "infoPlist": {
         "NSCameraUsageDescription": "This app does not use the camera.",
         "NSPhotoLibraryUsageDescription": "Used to save screenshots from the app.",
@@ -48,7 +48,7 @@
     },
     "android": {
       "package": "com.animewatch.app",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#1C1B1F",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
