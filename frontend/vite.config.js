@@ -34,11 +34,16 @@ export default defineConfig({
   },
   build: {
     sourcemap: false,
+    // The only chunk above 500 kB is hls.js, which is pulled in solely by the
+    // lazy WatchPage (≈162 kB gzip). It is never part of the initial route, so
+    // the default 500 kB warning is noise here.
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           motion: ['framer-motion'],
+          query: ['@tanstack/react-query'],
           video: ['hls.js'],
         },
       },

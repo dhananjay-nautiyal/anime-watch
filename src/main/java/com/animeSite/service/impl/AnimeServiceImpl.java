@@ -19,9 +19,12 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 
 import java.util.ArrayList;
@@ -40,17 +43,23 @@ public class AnimeServiceImpl implements AnimeService {
     private final SlugService slugService;
     private final JikanMetadataProvider jikanMetadataProvider;
     private final AnimeMetadataEnricher metadataEnricher;
+    private final TransactionTemplate readOnlyTx;
+    private final TransactionTemplate writeTx;
 
     public AnimeServiceImpl(JikanApiClient jikanApiClient, AnimeRepository animeRepository,
                              AnimeGenreRepository animeGenreRepository,
                              SlugService slugService, JikanMetadataProvider jikanMetadataProvider,
-                             AnimeMetadataEnricher metadataEnricher) {
+                             AnimeMetadataEnricher metadataEnricher,
+                             PlatformTransactionManager transactionManager) {
         this.jikanApiClient = jikanApiClient;
         this.animeRepository = animeRepository;
         this.animeGenreRepository = animeGenreRepository;
         this.slugService = slugService;
         this.jikanMetadataProvider = jikanMetadataProvider;
         this.metadataEnricher = metadataEnricher;
+        this.readOnlyTx = new TransactionTemplate(transactionManager);
+        this.readOnlyTx.setReadOnly(true);
+        this.writeTx = new TransactionTemplate(transactionManager);
     }
 
     @Transactional
@@ -59,8 +68,7 @@ public class AnimeServiceImpl implements AnimeService {
         try {
             return toAnimePage(jikanApiClient.fetchTopAnime(page, size), page);
         } catch (Exception e) {
-            Page<Anime> dbPage = animeRepository.findAllByOrderByRatingDesc(PageRequest.of(page, size));
-            return toAnimePageFromDb(dbPage, page);
+            return fromDb(() -> animeRepository.findAllByOrderByRatingDesc(PageRequest.of(page, size)), page);
         }
     }
 
@@ -70,8 +78,7 @@ public class AnimeServiceImpl implements AnimeService {
         try {
             return toAnimePage(jikanApiClient.searchAnime(query, page, size), page);
         } catch (Exception e) {
-            Page<Anime> dbPage = animeRepository.findByTitleContainingIgnoreCase(query, PageRequest.of(page, size));
-            return toAnimePageFromDb(dbPage, page);
+            return fromDb(() -> animeRepository.findByTitleContainingIgnoreCase(query, PageRequest.of(page, size)), page);
         }
     }
 
@@ -105,9 +112,8 @@ public class AnimeServiceImpl implements AnimeService {
                                    String status, Integer year, String orderBy, String sort,
                                    int page, int size) {
         Specification<Anime> spec = AnimeFilters.build(includeIds, excludeIds, type, status, year);
-        Page<Anime> dbPage = animeRepository.findAll(spec,
-                PageRequest.of(page, size, AnimeFilters.sort(orderBy, sort)));
-        return toAnimePageFromDb(dbPage, page);
+        Pageable pageable = PageRequest.of(page, size, AnimeFilters.sort(orderBy, sort));
+        return fromDb(() -> animeRepository.findAll(spec, pageable), page);
     }
 
     /**
@@ -142,39 +148,43 @@ public class AnimeServiceImpl implements AnimeService {
         // Prefer the local catalog: the Jikan API is slow or unreachable on
         // some networks, and blocking the detail page for 15 s on every view
         // is far worse than a slightly stale record.
-        Optional<Anime> local = animeRepository.findByMalId(id);
-        if (local.isPresent()) {
-            return enrich(withRelations(local.get()));
+        if (animeRepository.findByMalId(id).isPresent()) {
+            return enrich(loadByIdWithRelations(id));
         }
 
         try {
             var response = jikanApiClient.fetchAnimeById(id);
             if (response != null && response.getData() != null) {
-                Anime saved = saveAnime(response.getData());
-                return enrich(withRelations(animeRepository.findByMalId(saved.getMalId()).orElse(saved)));
+                Integer malId = saveAnime(response.getData()).getMalId();
+                return enrich(loadByIdWithRelations(malId));
             }
         } catch (Exception ignored) {}
-        throw new BusinessException(ErrorCode.ANIME_0001, "Anime not found with ID: " + id);
+        return enrich(loadByIdWithRelations(id));
     }
 
     @Cacheable(value = "anime", key = "'slug-'+#slug", unless = "#result == null")
     public Anime getAnimeBySlug(String slug) {
-        Anime anime = animeRepository.findBySlug(slug)
-                .or(() -> {
-                    try {
-                        return animeRepository.findByMalId(Integer.parseInt(slug));
-                    } catch (NumberFormatException e) {
-                        return Optional.empty();
-                    }
-                })
-                .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with slug: " + slug));
-        return enrich(withRelations(anime));
+        Anime anime = readOnlyTx.execute(status -> {
+            Anime found = animeRepository.findBySlug(slug)
+                    .or(() -> {
+                        try {
+                            return animeRepository.findByMalId(Integer.parseInt(slug));
+                        } catch (NumberFormatException e) {
+                            return Optional.empty();
+                        }
+                    })
+                    .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with slug: " + slug));
+            initializeRelations(found);
+            return found;
+        });
+        return enrich(anime);
     }
 
     /**
      * Detail responses are the only place the full metadata is shown, so this
      * is where the MAL enrichment runs. It is persisted, making subsequent
-     * lookups free.
+     * lookups free. Runs after the read-only transaction above so the write
+     * is not swallowed by a read-only Hibernate session.
      */
     private Anime enrich(Anime anime) {
         if (metadataEnricher.needsEnrichment(anime)) {
@@ -183,15 +193,26 @@ public class AnimeServiceImpl implements AnimeService {
         return anime;
     }
 
+    private Anime loadByIdWithRelations(int id) {
+        return readOnlyTx.execute(status -> {
+            Anime anime = animeRepository.findByMalId(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ANIME_0001, "Anime not found with ID: " + id));
+            initializeRelations(anime);
+            return anime;
+        });
+    }
+
     /**
-     * Detail responses expose genres and studios. Loading them here (two
-     * batched queries) keeps the cached entity fully initialized instead of
-     * caching lazy proxies that later blow up outside a session.
+     * Detail responses and cached list pages expose genres and studios. Both
+     * collections are lazy, so touching them here (two batched queries inside
+     * the surrounding transaction) stores fully initialized entities in the
+     * cache. Serializing a cached page later happens outside any session, and
+     * an uninitialized proxy there used to fail /api/anime/home with
+     * LazyInitializationException.
      */
-    private Anime withRelations(Anime anime) {
+    private void initializeRelations(Anime anime) {
         anime.getAnimeGenres().size();
         anime.getAnimeStudios().size();
-        return anime;
     }
 
     @Transactional
@@ -200,8 +221,7 @@ public class AnimeServiceImpl implements AnimeService {
         try {
             return toAnimePage(jikanApiClient.fetchSeasonalAnime(page, size), page);
         } catch (Exception e) {
-            Page<Anime> dbPage = animeRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, size));
-            return toAnimePageFromDb(dbPage, page);
+            return fromDb(() -> animeRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, size)), page);
         }
     }
 
@@ -310,13 +330,32 @@ public class AnimeServiceImpl implements AnimeService {
         List<Anime> animeList = new ArrayList<>();
         int totalPages = 1;
         if (response != null && response.getData() != null) {
-            animeList = saveAnimeBatch(response.getData());
+            List<Anime> saved = writeTx.execute(status -> {
+                List<Anime> batch = saveAnimeBatch(response.getData());
+                batch.forEach(this::initializeRelations);
+                return batch;
+            });
+            animeList = saved == null ? List.of() : saved;
             if (response.getPagination() != null) {
                 totalPages = response.getPagination().getLastVisiblePage();
             }
         }
         initRelations(animeList);
         return new AnimePage(animeList, page, totalPages);
+    }
+
+    /**
+     * Runs the query and relation initialization in one read-only transaction,
+     * so the page that gets cached is safe to serialize after the session is
+     * closed. The DB half of /api/anime/home runs on CompletableFuture threads,
+     * where Open Session in View does not apply.
+     */
+    private AnimePage fromDb(java.util.function.Supplier<Page<Anime>> query, int page) {
+        return readOnlyTx.execute(status -> {
+            Page<Anime> dbPage = query.get();
+            dbPage.getContent().forEach(this::initializeRelations);
+            return toAnimePageFromDb(dbPage, page);
+        });
     }
 
     private AnimePage toAnimePageFromDb(Page<Anime> dbPage, int page) {

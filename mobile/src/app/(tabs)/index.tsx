@@ -16,6 +16,7 @@ import AnimeCard from '@/components/AnimeCard'
 import type { AnimeItem } from '@/components/AnimeCard'
 import HeroBanner from '@/components/HeroBanner'
 import HomeSkeleton from '@/components/HomeSkeleton'
+import ErrorView from '@/components/ErrorView'
 import PressableScale from '@/components/PressableScale'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')

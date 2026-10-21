@@ -40,6 +40,8 @@ class ProviderResolverIntegrationTest {
     @Mock(lenient = true)
     private JikanApiClient jikanApiClient;
     @Mock(lenient = true)
+    private MegaPlayResolver megaPlayResolver;
+    @Mock(lenient = true)
     private ProviderPriorityManager priorityManager;
 
     @Captor
@@ -60,7 +62,7 @@ class ProviderResolverIntegrationTest {
 
         resolver = new ProviderResolver(
             priorityManager, validationService, streamVerificationService,
-            healthMonitor, cacheRepository, recoveryEngine, jikanApiClient);
+            healthMonitor, cacheRepository, recoveryEngine, jikanApiClient, megaPlayResolver);
     }
 
     private Episode createEpisode(int num, String url, int malId) {
