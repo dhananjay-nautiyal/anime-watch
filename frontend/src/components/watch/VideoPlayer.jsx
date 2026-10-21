@@ -25,6 +25,7 @@ export default function VideoPlayer({
   const videoRef = useRef(null)
   const containerRef = useRef(null)
   const controlsTimer = useRef(null)
+  const toastTimer = useRef(null)
   const hlsRef = useRef(null)
   const seeking = useRef(false)
   const readyFired = useRef(false)
@@ -40,9 +41,32 @@ export default function VideoPlayer({
     autoQuality: localStorage.getItem(STORAGE.autoQuality) !== 'false',
     theater: localStorage.getItem(STORAGE.theater) === 'true',
     subtitles: [], currentSubtitle: -1,
-    showShortcuts: false,
+    showShortcuts: false, toast: null,
   })
-  const st = useCallback((partial) => setState(prev => ({ ...prev, ...partial })), [])
+  // Accepts either a partial object or an updater, like React's setState.
+  // Several controls pass `st(prev => ({ ... }))`; spreading a function used
+  // to produce no keys, so those clicks silently did nothing.
+  const st = useCallback((partial) => {
+    setState(prev => {
+      const patch = typeof partial === 'function' ? partial(prev) : partial
+      return { ...prev, ...patch }
+    })
+  }, [])
+
+  const notify = useCallback((message) => {
+    st({ toast: message })
+    clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => st({ toast: null }), 2200)
+  }, [st])
+
+  const resetHideTimer = useCallback(() => {
+    clearTimeout(controlsTimer.current)
+    const v = videoRef.current
+    if (!v || v.paused) return
+    controlsTimer.current = setTimeout(() => {
+      setState(prev => (prev.showSettings || prev.showVol ? prev : { ...prev, showControls: false }))
+    }, CONTROLS_HIDE_DELAY)
+  }, [])
 
   const togglePlay = useCallback(() => {
     const v = videoRef.current
@@ -101,10 +125,19 @@ export default function VideoPlayer({
   const togglePip = useCallback(async () => {
     try {
       const v = videoRef.current
-      if (document.pictureInPictureElement) await document.exitPictureInPicture()
-      else if (v) await v.requestPictureInPicture()
-    } catch {}
-  }, [])
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture()
+      } else if (v) {
+        if (!document.pictureInPictureEnabled) {
+          notify('Picture-in-Picture is not available in this browser')
+          return
+        }
+        await v.requestPictureInPicture()
+      }
+    } catch {
+      notify('Picture-in-Picture is not available')
+    }
+  }, [notify])
 
   const toggleTheater = useCallback(() => {
     st(p => ({ theater: !p.theater }))
@@ -112,15 +145,19 @@ export default function VideoPlayer({
   }, [st, state.theater])
 
   const handleShare = useCallback(async () => {
+    const url = window.location.href
     try {
-      const url = window.location.href
       if (navigator.share) {
         await navigator.share({ title: animeTitle, url })
       } else {
         await navigator.clipboard.writeText(url)
+        notify('Link copied to clipboard')
       }
-    } catch {}
-  }, [animeTitle])
+    } catch (err) {
+      // A cancelled share sheet is not an error worth surfacing.
+      if (err?.name !== 'AbortError') notify('Could not copy the link')
+    }
+  }, [animeTitle, notify])
 
   const handleSubtitleChange = useCallback((idx) => {
     const hls = hlsRef.current
@@ -209,16 +246,14 @@ export default function VideoPlayer({
   }, [st])
 
   useEffect(() => {
-    if (state.showControls) {
-      clearTimeout(controlsTimer.current)
-      if (state.playing) {
-        controlsTimer.current = setTimeout(() => {
-          st({ showControls: false, showSettings: false, showVol: false })
-        }, CONTROLS_HIDE_DELAY)
-      }
+    clearTimeout(controlsTimer.current)
+    if (state.playing && !state.showSettings && !state.showVol) {
+      controlsTimer.current = setTimeout(() => {
+        setState(prev => (prev.showSettings || prev.showVol ? prev : { ...prev, showControls: false }))
+      }, CONTROLS_HIDE_DELAY)
     }
     return () => clearTimeout(controlsTimer.current)
-  }, [state.showControls, state.playing, st])
+  }, [state.playing, state.showSettings, state.showVol])
 
   const showControls = state.showControls || state.buffering || !state.playing
 
@@ -258,7 +293,18 @@ export default function VideoPlayer({
 
     if (streamType === 'hls' && Hls.isSupported() && embedUrl.includes('.m3u8')) {
       const hlsUrl = wrapProxy(embedUrl, 'https://anineko.to/')
-      const hls = new Hls({ enableWorker: true, lowLatencyMode: true, maxBufferLength: 30 })
+      const hls = new Hls({
+        enableWorker: true,
+        // VOD playlists gain nothing from low-latency mode; it only makes the
+        // player re-request playlists more often.
+        lowLatencyMode: false,
+        startFragPrefetch: true,
+        capLevelToPlayerSize: true,
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        backBufferLength: 30,
+        abrEwmaDefaultEstimate: 1500000,
+      })
       hlsRef.current = hls
       hls.loadSource(hlsUrl)
       hls.attachMedia(v)
@@ -430,7 +476,7 @@ export default function VideoPlayer({
         ref={containerRef}
         className={`w-full aspect-video bg-black rounded-xl overflow-hidden shadow-2xl relative group cursor-pointer touch-manipulation ${state.theater ? 'rounded-none' : ''}`}
         style={state.theater ? { maxWidth: '100%', maxHeight: '85vh' } : {}}
-      onMouseMove={() => st({ showControls: true })}
+      onMouseMove={() => { st({ showControls: true }); resetHideTimer() }}
       onMouseLeave={() => state.playing && st({ showControls: false })}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
@@ -482,7 +528,7 @@ export default function VideoPlayer({
       )}
 
       {showSkipIntro && (
-        <div className="absolute top-4 right-4 z-30">
+        <div className="absolute top-4 right-4 z-40">
           <button
             onClick={(e) => { e.stopPropagation(); skipIntro() }}
             className="bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-all border border-white/10 flex items-center gap-1.5"
@@ -550,6 +596,11 @@ export default function VideoPlayer({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
             </svg>
           )}
+        </div>
+      )}
+      {state.toast && (
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-50 bg-black/85 backdrop-blur-sm text-white text-xs font-medium px-4 py-2 rounded-lg shadow-2xl pointer-events-none">
+          {state.toast}
         </div>
       )}
       </div>
