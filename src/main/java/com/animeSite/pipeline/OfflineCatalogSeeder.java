@@ -6,6 +6,7 @@ import com.animeSite.persist.AnimeStudio;
 import com.animeSite.repo.AnimeRepository;
 import com.animeSite.repo.AnimeStudioRepository;
 import com.animeSite.service.SlugService;
+import com.animeSite.util.MalPlaceholders;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.CommandLineRunner;
@@ -183,30 +184,23 @@ public class OfflineCatalogSeeder implements CommandLineRunner {
     /**
      * Copy the detail fields the catalogue ships onto a row, but only where the
      * row is still empty: an imported record always wins over the seed file.
+     *
+     * <p>"Empty" includes MyAnimeList's stand-in text. An earlier run of the
+     * enricher stored values like a studio named "None found" or MAL's "No
+     * synopsis information" boilerplate; because such text is not blank, a
+     * naive top-up would keep it forever. Here it is treated as a gap, so the
+     * catalogue value replaces it - and when the catalogue has nothing either,
+     * the junk is cleared rather than left on the row.
      */
     private boolean applyDetailFields(Anime anime, Map<String, Object> row, StudioIndex studios) {
         boolean changed = false;
 
-        if (isBlank(anime.getSynopsis()) && row.get("synopsis") instanceof String s && !s.isBlank()) {
-            anime.setSynopsis(s);
-            changed = true;
-        }
-        if (isBlank(anime.getDuration()) && row.get("duration") instanceof String s && !s.isBlank()) {
-            anime.setDuration(s);
-            changed = true;
-        }
-        if (isBlank(anime.getSource()) && row.get("source") instanceof String s && !s.isBlank()) {
-            anime.setSource(s);
-            changed = true;
-        }
-        if (isBlank(anime.getAired()) && row.get("aired") instanceof String s && !s.isBlank()) {
-            anime.setAired(s);
-            changed = true;
-        }
-        if (isBlank(anime.getRating()) && row.get("rating") instanceof String s && !s.isBlank()) {
-            anime.setRating(s);
-            changed = true;
-        }
+        changed |= applyText(anime.getSynopsis(), text(row, "synopsis"), anime::setSynopsis);
+        changed |= applyText(anime.getDuration(), text(row, "duration"), anime::setDuration);
+        changed |= applyText(anime.getSource(), text(row, "source"), anime::setSource);
+        changed |= applyText(anime.getAired(), text(row, "aired"), anime::setAired);
+        changed |= applyText(anime.getRating(), text(row, "rating"), anime::setRating);
+
         if (anime.getMembers() == null && row.get("members") instanceof Number n) {
             anime.setMembers(n.intValue());
             changed = true;
@@ -224,7 +218,25 @@ public class OfflineCatalogSeeder implements CommandLineRunner {
             changed = true;
         }
 
-        if ((anime.getAnimeStudios() == null || anime.getAnimeStudios().isEmpty())) {
+        List<AnimeStudio> existing = anime.getAnimeStudios() == null
+            ? List.of() : new ArrayList<>(anime.getAnimeStudios());
+        List<AnimeStudio> kept = new ArrayList<>();
+        for (AnimeStudio studio : existing) {
+            if (studio != null && !MalPlaceholders.isStudioPlaceholder(studio.getName())) {
+                kept.add(studio);
+            }
+        }
+        if (kept.size() != existing.size()) {
+            // Dropping a studio only removes the join row; the shared studio
+            // entity stays for the other anime that reference it.
+            List<AnimeStudio> current = anime.getAnimeStudios();
+            if (current != null) {
+                current.clear();
+                current.addAll(kept);
+            }
+            changed = true;
+        }
+        if (kept.isEmpty()) {
             List<AnimeStudio> resolved = resolveStudios(row.get("studios"), studios);
             if (!resolved.isEmpty()) {
                 if (anime.getAnimeStudios() == null) anime.setAnimeStudios(new ArrayList<>());
@@ -233,6 +245,37 @@ public class OfflineCatalogSeeder implements CommandLineRunner {
             }
         }
         return changed;
+    }
+
+    /** MAL stand-in text counts as missing, not as a stored value. */
+    private static String safe(String value) {
+        return MalPlaceholders.isPlaceholder(value)
+            || (value != null && MalPlaceholders.isSynopsisPlaceholder(value))
+            ? null : value;
+    }
+
+    /** A catalogue text field, or null when it is absent or stand-in text. */
+    private static String text(Map<String, Object> row, String key) {
+        return row.get(key) instanceof String s ? s : null;
+    }
+
+    /**
+     * Point the setter at the catalogue value when the stored one is unusable,
+     * or clear it when the catalogue has nothing better. A usable stored value
+     * is never touched, so imported data always wins.
+     */
+    private static boolean applyText(String stored, String catalogue,
+                                     java.util.function.Consumer<String> setter) {
+        String usable = safe(stored);
+        if (usable != null) return false;         // a real value is never touched
+        String desired = safe(catalogue);
+        if (desired == null) {
+            if (stored == null) return false;     // already clear, nothing to do
+            setter.accept(null);                  // drop the junk placeholder
+            return true;
+        }
+        setter.accept(desired);
+        return true;
     }
 
     /**

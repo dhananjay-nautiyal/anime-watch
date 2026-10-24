@@ -116,8 +116,45 @@ class OfflineCatalogSeederTest {
     }
 
     @Test
-    void resolvesDuplicateTitlesWithinTheSameUnsavedBatch() {
-        when(animeRepository.findAll()).thenReturn(List.of());
+    void replacesMalPlaceholderTextLeftOnRowsByOlderRuns() {
+        // The old enricher split MAL's "None found, add some" into two studio
+        // names and kept its "No synopsis information" boilerplate; junk is not
+        // blank, so a plain "fill the gaps" pass would leave it forever.
+        AnimeStudio noneFound = new AnimeStudio(java.util.UUID.randomUUID(), -5, "None found");
+        AnimeStudio addSome = new AnimeStudio(java.util.UUID.randomUUID(), -6, "add some");
+        Anime polluted = new Anime();
+        polluted.setMalId(21);
+        polluted.setTitle("One Piece");
+        polluted.setSlug("one-piece");
+        polluted.setSynopsis("No synopsis information has been added to this title. "
+                + "Help improve our database by adding synopsis information here.");
+        polluted.setRating("None");
+        polluted.getAnimeStudios().add(noneFound);
+        polluted.getAnimeStudios().add(addSome);
+
+        when(animeRepository.findAll()).thenReturn(List.of(polluted));
+        when(studioRepository.findAll()).thenReturn(List.of(noneFound, addSome));
+        when(animeRepository.existsBySlug(anyString())).thenReturn(false);
+        when(animeRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        seeder.run();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Anime>> captor = ArgumentCaptor.forClass(List.class);
+        verify(animeRepository, times(2)).saveAll(captor.capture());
+        Anime healed = captor.getAllValues().get(1).get(0);
+
+        assertEquals(21, healed.getMalId());
+        assertFalse(healed.getSynopsis().startsWith("No synopsis information"),
+                "MAL's boilerplate must be replaced with the real synopsis");
+        assertNotEquals("None", healed.getRating(), "'None' is MAL's stand-in for unrated");
+        assertEquals(List.of("Toei Animation"),
+                healed.getAnimeStudios().stream().map(AnimeStudio::getName).toList(),
+                "placeholder studios must be dropped and the real one linked");
+    }
+
+    @Test
+    void resolvesDuplicateTitlesWithinTheSameUnsavedBatch() {        when(animeRepository.findAll()).thenReturn(List.of());
         when(animeRepository.existsBySlug(anyString())).thenReturn(false);
         when(animeRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 

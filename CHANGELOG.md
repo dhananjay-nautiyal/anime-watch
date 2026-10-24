@@ -16,6 +16,14 @@ All notable changes to AnimeWatch are documented here. Versions follow
   the lazy enricher reads the synopsis too, retries a fetch instead of giving
   up on a title for the life of the JVM, and keeps backfilling genres. Detail
   and watch pages now render every field, fully offline for seeded titles.
+- **MyAnimeList placeholder text shipped as real data**. Where a field is
+  empty, MAL renders stand-in text — a Studios row reading `None found, add
+  some`, a Rating of `None`, a "No synopsis information has been added…"
+  paragraph. An earlier enricher stored those verbatim (splitting the studios
+  line into two studio names), and because they are not blank no later pass
+  would ever correct them. The backfill script and the enricher now reject
+  them, the catalogue is scrubbed, and the seeder treats them as gaps on boot
+  so existing rows are healed instead of kept.
 - **The detail page stuck on “Anime not found”** in dev: React StrictMode
   aborts the first request, and the cancellation set an error state that the
   successful second request never cleared, so the page hid the metadata it had

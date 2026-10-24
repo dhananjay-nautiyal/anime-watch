@@ -6,6 +6,7 @@ import com.animeSite.persist.AnimeStudio;
 import com.animeSite.repo.AnimeGenreRepository;
 import com.animeSite.repo.AnimeRepository;
 import com.animeSite.repo.AnimeStudioRepository;
+import com.animeSite.util.MalPlaceholders;
 import org.jsoup.parser.Parser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,19 +76,35 @@ public class AnimeMetadataEnricher {
     public boolean needsEnrichment(Anime anime) {
         return anime != null
             && anime.getMalId() != null
-            && (isBlank(anime.getSynopsis())
-                || isBlank(anime.getDuration())
-                || isBlank(anime.getAired())
-                || isBlank(anime.getSource())
+            && (needsText(anime.getSynopsis())
+                || needsText(anime.getDuration())
+                || needsText(anime.getAired())
+                || needsText(anime.getSource())
                 || anime.getMembers() == null
                 || anime.getPopularity() == null
                 || anime.getFavorites() == null
-                || anime.getAnimeStudios() == null
-                || anime.getAnimeStudios().isEmpty()
+                || hasNoStudios(anime)
                 // The catalogue ships no genres; without this the detail view
                 // would stop being the one place that backfills them.
                 || anime.getAnimeGenres() == null
                 || anime.getAnimeGenres().isEmpty());
+    }
+
+    /** Blank, or MyAnimeList stand-in text that got stored as a value. */
+    private static boolean needsText(String value) {
+        return MalPlaceholders.isPlaceholder(value)
+            || MalPlaceholders.isSynopsisPlaceholder(value);
+    }
+
+    /** True when the row has no usable studio, ignoring stored junk. */
+    private static boolean hasNoStudios(Anime anime) {
+        if (anime.getAnimeStudios() == null || anime.getAnimeStudios().isEmpty()) return true;
+        for (AnimeStudio studio : anime.getAnimeStudios()) {
+            if (studio != null && !MalPlaceholders.isStudioPlaceholder(studio.getName())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -110,7 +127,7 @@ public class AnimeMetadataEnricher {
             boolean changed = false;
 
             String type = infoValue(html, "Type");
-            if (isBlank(anime.getType()) && type != null) { anime.setType(type); changed = true; }
+            if (needsText(anime.getType()) && type != null) { anime.setType(type); changed = true; }
 
             String episodes = infoValue(html, "Episodes");
             if (anime.getEpisodes() == null && episodes != null) {
@@ -128,16 +145,16 @@ public class AnimeMetadataEnricher {
             }
 
             String aired = infoValue(html, "Aired");
-            if (isBlank(anime.getAired()) && aired != null) { anime.setAired(aired); changed = true; }
+            if (needsText(anime.getAired()) && aired != null) { anime.setAired(aired); changed = true; }
 
             String duration = infoValue(html, "Duration");
-            if (isBlank(anime.getDuration()) && duration != null) { anime.setDuration(duration); changed = true; }
+            if (needsText(anime.getDuration()) && duration != null) { anime.setDuration(duration); changed = true; }
 
             String source = infoValue(html, "Source");
-            if (isBlank(anime.getSource()) && source != null) { anime.setSource(source); changed = true; }
+            if (needsText(anime.getSource()) && source != null) { anime.setSource(source); changed = true; }
 
             String rating = infoValue(html, "Rating");
-            if (isBlank(anime.getRating()) && rating != null) { anime.setRating(rating); changed = true; }
+            if (needsText(anime.getRating()) && rating != null) { anime.setRating(rating); changed = true; }
 
             String premiered = infoValue(html, "Premiered");
             if (premiered != null) {
@@ -168,12 +185,25 @@ public class AnimeMetadataEnricher {
             Double score = firstDouble(infoValue(html, "Score"));
             if (anime.getScore() == null && score != null) { anime.setScore(score); changed = true; }
 
-            if (isBlank(anime.getSynopsis())) {
+            if (needsText(anime.getSynopsis())) {
                 String syn = synopsis(html);
                 if (syn != null) { anime.setSynopsis(syn); changed = true; }
             }
 
-            if (anime.getAnimeStudios() == null || anime.getAnimeStudios().isEmpty()) {
+            if (hasNoStudios(anime)) {
+                // Drop any stored junk ("None found" / "add some" left behind
+                // by an older run) before attaching the real studios. Collect
+                // first: mutating a lazy Hibernate bag while iterating it can
+                // throw. Removing a studio only drops the join row.
+                if (anime.getAnimeStudios() != null && !anime.getAnimeStudios().isEmpty()) {
+                    List<AnimeStudio> junk = new ArrayList<>();
+                    for (AnimeStudio studio : anime.getAnimeStudios()) {
+                        if (studio == null || MalPlaceholders.isStudioPlaceholder(studio.getName())) {
+                            junk.add(studio);
+                        }
+                    }
+                    anime.getAnimeStudios().removeAll(junk);
+                }
                 for (String name : splitNames(infoValue(html, "Studios"))) {
                     anime.getAnimeStudios().add(resolveStudio(name));
                     changed = true;
@@ -223,9 +253,11 @@ public class AnimeMetadataEnricher {
             .replaceAll("\\s+", " ")
             .trim();
 
-        if (text.isEmpty()) return null;
-        String lower = text.toLowerCase();
-        if (lower.startsWith("none found") || lower.equals("unknown")) return null;
+        // MAL renders "None found, add some" (studios), "None" (rating) and
+        // friends in place of a value; storing those would put literal junk on
+        // the row that no later pass can correct, since both the seeder and
+        // this enricher skip fields that already have a value.
+        if (MalPlaceholders.isPlaceholder(text)) return null;
         // Strip the rank footnote ("#2065 2 based on the top anime page...").
         if (label.equals("Ranked") || label.equals("Popularity")) {
             Matcher number = Pattern.compile("#?([\\d,]+)").matcher(text);
@@ -257,7 +289,10 @@ public class AnimeMetadataEnricher {
             lines.add(line.replaceAll("[ \\t]+", " ").trim());
         }
         String cleaned = String.join("\n", lines).replaceAll("\n{3,}", "\n\n").trim();
-        return cleaned.isEmpty() ? null : cleaned;
+        // Pages with no description carry MAL's own "No synopsis information
+        // has been added..." paragraph; that is not a synopsis.
+        if (cleaned.isEmpty() || MalPlaceholders.isSynopsisPlaceholder(cleaned)) return null;
+        return cleaned;
     }
 
     private static List<String> genres(String html) {
