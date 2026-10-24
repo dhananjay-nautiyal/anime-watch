@@ -140,6 +140,29 @@ He is not to be underestimated &amp; never gives up.</p>
     }
 
     @Test
+    void neverStoresMyAnimeListPlaceholderTextAsValues() {
+        String html = """
+            <div class="spaceit_pad"><span class="dark_text">Studios:</span> None found, add some</div>
+            <div class="spaceit_pad"><span class="dark_text">Rating:</span> None</div>
+            <div class="spaceit_pad"><span class="dark_text">Duration:</span> Unknown</div>
+            <div><h2 id="synopsis">Synopsis</h2></div>
+            <p itemprop="description">No synopsis information has been added to this title. \
+            Help improve our database by adding synopsis information here.</p>
+            """;
+        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn(html);
+
+        Anime anime = seededAnime();
+        enricher.enrich(anime);
+
+        assertNull(anime.getSynopsis(), "MAL's 'no synopsis' boilerplate is not a synopsis");
+        assertNull(anime.getRating(), "'None' is MAL's stand-in for an unrated title");
+        assertNull(anime.getDuration(), "'Unknown' is not a duration");
+        assertTrue(anime.getAnimeStudios().isEmpty(),
+                "'None found, add some' is one label, not two studio names");
+        verify(animeRepository, never()).save(any(Anime.class));
+    }
+
+    @Test
     void retriesAFailedFetchInsteadOfGivingUpForTheRestOfTheJvm() {
         when(restTemplate.getForObject(anyString(), eq(String.class)))
                 .thenThrow(new RuntimeException("network down"));

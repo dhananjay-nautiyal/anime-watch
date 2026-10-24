@@ -12,6 +12,7 @@ does at runtime - just eagerly, once, so seeded rows are complete from boot.
 
     python3 scripts/backfill_offline_catalog.py --limit 5   # smoke test
     python3 scripts/backfill_offline_catalog.py             # full backfill
+    python3 scripts/backfill_offline_catalog.py --clean     # scrub MAL placeholders, no network
 
 Progress is written to a JSONL checkpoint after every page, so an interrupted
 run resumes where it stopped. The catalog is rewritten atomically at the end,
@@ -50,7 +51,17 @@ USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
-EMPTY_VALUES = {"none found", "unknown", "not available", "-", "?"}
+# MyAnimeList renders these in place of a real value. Capturing them verbatim
+# would persist literal "None found" studios and a "No synopsis information"
+# synopsis that no later pass can correct, because the seeder and the enricher
+# only ever replace empty values.
+EMPTY_VALUES = {
+    "none found", "add some", "unknown", "not available", "not found",
+    "none", "n/a", "na", "-", "?", "tba", "to be added", "nothing found",
+}
+SYNOPSIS_PLACEHOLDER = re.compile(
+    r"no synopsis information has been added|help improve our database", re.I
+)
 
 _console_lock = threading.Lock()
 
@@ -101,9 +112,19 @@ def info_value(page: str, label: str) -> str | None:
     text = re.sub(r"<[^>]+>", " ", match.group(1))
     text = html.unescape(text).replace("\xa0", " ")
     text = re.sub(r"\s+", " ", text).strip()
-    if not text or text.lower() in EMPTY_VALUES:
+    if not text or is_placeholder(text):
         return None
     return text
+
+
+def is_placeholder(text: str) -> bool:
+    """True for MAL's stand-in text ("None found", "None", "Unknown", ...).
+
+    A value like "None found, add some" is a single label MAL renders when a
+    field is empty; splitting it on commas would fabricate studios out of it.
+    """
+    parts = [part.strip().lower().strip(".") for part in text.split(",")]
+    return bool(parts) and all(part in EMPTY_VALUES for part in parts)
 
 
 def first_int(value: str | None) -> int | None:
@@ -129,7 +150,9 @@ def synopsis(page: str) -> str | None:
     text = re.sub(r"[ \t]+", " ", text)
     text = "\n".join(line.strip() for line in text.split("\n"))
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
-    return text or None
+    if not text or SYNOPSIS_PLACEHOLDER.search(text):
+        return None
+    return text
 
 
 def studios(page: str) -> list[dict]:
@@ -149,9 +172,15 @@ def studios(page: str) -> list[dict]:
         if found:
             return found
     # Fall back to the plain text list ("Studio A, Studio B"); the seeder
-    # assigns a stable synthetic id when MAL did not give us one.
+    # assigns a stable synthetic id when MAL did not give us one. A bare
+    # "None found, add some" is MAL saying there is no studio, not two names.
     text = info_value(page, "Studios")
-    return [{"malId": None, "name": name.strip()} for name in (text or "").split(",") if name.strip()]
+    names = [name.strip() for name in (text or "").split(",")]
+    return [
+        {"malId": None, "name": name}
+        for name in names
+        if name and not is_placeholder(name)
+    ]
 
 
 def parse(page: str) -> dict:
@@ -252,6 +281,38 @@ def merge(rows: list[dict], results: dict[int, dict]) -> int:
     return updated
 
 
+def clean(rows: list[dict]) -> int:
+    """Drop MyAnimeList's stand-in text that a run captured as a real value.
+
+    Junk is not empty, so neither the seeder nor the enricher would ever
+    replace it: "None found" studios and a "No synopsis information..." blurb
+    would ship to production as if they were data.
+    """
+    scrubbed = 0
+    for row in rows:
+        touched = False
+        for key in ("synopsis", "duration", "source", "aired", "rating"):
+            value = row.get(key)
+            if isinstance(value, str) and (
+                is_placeholder(value) or SYNOPSIS_PLACEHOLDER.search(value)
+            ):
+                row[key] = None
+                touched = True
+        studios_value = row.get("studios")
+        if isinstance(studios_value, list) and studios_value:
+            kept = [
+                studio for studio in studios_value
+                if isinstance(studio, dict)
+                and studio.get("name")
+                and not is_placeholder(studio["name"])
+            ]
+            if len(kept) != len(studios_value):
+                row["studios"] = kept
+                touched = True
+        scrubbed += touched
+    return scrubbed
+
+
 def main() -> int:
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     default_catalog = os.path.join(root, "src", "main", "resources", "static-data", "offline-catalog.json")
@@ -266,11 +327,23 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=20.0)
     parser.add_argument("--limit", type=int, default=0, help="fetch at most N rows (smoke test)")
     parser.add_argument("--refetch", action="store_true", help="ignore an existing checkpoint")
+    parser.add_argument("--clean", action="store_true",
+                        help="scrub MyAnimeList placeholder text from the catalog and exit (no network)")
     args = parser.parse_args()
     args.output = args.output or args.input
     if args.refetch and os.path.exists(args.checkpoint):
         os.remove(args.checkpoint)
     args.done = load_checkpoint(args.checkpoint)
+
+    if args.clean:
+        rows = json.loads(open(args.input, encoding="utf-8").read())
+        scrubbed = clean(rows)
+        tmp = args.output + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(rows, ensure_ascii=False))
+        os.replace(tmp, args.output)
+        log(f"scrubbed MyAnimeList placeholder text from {scrubbed}/{len(rows)} rows -> {args.output}")
+        return 0
 
     results, failed = backfill(args)
 
