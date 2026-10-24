@@ -3,6 +3,25 @@
 All notable changes to AnimeWatch are documented here. Versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Anime detail pages showed no synopsis and N/A metadata** (#12). The offline
+  catalog only shipped browse fields, so `synopsis`, `studios`, `duration`,
+  `source`, `aired`, `rating`, `members`, `popularity`, `favorites` and `rank`
+  were null for all 1500 seeded titles. The catalog now carries them
+  (backfilled from MyAnimeList by `scripts/backfill_offline_catalog.py`), the
+  seeder persists them and fills them into rows an older seed left blank, and
+  the lazy enricher reads the synopsis too, retries a fetch instead of giving
+  up on a title for the life of the JVM, and keeps backfilling genres. Detail
+  and watch pages now render every field, fully offline for seeded titles.
+- **The detail page stuck on “Anime not found”** in dev: React StrictMode
+  aborts the first request, and the cancellation set an error state that the
+  successful second request never cleared, so the page hid the metadata it had
+  already loaded. The Retry button also passed the click event as an abort
+  signal, so it could never recover.
+
 ## [1.1.1] — 2026-10-21
 
 ### Fixed

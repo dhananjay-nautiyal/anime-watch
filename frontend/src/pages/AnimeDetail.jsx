@@ -45,12 +45,15 @@ export default function AnimeDetail() {
       const data = isNumeric
         ? await getAnimeById(parseInt(slug), signal)
         : await getAnimeBySlug(slug, signal)
-      if (signal.aborted) return
+      if (signal?.aborted) return
       setAnime(data)
     } catch {
-      setError(true)
+      // React StrictMode re-runs the effect and aborts the first request.
+      // That cancellation is not a failure: setting the error here latched
+      // "Anime not found" over an otherwise healthy detail page.
+      if (!signal?.aborted) setError(true)
     } finally {
-      if (!signal.aborted) setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }, [slug, isNumeric])
 
@@ -175,7 +178,7 @@ export default function AnimeDetail() {
   }
 
   if (loading) return <DetailSkeleton />
-  if (error) return <ErrorState title="Anime not found" message="Could not load anime details." onRetry={fetchData} />
+  if (error) return <ErrorState title="Anime not found" message="Could not load anime details." onRetry={() => fetchData()} />
   if (!anime) return <ErrorState title="Anime not found" message="No data available for this anime." />
 
   const episodeCount = anime.episodes ? `${anime.episodes} Episodes` : `${episodes.length || '?'} Episodes`
