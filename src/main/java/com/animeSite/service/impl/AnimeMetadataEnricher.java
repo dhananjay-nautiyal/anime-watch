@@ -6,6 +6,7 @@ import com.animeSite.persist.AnimeStudio;
 import com.animeSite.repo.AnimeGenreRepository;
 import com.animeSite.repo.AnimeRepository;
 import com.animeSite.repo.AnimeStudioRepository;
+import org.jsoup.parser.Parser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -13,23 +14,25 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Fills the anime detail fields the offline catalog does not ship (duration,
- * aired dates, source, studios, genres, rank, popularity, members, favourites).
+ * Fills the anime detail fields the offline catalog does not ship (synopsis,
+ * duration, aired dates, source, studios, genres, rank, popularity, members,
+ * favourites).
  *
  * <p>Jikan's API is not reachable from every network, but the MyAnimeList site
  * itself usually is, and the detail page carries exactly the values the UI
  * shows. Enrichment happens lazily on first detail view and is persisted, so a
- * given anime is fetched at most once per JVM.
+ * given anime is fetched at most once per retry window instead of on every view.
  */
 @Service
 public class AnimeMetadataEnricher {
@@ -40,13 +43,24 @@ public class AnimeMetadataEnricher {
     private static final Pattern GENRE_LINK =
         Pattern.compile("<a href=\"/anime/genre/[^\"]*\"[^>]*>([^<]+)</a>");
     private static final Pattern FIRST_NUMBER = Pattern.compile("([\\d,.]+)");
+    private static final Pattern SYNOPSIS =
+        Pattern.compile("<p[^>]*itemprop=\"description\"[^>]*>(.*?)</p>", Pattern.DOTALL);
+    private static final Pattern BR_TAG = Pattern.compile("(?i)<br\\s*/?>");
+
+    /**
+     * A failed fetch (offline network, MAL outage) used to be remembered for the
+     * lifetime of the JVM, which left the row incomplete forever. Retry after
+     * this gap instead, so a transient failure heals on a later visit without
+     * hitting MAL on every single detail view.
+     */
+    private static final long RETRY_AFTER_MS = Duration.ofMinutes(10).toMillis();
 
     private final RestTemplate restTemplate;
     private final AnimeRepository animeRepository;
     private final AnimeGenreRepository genreRepository;
     private final AnimeStudioRepository studioRepository;
 
-    private final Set<Integer> attempted = ConcurrentHashMap.newKeySet();
+    private final Map<Integer, Long> lastAttempt = new ConcurrentHashMap<>();
 
     public AnimeMetadataEnricher(@Qualifier("jikanRestTemplate") RestTemplate restTemplate,
                                  AnimeRepository animeRepository,
@@ -61,22 +75,33 @@ public class AnimeMetadataEnricher {
     public boolean needsEnrichment(Anime anime) {
         return anime != null
             && anime.getMalId() != null
-            && (isBlank(anime.getDuration())
+            && (isBlank(anime.getSynopsis())
+                || isBlank(anime.getDuration())
                 || isBlank(anime.getAired())
                 || isBlank(anime.getSource())
+                || anime.getMembers() == null
+                || anime.getPopularity() == null
+                || anime.getFavorites() == null
                 || anime.getAnimeStudios() == null
-                || anime.getAnimeStudios().isEmpty());
+                || anime.getAnimeStudios().isEmpty()
+                // The catalogue ships no genres; without this the detail view
+                // would stop being the one place that backfills them.
+                || anime.getAnimeGenres() == null
+                || anime.getAnimeGenres().isEmpty());
     }
 
     /**
      * Fetch MAL metadata for the anime and persist whatever is still missing.
-     * Safe to call repeatedly: a no-op once the record is complete or after a
-     * failed attempt.
+     * Safe to call repeatedly: a no-op once the record is complete, and a
+     * failed attempt is retried only after {@link #RETRY_AFTER_MS}.
      */
     @Transactional
     public void enrich(Anime anime) {
         if (anime == null || anime.getMalId() == null) return;
-        if (!attempted.add(anime.getMalId())) return;
+        long now = System.currentTimeMillis();
+        Long previous = lastAttempt.get(anime.getMalId());
+        if (previous != null && now - previous < RETRY_AFTER_MS) return;
+        lastAttempt.put(anime.getMalId(), now);
 
         try {
             String html = fetch(anime.getMalId());
@@ -143,6 +168,11 @@ public class AnimeMetadataEnricher {
             Double score = firstDouble(infoValue(html, "Score"));
             if (anime.getScore() == null && score != null) { anime.setScore(score); changed = true; }
 
+            if (isBlank(anime.getSynopsis())) {
+                String syn = synopsis(html);
+                if (syn != null) { anime.setSynopsis(syn); changed = true; }
+            }
+
             if (anime.getAnimeStudios() == null || anime.getAnimeStudios().isEmpty()) {
                 for (String name : splitNames(infoValue(html, "Studios"))) {
                     anime.getAnimeStudios().add(resolveStudio(name));
@@ -208,6 +238,26 @@ public class AnimeMetadataEnricher {
             return null;
         }
         return text;
+    }
+
+    /**
+     * The synopsis is the description paragraph under the "Synopsis" heading,
+     * not one of the sidebar rows {@link #infoValue} reads.
+     */
+    private static String synopsis(String html) {
+        Matcher matcher = SYNOPSIS.matcher(html);
+        if (!matcher.find()) return null;
+
+        String fragment = BR_TAG.matcher(matcher.group(1)).replaceAll("\n");
+        String text = Parser.unescapeEntities(fragment.replaceAll("<[^>]+>", ""), false)
+            .replace('\u00a0', ' ');
+
+        List<String> lines = new ArrayList<>();
+        for (String line : text.split("\n", -1)) {
+            lines.add(line.replaceAll("[ \\t]+", " ").trim());
+        }
+        String cleaned = String.join("\n", lines).replaceAll("\n{3,}", "\n\n").trim();
+        return cleaned.isEmpty() ? null : cleaned;
     }
 
     private static List<String> genres(String html) {
