@@ -15,6 +15,9 @@ import com.animeSite.repo.AnimeRepository;
 import com.animeSite.service.AnimeFilters;
 import com.animeSite.service.AnimeService;
 import com.animeSite.service.SlugService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -33,9 +36,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 
 @Service
 public class AnimeServiceImpl implements AnimeService {
+
+    private static final Logger log = LoggerFactory.getLogger(AnimeServiceImpl.class);
 
     private final JikanApiClient jikanApiClient;
     private final AnimeRepository animeRepository;
@@ -43,6 +50,7 @@ public class AnimeServiceImpl implements AnimeService {
     private final SlugService slugService;
     private final JikanMetadataProvider jikanMetadataProvider;
     private final AnimeMetadataEnricher metadataEnricher;
+    private final Executor enrichmentExecutor;
     private final TransactionTemplate readOnlyTx;
     private final TransactionTemplate writeTx;
 
@@ -50,6 +58,7 @@ public class AnimeServiceImpl implements AnimeService {
                              AnimeGenreRepository animeGenreRepository,
                              SlugService slugService, JikanMetadataProvider jikanMetadataProvider,
                              AnimeMetadataEnricher metadataEnricher,
+                             @Qualifier("enrichmentExecutor") Executor enrichmentExecutor,
                              PlatformTransactionManager transactionManager) {
         this.jikanApiClient = jikanApiClient;
         this.animeRepository = animeRepository;
@@ -57,6 +66,7 @@ public class AnimeServiceImpl implements AnimeService {
         this.slugService = slugService;
         this.jikanMetadataProvider = jikanMetadataProvider;
         this.metadataEnricher = metadataEnricher;
+        this.enrichmentExecutor = enrichmentExecutor;
         this.readOnlyTx = new TransactionTemplate(transactionManager);
         this.readOnlyTx.setReadOnly(true);
         this.writeTx = new TransactionTemplate(transactionManager);
@@ -186,15 +196,43 @@ public class AnimeServiceImpl implements AnimeService {
 
     /**
      * Detail responses are the only place the full metadata is shown, so this
-     * is where the MAL enrichment runs. It is persisted, making subsequent
-     * lookups free. Runs after the read-only transaction above so the write
-     * is not swallowed by a read-only Hibernate session.
+     * is where the MAL enrichment is triggered. It used to run inline: the
+     * caller waited up to 2500 ms connect + 6000 ms read on a network where
+     * myanimelist.net is regularly unreachable, while the offline catalogue
+     * already ships every sidebar field but genres. The fetch now runs on the
+     * enrichment pool - the response is served straight from the catalog and
+     * the enricher's cache eviction (registered for after commit) makes the
+     * next view pick up whatever the background run filled in.
      */
     private Anime enrich(Anime anime) {
         if (metadataEnricher.needsEnrichment(anime)) {
-            metadataEnricher.enrich(anime);
+            enrichInBackground(anime.getMalId());
         }
         return anime;
+    }
+
+    /**
+     * Enrich on the worker thread instead of handing over the request's
+     * entity: that one is being serialized into the response and must not be
+     * mutated concurrently. {@code enrichById} reloads the row inside its own
+     * transaction (a row detached from the request's read-only session cannot
+     * lazy-load studios here), and the cache eviction fires after that
+     * transaction commits.
+     */
+    private void enrichInBackground(int malId) {
+        try {
+            enrichmentExecutor.execute(() -> {
+                try {
+                    metadataEnricher.enrichById(malId);
+                } catch (Exception e) {
+                    log.warn("[ENRICH] BACKGROUND_FAILED | malId={} error='{}'", malId, e.getMessage());
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            // Pool saturated: drop the attempt. The row stays incomplete, so
+            // the next detail view re-submits after the enricher's retry window.
+            log.debug("[ENRICH] DROPPED | malId={} enrichment pool busy", malId);
+        }
     }
 
     private Anime loadByIdWithRelations(int id) {

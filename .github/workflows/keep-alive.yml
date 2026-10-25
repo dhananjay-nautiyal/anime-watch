@@ -1,0 +1,33 @@
+name: keep-alive
+
+# Render's free tier spins the instance down after ~15 minutes without
+# traffic, and the next visitor then waits 30-45 s for a cold start.
+# Pinging a cheap endpoint every 10 minutes keeps it warm. Runs are offset
+# from the hour so GitHub's congested :00-minute cron slot cannot push a
+# run past the spin-down window. Public repository: scheduled runs are free.
+on:
+  schedule:
+    - cron: '2,12,22,32,42,52 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: wake backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request /api/app/version
+        run: |
+          url="https://anime-watch-6h6z.onrender.com/api/app/version"
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 90 "$url" || true)
+          echo "first attempt: HTTP $code"
+          # A cold instance may need longer than a single request to come up;
+          # one retry covers that without failing the schedule.
+          if [ "$code" != "200" ]; then
+            sleep 45
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 90 "$url" || true)
+            echo "second attempt: HTTP $code"
+          fi
+          test "$code" = "200"

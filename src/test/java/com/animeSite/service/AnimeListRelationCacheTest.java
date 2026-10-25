@@ -77,7 +77,7 @@ class AnimeListRelationCacheTest {
 
         AnimeServiceImpl service = new AnimeServiceImpl(jikan, animeRepository, animeGenreRepository,
                 mock(SlugService.class), mock(JikanMetadataProvider.class),
-                mock(AnimeMetadataEnricher.class), transactionManager);
+                mock(AnimeMetadataEnricher.class), Runnable::run, transactionManager);
 
         AnimePage page = service.getTrending(0, 10);
 

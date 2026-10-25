@@ -3,7 +3,7 @@
 All notable changes to AnimeWatch are documented here. Versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.2.0] — 2026-10-25
 
 ### Fixed
 
@@ -37,6 +37,26 @@ All notable changes to AnimeWatch are documented here. Versions follow
   successful second request never cleared, so the page hid the metadata it had
   already loaded. The Retry button also passed the click event as an abort
   signal, so it could never recover.
+- **Coming Soon pages had the same two bugs**: the cancelled request could
+  latch "Anime not found" over a healthy page, and the Retry button passed
+  its click event as the abort signal. Both now match the detail page's fix.
+
+### Changed
+
+- **Detail views no longer block on MyAnimeList**. Enrichment used to run
+  inline on the first view of every seeded title (the catalogue ships no
+  genres), so the page waited up to 2.5 s connect + 6 s read — usually the
+  full timeout, since MAL is regularly unreachable from datacenter IPs. The
+  fetch now runs on a bounded background pool: the response is served
+  straight from the catalogue, whatever the run fills in reaches the next
+  view through the cache eviction from this release, and concurrent views of
+  one title claim a single fetch instead of racing.
+- **Detail cache sized for the catalogue**: the `anime` cache allowed 100
+  entries while every title is keyed twice (`id-` and `slug-`), so entries
+  evicted each other under real traffic. Raised to 500.
+- **Production stays awake**: a scheduled GitHub Actions job pings the
+  backend every 10 minutes, so visitors no longer sit out the free-tier cold
+  start (~30–45 s) after a quiet period.
 
 ## [1.1.1] — 2026-10-21
 

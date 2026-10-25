@@ -113,17 +113,41 @@ public class AnimeMetadataEnricher {
     }
 
     /**
+     * Load the row and enrich it inside a single transaction. Detail views
+     * trigger this from the background pool: the row must be loaded inside
+     * the very session that resolves its studios and genres, because a row
+     * detached from an earlier (closed) session cannot initialize those lazy
+     * collections here - {@code enrich} would fail with a
+     * LazyInitializationException on every run.
+     */
+    @Transactional
+    public void enrichById(int malId) {
+        animeRepository.findByMalId(malId).ifPresent(this::enrich);
+    }
+
+    /**
      * Fetch MAL metadata for the anime and persist whatever is still missing.
      * Safe to call repeatedly: a no-op once the record is complete, and a
      * failed attempt is retried only after {@link #RETRY_AFTER_MS}.
+     * Callers outside this class must run inside a transaction (see
+     * {@link #enrichById(int)}) so lazy relations resolve in one session.
      */
     @Transactional
     public void enrich(Anime anime) {
         if (anime == null || anime.getMalId() == null) return;
         long now = System.currentTimeMillis();
-        Long previous = lastAttempt.get(anime.getMalId());
-        if (previous != null && now - previous < RETRY_AFTER_MS) return;
-        lastAttempt.put(anime.getMalId(), now);
+        // Claim atomically: detail views enqueue this on a background pool,
+        // so concurrent views of the same title must not both pay for a fetch.
+        // putIfAbsent returns null only to the caller that inserted the stamp;
+        // using the stamp's value as the win signal would misfire whenever two
+        // attempts land in the same millisecond.
+        Long previous = lastAttempt.putIfAbsent(anime.getMalId(), now);
+        if (previous != null) {
+            // An attempt exists (possibly from this very millisecond). Retry
+            // only after the window, and only if we win the compare-and-set.
+            if (now - previous < RETRY_AFTER_MS) return;
+            if (!lastAttempt.replace(anime.getMalId(), previous, now)) return;
+        }
 
         try {
             String html = fetch(anime.getMalId());

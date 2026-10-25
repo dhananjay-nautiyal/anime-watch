@@ -120,6 +120,40 @@ He is not to be underestimated &amp; never gives up.</p>
     }
 
     @Test
+    void enrichByIdReloadsTheRowBeforeEnrichingIt() {
+        // The background pool cannot hand over the request's entity: that one
+        // is detached from the request's read-only session (its lazy studios
+        // would fail with "could not initialize proxy - no Session"). The row
+        // must be reloaded here, inside the transaction enrichById opens.
+        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn(DETAIL_HTML);
+        when(studioRepository.findByNameIgnoreCase("Toei Animation")).thenReturn(Optional.empty());
+        when(studioRepository.save(any(AnimeStudio.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(animeRepository.save(any(Anime.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Anime databaseRow = seededAnime();
+        when(animeRepository.findByMalId(21)).thenReturn(Optional.of(databaseRow));
+
+        enricher.enrichById(21);
+
+        verify(animeRepository).findByMalId(21);
+        assertEquals("Luffy sets out to sea.\n\nHe is not to be underestimated & never gives up.",
+                databaseRow.getSynopsis(), "the loaded row is enriched in place");
+        verify(animeRepository).save(databaseRow);
+    }
+
+    @Test
+    void enrichByIdIsANoOpWhenTheRowIsGone() {
+        when(animeRepository.findByMalId(21)).thenReturn(Optional.empty());
+
+        enricher.enrichById(21);
+
+        verify(restTemplate, never()).getForObject(anyString(), eq(String.class));
+        verify(animeRepository, never()).save(any(Anime.class));
+    }
+
+    @Test
     void stillNeedsEnrichmentWhenOnlyTheSynopsisIsMissing() {
         Anime anime = seededAnime();
         anime.setDuration("24 min.");
@@ -190,6 +224,29 @@ He is not to be underestimated &amp; never gives up.</p>
         attempts.clear();
         enricher.enrich(anime);
         verify(restTemplate, times(2)).getForObject(anyString(), eq(String.class));
+    }
+
+    @Test
+    void backToBackViewsInTheSameMillisecondAreStillRateLimited() {
+        // Two views arriving within one millisecond produce identical claim
+        // timestamps, so a win check based on "my stamp equals now" lets both
+        // through. Each iteration restarts the window and fires two attempts
+        // back-to-back - only the first may reach MyAnimeList.
+        when(restTemplate.getForObject(anyString(), eq(String.class)))
+                .thenThrow(new RuntimeException("network down"));
+
+        @SuppressWarnings("unchecked")
+        java.util.Map<Integer, Long> attempts =
+                (java.util.Map<Integer, Long>) ReflectionTestUtils.getField(enricher, "lastAttempt");
+
+        for (int i = 0; i < 25; i++) {
+            attempts.clear();
+            Anime anime = seededAnime();
+            enricher.enrich(anime);
+            enricher.enrich(anime);
+        }
+
+        verify(restTemplate, times(25)).getForObject(anyString(), eq(String.class));
     }
 
     @Test

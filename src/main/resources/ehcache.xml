@@ -24,6 +24,9 @@
 
     <cache alias="anime" uses-template="default">
         <expiry><ttl unit="seconds">3600</ttl></expiry>
+        <!-- The catalogue holds 1500 titles keyed twice (id- and slug-); the
+             template's 100 entries evicted each other under real traffic. -->
+        <heap unit="entries">500</heap>
     </cache>
 
     <cache alias="home" uses-template="default">

@@ -5,6 +5,7 @@ import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
@@ -50,6 +51,24 @@ public class AppConfig {
             return execution.execute(request, body);
         }));
         return restTemplate;
+    }
+
+    /**
+     * Background pool for MyAnimeList metadata enrichment. Detail views must
+     * not wait on myanimelist.net: the fetch runs up to 2500 ms connect +
+     * 6000 ms read on an unreachable network, while the offline catalogue
+     * already ships every sidebar field but genres. Bounded so a burst of
+     * first views cannot spawn unbounded threads; when the pool is full the
+     * attempt is dropped and a later view retries after the backoff window.
+     */
+    @Bean(name = "enrichmentExecutor")
+    public ThreadPoolTaskExecutor enrichmentExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("enrich-");
+        return executor;
     }
 
 }
