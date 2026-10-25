@@ -136,13 +136,18 @@ public class AnimeMetadataEnricher {
     public void enrich(Anime anime) {
         if (anime == null || anime.getMalId() == null) return;
         long now = System.currentTimeMillis();
-        // Claim the attempt atomically: detail views enqueue this on a
-        // background pool, so two concurrent views of the same title must not
-        // both pay for a fetch. merge() keeps the previous stamp when the
-        // retry window has not passed, so only the winning caller proceeds.
-        Long claimed = lastAttempt.merge(anime.getMalId(), now,
-                (previous, ignored) -> now - previous < RETRY_AFTER_MS ? previous : now);
-        if (claimed == null || claimed.longValue() != now) return;
+        // Claim atomically: detail views enqueue this on a background pool,
+        // so concurrent views of the same title must not both pay for a fetch.
+        // putIfAbsent returns null only to the caller that inserted the stamp;
+        // using the stamp's value as the win signal would misfire whenever two
+        // attempts land in the same millisecond.
+        Long previous = lastAttempt.putIfAbsent(anime.getMalId(), now);
+        if (previous != null) {
+            // An attempt exists (possibly from this very millisecond). Retry
+            // only after the window, and only if we win the compare-and-set.
+            if (now - previous < RETRY_AFTER_MS) return;
+            if (!lastAttempt.replace(anime.getMalId(), previous, now)) return;
+        }
 
         try {
             String html = fetch(anime.getMalId());

@@ -227,6 +227,29 @@ He is not to be underestimated &amp; never gives up.</p>
     }
 
     @Test
+    void backToBackViewsInTheSameMillisecondAreStillRateLimited() {
+        // Two views arriving within one millisecond produce identical claim
+        // timestamps, so a win check based on "my stamp equals now" lets both
+        // through. Each iteration restarts the window and fires two attempts
+        // back-to-back - only the first may reach MyAnimeList.
+        when(restTemplate.getForObject(anyString(), eq(String.class)))
+                .thenThrow(new RuntimeException("network down"));
+
+        @SuppressWarnings("unchecked")
+        java.util.Map<Integer, Long> attempts =
+                (java.util.Map<Integer, Long>) ReflectionTestUtils.getField(enricher, "lastAttempt");
+
+        for (int i = 0; i < 25; i++) {
+            attempts.clear();
+            Anime anime = seededAnime();
+            enricher.enrich(anime);
+            enricher.enrich(anime);
+        }
+
+        verify(restTemplate, times(25)).getForObject(anyString(), eq(String.class));
+    }
+
+    @Test
     void evictsBothDetailCacheKeysAfterASuccessfulSave() {
         // The entry cached under the *other* key (id vs slug) would otherwise
         // keep serving the pre-enrichment row for up to an hour, since the
