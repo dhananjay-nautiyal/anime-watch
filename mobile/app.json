@@ -2,7 +2,7 @@
   "expo": {
     "name": "AnimeWatch",
     "slug": "anime-watch",
-    "version": "1.1.1",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "animewatch",
@@ -48,7 +48,7 @@
     },
     "android": {
       "package": "com.animewatch.app",
-      "versionCode": 4,
+      "versionCode": 5,
       "adaptiveIcon": {
         "backgroundColor": "#1C1B1F",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
