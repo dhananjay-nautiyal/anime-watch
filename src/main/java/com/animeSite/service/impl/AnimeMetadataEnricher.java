@@ -113,17 +113,36 @@ public class AnimeMetadataEnricher {
     }
 
     /**
+     * Load the row and enrich it inside a single transaction. Detail views
+     * trigger this from the background pool: the row must be loaded inside
+     * the very session that resolves its studios and genres, because a row
+     * detached from an earlier (closed) session cannot initialize those lazy
+     * collections here - {@code enrich} would fail with a
+     * LazyInitializationException on every run.
+     */
+    @Transactional
+    public void enrichById(int malId) {
+        animeRepository.findByMalId(malId).ifPresent(this::enrich);
+    }
+
+    /**
      * Fetch MAL metadata for the anime and persist whatever is still missing.
      * Safe to call repeatedly: a no-op once the record is complete, and a
      * failed attempt is retried only after {@link #RETRY_AFTER_MS}.
+     * Callers outside this class must run inside a transaction (see
+     * {@link #enrichById(int)}) so lazy relations resolve in one session.
      */
     @Transactional
     public void enrich(Anime anime) {
         if (anime == null || anime.getMalId() == null) return;
         long now = System.currentTimeMillis();
-        Long previous = lastAttempt.get(anime.getMalId());
-        if (previous != null && now - previous < RETRY_AFTER_MS) return;
-        lastAttempt.put(anime.getMalId(), now);
+        // Claim the attempt atomically: detail views enqueue this on a
+        // background pool, so two concurrent views of the same title must not
+        // both pay for a fetch. merge() keeps the previous stamp when the
+        // retry window has not passed, so only the winning caller proceeds.
+        Long claimed = lastAttempt.merge(anime.getMalId(), now,
+                (previous, ignored) -> now - previous < RETRY_AFTER_MS ? previous : now);
+        if (claimed == null || claimed.longValue() != now) return;
 
         try {
             String html = fetch(anime.getMalId());

@@ -116,12 +116,15 @@ export default function ComingSoon() {
     setError(false)
     try {
       const data = await getAnimeById(malId, signal)
-      if (signal.aborted) return
+      if (signal?.aborted) return
       setAnime(data)
     } catch {
-      setError(true)
+      // React StrictMode re-runs the effect and aborts the first request;
+      // that cancellation is not a failure. Signal is also undefined when
+      // the Retry button calls fetchData(), so it must be optional-chained.
+      if (!signal?.aborted) setError(true)
     } finally {
-      if (!signal.aborted) setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }, [malId])
 
@@ -160,7 +163,7 @@ export default function ComingSoon() {
   }
 
   if (loading) return <DetailSkeleton />
-  if (error) return <ErrorState title="Anime not found" message="Could not load this anime. It may not exist or there was a network error." onRetry={fetchData} />
+  if (error) return <ErrorState title="Anime not found" message="Could not load this anime. It may not exist or there was a network error." onRetry={() => fetchData()} />
   if (!anime) return <ErrorState title="Anime not found" message="No data available." />
 
   const trailerId = anime?.trailerUrl
