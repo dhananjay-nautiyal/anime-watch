@@ -1,5 +1,6 @@
 package com.animeSite.service.impl;
 
+import com.animeSite.core.cache.CacheEvictions;
 import com.animeSite.persist.Anime;
 import com.animeSite.persist.AnimeGenre;
 import com.animeSite.persist.AnimeStudio;
@@ -11,6 +12,7 @@ import org.jsoup.parser.Parser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -60,17 +62,20 @@ public class AnimeMetadataEnricher {
     private final AnimeRepository animeRepository;
     private final AnimeGenreRepository genreRepository;
     private final AnimeStudioRepository studioRepository;
+    private final CacheManager cacheManager;
 
     private final Map<Integer, Long> lastAttempt = new ConcurrentHashMap<>();
 
     public AnimeMetadataEnricher(@Qualifier("jikanRestTemplate") RestTemplate restTemplate,
                                  AnimeRepository animeRepository,
                                  AnimeGenreRepository genreRepository,
-                                 AnimeStudioRepository studioRepository) {
+                                 AnimeStudioRepository studioRepository,
+                                 CacheManager cacheManager) {
         this.restTemplate = restTemplate;
         this.animeRepository = animeRepository;
         this.genreRepository = genreRepository;
         this.studioRepository = studioRepository;
+        this.cacheManager = cacheManager;
     }
 
     public boolean needsEnrichment(Anime anime) {
@@ -219,6 +224,14 @@ public class AnimeMetadataEnricher {
 
             if (changed) {
                 animeRepository.save(anime);
+                // This write bypasses @Cacheable: a detail entry cached before
+                // the fetch (the sibling key of the request that triggered this
+                // enrichment, or one put by a concurrent read) would otherwise
+                // serve the old row for up to an hour. Evicting after the
+                // transaction commits keeps an in-flight read from re-caching
+                // the pre-save row; the enclosing @Cacheable put for the key
+                // that triggered this call happens afterwards and stays fresh.
+                CacheEvictions.evictKeysAfterCommit(cacheManager, "anime", detailKeys(anime));
                 log.info("[ENRICH] SAVED | malId={} title='{}' aired='{}' duration='{}' studios={} genres={} members={} favorites={}",
                     anime.getMalId(), anime.getTitle(), anime.getAired(), anime.getDuration(),
                     anime.getAnimeStudios() != null ? anime.getAnimeStudios().size() : 0,
@@ -228,6 +241,19 @@ public class AnimeMetadataEnricher {
         } catch (Exception e) {
             log.warn("[ENRICH] FAILED | malId={} error='{}'", anime.getMalId(), e.getMessage());
         }
+    }
+
+    /**
+     * The keys {@code @Cacheable} puts in {@code AnimeServiceImpl} for this
+     * anime: the id-based detail entry and the slug-based one. Both must go,
+     * since the request that triggered this enrichment only refreshes one of
+     * them.
+     */
+    private static String[] detailKeys(Anime anime) {
+        List<String> keys = new ArrayList<>();
+        if (anime.getMalId() != null) keys.add("id-" + anime.getMalId());
+        if (anime.getSlug() != null && !anime.getSlug().isBlank()) keys.add("slug-" + anime.getSlug());
+        return keys.toArray(new String[0]);
     }
 
     private String fetch(int malId) {

@@ -1,6 +1,7 @@
 package com.animeSite.pipeline;
 
 import com.animeSite.constant.AnimeStatus;
+import com.animeSite.core.cache.CacheEvictions;
 import com.animeSite.persist.Anime;
 import com.animeSite.persist.AnimeStudio;
 import com.animeSite.repo.AnimeRepository;
@@ -10,6 +11,7 @@ import com.animeSite.util.MalPlaceholders;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.cache.CacheManager;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
@@ -41,17 +43,28 @@ public class OfflineCatalogSeeder implements CommandLineRunner {
     private final AnimeRepository animeRepository;
     private final SlugService slugService;
     private final AnimeStudioRepository studioRepository;
+    private final CacheManager cacheManager;
 
     public OfflineCatalogSeeder(AnimeRepository animeRepository, SlugService slugService,
-                                AnimeStudioRepository studioRepository) {
+                                AnimeStudioRepository studioRepository, CacheManager cacheManager) {
         this.animeRepository = animeRepository;
         this.slugService = slugService;
         this.studioRepository = studioRepository;
+        this.cacheManager = cacheManager;
     }
 
     @Override
     @Transactional
     public void run(String... args) {
+        // Tomcat starts accepting requests before this runner finishes, so a
+        // read landing mid-seed can cache the pre-seed row and would keep
+        // serving it for a full cache TTL (3600 s for the detail cache).
+        // Clear every anime-derived cache once this seeding transaction has
+        // committed; clearing earlier would let an in-flight read re-cache
+        // the still-uncommitted row.
+        CacheEvictions.clearAfterCommit(cacheManager, "anime", "home",
+                "search", "trending", "seasonal");
+
         // Offline catalog first (works with zero external connectivity):
         // 1500 curated titles. Episodes are deliberately not fabricated here;
         // they are filled in by a real provider sync.

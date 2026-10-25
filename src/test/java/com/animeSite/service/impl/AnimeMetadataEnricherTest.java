@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 
@@ -64,12 +65,15 @@ He is not to be underestimated &amp; never gives up.</p>
     @Mock
     private AnimeStudioRepository studioRepository;
 
+    private ConcurrentMapCacheManager cacheManager;
+
     private AnimeMetadataEnricher enricher;
 
     @BeforeEach
     void setUp() {
+        cacheManager = new ConcurrentMapCacheManager("anime");
         enricher = new AnimeMetadataEnricher(restTemplate, animeRepository,
-                genreRepository, studioRepository);
+                genreRepository, studioRepository, cacheManager);
     }
 
     private Anime seededAnime() {
@@ -186,5 +190,54 @@ He is not to be underestimated &amp; never gives up.</p>
         attempts.clear();
         enricher.enrich(anime);
         verify(restTemplate, times(2)).getForObject(anyString(), eq(String.class));
+    }
+
+    @Test
+    void evictsBothDetailCacheKeysAfterASuccessfulSave() {
+        // The entry cached under the *other* key (id vs slug) would otherwise
+        // keep serving the pre-enrichment row for up to an hour, since the
+        // request that triggered this enrichment only refreshes its own key.
+        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn(DETAIL_HTML);
+        when(studioRepository.findByNameIgnoreCase("Toei Animation")).thenReturn(Optional.empty());
+        when(studioRepository.save(any(AnimeStudio.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(animeRepository.save(any(Anime.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Anime anime = seededAnime();
+        anime.setSlug("one-piece");
+        cacheManager.getCache("anime").put("id-21", "pre-enrichment row");
+        cacheManager.getCache("anime").put("slug-one-piece", "pre-enrichment row");
+
+        enricher.enrich(anime);
+
+        assertNull(cacheManager.getCache("anime").get("id-21"),
+                "the id entry must not keep serving pre-enrichment data");
+        assertNull(cacheManager.getCache("anime").get("slug-one-piece"),
+                "the sibling slug entry must be evicted too");
+    }
+
+    @Test
+    void leavesTheDetailCacheAloneWhenNothingChanged() {
+        String html = """
+            <div class="spaceit_pad"><span class="dark_text">Studios:</span> None found, add some</div>
+            <div class="spaceit_pad"><span class="dark_text">Rating:</span> None</div>
+            <div><h2 id="synopsis">Synopsis</h2></div>
+            <p itemprop="description">No synopsis information has been added to this title. \
+            Help improve our database by adding synopsis information here.</p>
+            """;
+        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn(html);
+
+        Anime anime = seededAnime();
+        anime.setSlug("one-piece");
+        cacheManager.getCache("anime").put("id-21", "current row");
+        cacheManager.getCache("anime").put("slug-one-piece", "current row");
+
+        enricher.enrich(anime);
+
+        assertNotNull(cacheManager.getCache("anime").get("id-21"),
+                "an attempt that wrote nothing must not throw away a valid entry");
+        assertNotNull(cacheManager.getCache("anime").get("slug-one-piece"));
+        verify(animeRepository, never()).save(any(Anime.class));
     }
 }

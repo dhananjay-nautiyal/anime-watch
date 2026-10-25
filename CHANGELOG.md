@@ -24,6 +24,14 @@ All notable changes to AnimeWatch are documented here. Versions follow
   would ever correct them. The backfill script and the enricher now reject
   them, the catalogue is scrubbed, and the seeder treats them as gaps on boot
   so existing rows are healed instead of kept.
+- **Detail pages served stale rows for an hour after every deploy**. The seed
+  writes through the repository while Tomcat already accepts requests, so a
+  detail read landing during boot cached the pre-seed row and the 3600s `anime`
+  cache kept serving it — production showed the old junk synopsis again hours
+  after the database had healed. Neither the seeder nor the enricher evicted
+  after writing. Both now clear their caches once the write transaction has
+  committed (the enricher evicts the `id-` and `slug-` keys, so the entry the
+  current request repopulates stays fresh while its sibling is dropped).
 - **The detail page stuck on “Anime not found”** in dev: React StrictMode
   aborts the first request, and the cancellation set an error state that the
   successful second request never cleared, so the page hid the metadata it had
