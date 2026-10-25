@@ -57,6 +57,10 @@ All notable changes to AnimeWatch are documented here. Versions follow
 - **Production stays awake**: a scheduled GitHub Actions job pings the
   backend every 10 minutes, so visitors no longer sit out the free-tier cold
   start (~30–45 s) after a quiet period.
+- **Android build carries 1.2.0** (versionCode 5): the mobile app's version
+  was bumped to match the release, and the APK is attached to it. Android
+  users get the faster API automatically — detail and home responses no
+  longer wait on MyAnimeList.
 
 ## [1.1.1] — 2026-10-21
 
