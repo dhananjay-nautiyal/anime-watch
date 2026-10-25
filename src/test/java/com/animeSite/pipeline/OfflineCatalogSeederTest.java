@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 
 import java.util.List;
 
@@ -28,12 +29,15 @@ class OfflineCatalogSeederTest {
     @Mock
     private AnimeStudioRepository studioRepository;
 
+    private ConcurrentMapCacheManager cacheManager;
+
     private OfflineCatalogSeeder seeder;
 
     @BeforeEach
     void setUp() {
         SlugService slugService = new SlugService(animeRepository);
-        seeder = new OfflineCatalogSeeder(animeRepository, slugService, studioRepository);
+        cacheManager = new ConcurrentMapCacheManager("anime", "home", "search", "trending", "seasonal");
+        seeder = new OfflineCatalogSeeder(animeRepository, slugService, studioRepository, cacheManager);
     }
 
     @Test
@@ -195,5 +199,27 @@ class OfflineCatalogSeederTest {
 
         assertEquals(1, seeded.size());
         assertSame(toei, seeded.get(0), "a studio the database has must be linked, not recreated");
+    }
+
+    @Test
+    void clearsTheAnimeCachesSoBootWindowReadsCannotOutliveTheSeed() {
+        // Tomcat accepts requests before this runner finishes; a detail read
+        // landing mid-seed caches the pre-seed row. Without this eviction that
+        // entry was served for a full hour in production (issue #12 follow-up).
+        when(animeRepository.findAll()).thenReturn(List.of());
+        when(animeRepository.existsBySlug(anyString())).thenReturn(false);
+        when(animeRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        cacheManager.getCache("anime").put("id-21", "stale pre-seed row");
+        cacheManager.getCache("anime").put("slug-one-piece", "stale pre-seed row");
+        cacheManager.getCache("home").put("payload", "stale home payload");
+
+        seeder.run();
+
+        assertNull(cacheManager.getCache("anime").get("id-21"),
+                "a detail entry cached before the seed would serve pre-seed data for an hour");
+        assertNull(cacheManager.getCache("anime").get("slug-one-piece"));
+        assertNull(cacheManager.getCache("home").get("payload"),
+                "list payloads cached mid-boot are stale too");
     }
 }
