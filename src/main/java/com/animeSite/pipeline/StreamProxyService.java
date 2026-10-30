@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 public class StreamProxyService {
@@ -27,19 +28,24 @@ public class StreamProxyService {
     private static final int MAX_BUFFERED_BODY = 1024 * 1024;
     private static final int COPY_BUFFER = 64 * 1024;
     private static final String DEFAULT_REFERER = "https://anineko.to/";
+    /** Redirects are followed manually so every hop is re-validated. */
+    private static final int MAX_REDIRECTS = 5;
 
     private final RestTemplate restTemplate;
     private final ProviderResolver providerResolver;
     private final AnimeProviderCacheRepository cacheRepository;
+    private final UrlValidator urlValidator;
 
     private final ConcurrentHashMap<String, CachedEntry> cache = new ConcurrentHashMap<>();
 
-    public StreamProxyService(@Qualifier("aninekoRestTemplate") RestTemplate restTemplate,
+    public StreamProxyService(@Qualifier("streamProxyRestTemplate") RestTemplate restTemplate,
                                ProviderResolver providerResolver,
-                               AnimeProviderCacheRepository cacheRepository) {
+                               AnimeProviderCacheRepository cacheRepository,
+                               UrlValidator urlValidator) {
         this.restTemplate = restTemplate;
         this.providerResolver = providerResolver;
         this.cacheRepository = cacheRepository;
+        this.urlValidator = urlValidator;
     }
 
     /**
@@ -53,7 +59,7 @@ public class StreamProxyService {
      * segments are copied through as they arrive.</p>
      */
     public void proxyStream(String url, String referer, String acceptHeader, HttpServletResponse response) {
-        if (!UrlValidator.isValidStreamUrl(url)) {
+        if (!urlValidator.isValidStreamUrl(url)) {
             log.warn("[PROXY] BLOCKED_SSRF | url='{}'", url);
             writeText(response, 403, "Forbidden: URL not allowed");
             return;
@@ -74,102 +80,138 @@ public class StreamProxyService {
 
         String effectiveReferer = referer != null ? referer : DEFAULT_REFERER;
 
+        // The backing RestTemplate has redirects disabled so every hop is
+        // surfaced here and re-validated against UrlValidator before we follow
+        // it. Without this an allow-listed host could 302 us to an arbitrary
+        // (including internal) target.
+        String currentUrl = url;
         try {
-            restTemplate.execute(URI.create(url), HttpMethod.GET,
-                request -> {
-                    HttpHeaders headers = request.getHeaders();
-                    headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-                    headers.set("Referer", effectiveReferer);
-                    headers.set("Origin", effectiveReferer);
-                    if (acceptHeader != null) {
-                        headers.set("Accept", acceptHeader);
-                    }
-                },
-                resp -> {
-                    int status = resp.getStatusCode().value();
-                    MediaType mediaType = resp.getHeaders().getContentType();
-                    String contentType = mediaType != null ? mediaType.toString() : "application/octet-stream";
-                    // Browser <track> elements refuse WebVTT served as
-                    // application/octet-stream, so trust the .vtt extension.
-                    if (isWebVtt(url, contentType)) {
-                        contentType = "text/vtt; charset=utf-8";
-                    }
-                    long contentLength = resp.getHeaders().getContentLength();
-                    InputStream body = resp.getBody();
+            for (int hop = 0; hop <= MAX_REDIRECTS; hop++) {
+                final String fetchUrl = currentUrl;
+                final AtomicReference<String> redirect = new AtomicReference<>();
 
-                    boolean playlistByType = contentType.contains("m3u8")
-                        || contentType.contains("vnd.apple.mpegurl");
-                    boolean isHtml = contentType.contains("text/html");
-                    long elapsed = System.currentTimeMillis() - start;
-
-                    if (playlistByType || url.contains(".m3u8")) {
-                        byte[] bytes = body.readAllBytes();
-                        String text = new String(bytes, StandardCharsets.UTF_8);
-                        if (status == 200 && (playlistByType || (bytes.length < MAX_CACHED_PLAYLIST_KB * 1024
-                                && text.contains("#EXTM3U")))) {
-                            String baseUrl = HlsPlaylistRewriter.detectBaseUrl(url, url);
-                            String rewritten = HlsPlaylistRewriter.rewritePlaylist(text, baseUrl, referer);
-                            ProxyResult result = new ProxyResult(status,
-                                rewritten.getBytes(StandardCharsets.UTF_8),
-                                "application/vnd.apple.mpegurl", elapsed);
-                            cache.put(cacheKey, new CachedEntry(result, System.currentTimeMillis(),
-                                TimeUnit.SECONDS.toMillis(30)));
-                            writeResult(response, result);
-                        } else {
-                            writeBody(response, status, contentType, bytes);
+                restTemplate.execute(URI.create(fetchUrl), HttpMethod.GET,
+                    request -> {
+                        HttpHeaders headers = request.getHeaders();
+                        headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+                        headers.set("Referer", effectiveReferer);
+                        headers.set("Origin", effectiveReferer);
+                        if (acceptHeader != null) {
+                            headers.set("Accept", acceptHeader);
                         }
-                        logResponse(url, status, contentType, bytes.length, elapsed);
-                        return null;
-                    }
+                    },
+                    resp -> {
+                        int status = resp.getStatusCode().value();
+                        // Capture the redirect target and let the outer loop
+                        // re-validate it; do not write anything yet.
+                        if (status >= 300 && status < 400) {
+                            String location = resp.getHeaders().getFirst(HttpHeaders.LOCATION);
+                            if (location != null) {
+                                redirect.set(location);
+                                return null;
+                            }
+                        }
+                        MediaType mediaType = resp.getHeaders().getContentType();
+                        String contentType = mediaType != null ? mediaType.toString() : "application/octet-stream";
+                        // Browser <track> elements refuse WebVTT served as
+                        // application/octet-stream, so trust the .vtt extension.
+                        if (isWebVtt(fetchUrl, contentType)) {
+                            contentType = "text/vtt; charset=utf-8";
+                        }
+                        long contentLength = resp.getHeaders().getContentLength();
+                        InputStream body = resp.getBody();
 
-                    if (isHtml) {
-                        // Some CDNs disguise media segments as .html and serve
-                        // them as text/html. Only genuine HTML documents need
-                        // the relaxed CSP and no-store; everything else is
-                        // media and should stream like any other segment.
-                        if (contentLength > MAX_BUFFERED_BODY) {
-                            long copied = streamMedia(response, status, "video/mp2t", contentLength, body);
-                            logResponse(url, status, "video/mp2t", copied, System.currentTimeMillis() - start);
+                        boolean playlistByType = contentType.contains("m3u8")
+                            || contentType.contains("vnd.apple.mpegurl");
+                        boolean isHtml = contentType.contains("text/html");
+                        long elapsed = System.currentTimeMillis() - start;
+
+                        if (playlistByType || fetchUrl.contains(".m3u8")) {
+                            byte[] bytes = body.readAllBytes();
+                            String text = new String(bytes, StandardCharsets.UTF_8);
+                            if (status == 200 && (playlistByType || (bytes.length < MAX_CACHED_PLAYLIST_KB * 1024
+                                    && text.contains("#EXTM3U")))) {
+                                String baseUrl = HlsPlaylistRewriter.detectBaseUrl(fetchUrl, fetchUrl);
+                                String rewritten = HlsPlaylistRewriter.rewritePlaylist(text, baseUrl, referer);
+                                ProxyResult result = new ProxyResult(status,
+                                    rewritten.getBytes(StandardCharsets.UTF_8),
+                                    "application/vnd.apple.mpegurl", elapsed);
+                                cache.put(cacheKey, new CachedEntry(result, System.currentTimeMillis(),
+                                    TimeUnit.SECONDS.toMillis(30)));
+                                writeResult(response, result);
+                            } else {
+                                writeBody(response, status, contentType, bytes);
+                            }
+                            logResponse(fetchUrl, status, contentType, bytes.length, elapsed);
                             return null;
                         }
-                        byte[] bytes = body.readAllBytes();
-                        String head = new String(bytes, 0, Math.min(bytes.length, 512),
-                            StandardCharsets.UTF_8).trim().toLowerCase(Locale.ROOT);
-                        boolean realHtml = head.startsWith("<!doctype") || head.startsWith("<html")
-                            || head.startsWith("<head") || head.contains("<body");
-                        if (realHtml) {
-                            writeHtml(response, status, bytes);
-                        } else {
-                            writeBody(response, status, "video/mp2t", bytes);
+
+                        if (isHtml) {
+                            // Some CDNs disguise media segments as .html and serve
+                            // them as text/html. Only genuine HTML documents need
+                            // the relaxed CSP and no-store; everything else is
+                            // media and should stream like any other segment.
+                            if (contentLength > MAX_BUFFERED_BODY) {
+                                long copied = streamMedia(response, status, "video/mp2t", contentLength, body);
+                                logResponse(fetchUrl, status, "video/mp2t", copied, System.currentTimeMillis() - start);
+                                return null;
+                            }
+                            byte[] bytes = body.readAllBytes();
+                            String head = new String(bytes, 0, Math.min(bytes.length, 512),
+                                StandardCharsets.UTF_8).trim().toLowerCase(Locale.ROOT);
+                            boolean realHtml = head.startsWith("<!doctype") || head.startsWith("<html")
+                                || head.startsWith("<head") || head.contains("<body");
+                            if (realHtml) {
+                                writeHtml(response, status, bytes);
+                            } else {
+                                writeBody(response, status, "video/mp2t", bytes);
+                            }
+                            logResponse(fetchUrl, status, realHtml ? "text/html" : "video/mp2t", bytes.length, elapsed);
+                            return null;
                         }
-                        logResponse(url, status, realHtml ? "text/html" : "video/mp2t", bytes.length, elapsed);
+
+                        if (status < 200 || status >= 300) {
+                            byte[] bytes = body.readAllBytes();
+                            writeBody(response, status, contentType, bytes);
+                            logResponse(fetchUrl, status, contentType, bytes.length, elapsed);
+                            return null;
+                        }
+
+                        if (contentLength >= 0 && contentLength < MAX_BUFFERED_BODY) {
+                            byte[] bytes = body.readAllBytes();
+                            ProxyResult result = new ProxyResult(status, bytes, contentType, elapsed);
+                            cache.put(cacheKey, new CachedEntry(result, System.currentTimeMillis(),
+                                TimeUnit.MINUTES.toMillis(5)));
+                            writeResult(response, result);
+                            logResponse(fetchUrl, status, contentType, bytes.length, elapsed);
+                            return null;
+                        }
+
+                        // Large segment: stream it through instead of buffering.
+                        long copied = streamMedia(response, status, contentType, contentLength, body);
+                        logResponse(fetchUrl, status, contentType, copied, System.currentTimeMillis() - start);
                         return null;
-                    }
+                    });
 
-                    if (status < 200 || status >= 300) {
-                        byte[] bytes = body.readAllBytes();
-                        writeBody(response, status, contentType, bytes);
-                        logResponse(url, status, contentType, bytes.length, elapsed);
-                        return null;
-                    }
+                String location = redirect.get();
+                if (location == null) {
+                    // Terminal response already written to the client.
+                    log.info("[PROXY] COMPLETE | url='{}' duration={}ms", url, System.currentTimeMillis() - start);
+                    return;
+                }
 
-                    if (contentLength >= 0 && contentLength < MAX_BUFFERED_BODY) {
-                        byte[] bytes = body.readAllBytes();
-                        ProxyResult result = new ProxyResult(status, bytes, contentType, elapsed);
-                        cache.put(cacheKey, new CachedEntry(result, System.currentTimeMillis(),
-                            TimeUnit.MINUTES.toMillis(5)));
-                        writeResult(response, result);
-                        logResponse(url, status, contentType, bytes.length, elapsed);
-                        return null;
-                    }
+                String next = URI.create(fetchUrl).resolve(location).toString();
+                if (!urlValidator.isValidStreamUrl(next)) {
+                    log.warn("[PROXY] BLOCKED_REDIRECT | from='{}' to='{}'", fetchUrl, next);
+                    writeText(response, 403, "Forbidden: redirect target not allowed");
+                    return;
+                }
+                log.info("[PROXY] REDIRECT | from='{}' to='{}' (hop {})", fetchUrl, next, hop + 1);
+                currentUrl = next;
+            }
 
-                    // Large segment: stream it through instead of buffering.
-                    long copied = streamMedia(response, status, contentType, contentLength, body);
-                    logResponse(url, status, contentType, copied, System.currentTimeMillis() - start);
-                    return null;
-                });
-
-            log.info("[PROXY] COMPLETE | url='{}' duration={}ms", url, System.currentTimeMillis() - start);
+            log.warn("[PROXY] TOO_MANY_REDIRECTS | url='{}'", url);
+            writeText(response, 502, "Proxy error: too many redirects");
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - start;
             log.warn("[PROXY] FAILED | url='{}' error='{}' duration={}ms", url, e.getMessage(), elapsed);

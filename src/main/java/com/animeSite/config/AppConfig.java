@@ -54,6 +54,35 @@ public class AppConfig {
     }
 
     /**
+     * RestTemplate for the public stream proxy. Redirects are disabled so every
+     * {@code Location} is surfaced to {@link com.animeSite.pipeline.StreamProxyService},
+     * which re-validates each hop against the URL allow-list before following it.
+     * Without this an allow-listed host could 302 us to an internal target.
+     */
+    @Bean
+    @Qualifier("streamProxyRestTemplate")
+    public RestTemplate streamProxyRestTemplate() {
+        var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory() {
+            @Override
+            protected void prepareConnection(java.net.HttpURLConnection connection, String httpMethod)
+                    throws java.io.IOException {
+                super.prepareConnection(connection, httpMethod);
+                // Surface 3xx responses instead of following them blindly; the
+                // proxy re-validates each redirect target.
+                connection.setInstanceFollowRedirects(false);
+            }
+        };
+        factory.setConnectTimeout(5000);
+        factory.setReadTimeout(15000);
+        RestTemplate restTemplate = new RestTemplate(factory);
+        restTemplate.setInterceptors(List.of((request, body, execution) -> {
+            request.getHeaders().set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            return execution.execute(request, body);
+        }));
+        return restTemplate;
+    }
+
+    /**
      * Background pool for MyAnimeList metadata enrichment. Detail views must
      * not wait on myanimelist.net: the fetch runs up to 2500 ms connect +
      * 6000 ms read on an unreachable network, while the offline catalogue
