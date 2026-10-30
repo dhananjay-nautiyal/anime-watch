@@ -50,9 +50,19 @@ export function configureTokenStorage(store) {
 let isRefreshing = false
 let refreshSubscribers = []
 
-function onRefreshed(token) {
-  refreshSubscribers.forEach(cb => cb(token))
+// Settle every request that queued behind an in-flight refresh. On success
+// each subscriber retries with the fresh token; on failure each is rejected so
+// no queued request is left hanging forever.
+function flushSubscribers(token, error) {
+  const pending = refreshSubscribers
   refreshSubscribers = []
+  pending.forEach(({ onSuccess, onFailure }) => {
+    if (error) {
+      onFailure(error)
+    } else {
+      onSuccess(token)
+    }
+  })
 }
 
 client.interceptors.request.use(async config => {
@@ -83,23 +93,35 @@ client.interceptors.response.use(
           isRefreshing = true
           try {
             const { data } = await axios.post(`${API_BASE}/api/auth/refresh`, { refreshToken: rt })
+            // The backend revokes the old refresh token and returns a
+            // replacement. Persist BOTH: saving only the access token would
+            // leave the stored refresh token revoked, so the next refresh
+            // fails and the user is silently signed out.
             await tokenStore.setToken(data.token)
+            if (data.refreshToken) {
+              await tokenStore.setRefreshToken(data.refreshToken)
+            }
             isRefreshing = false
-            onRefreshed(data.token)
+            flushSubscribers(data.token)
             original.headers.Authorization = `Bearer ${data.token}`
             return client(original)
-          } catch {
+          } catch (refreshErr) {
             isRefreshing = false
-            refreshSubscribers = []
+            // Reject queued requests instead of dropping them, so they fail
+            // fast rather than hanging forever.
+            flushSubscribers(null, refreshErr)
             await tokenStore.clearTokens()
-            return Promise.reject(err)
+            return Promise.reject(refreshErr)
           }
         }
 
-        return new Promise(resolve => {
-          refreshSubscribers.push(token => {
-            original.headers.Authorization = `Bearer ${token}`
-            resolve(client(original))
+        return new Promise((resolve, reject) => {
+          refreshSubscribers.push({
+            onSuccess: token => {
+              original.headers.Authorization = `Bearer ${token}`
+              resolve(client(original))
+            },
+            onFailure: reject,
           })
         })
       }
