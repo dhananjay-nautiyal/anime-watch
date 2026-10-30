@@ -78,6 +78,21 @@ app:
     # other providers still run.
     base-url: ${CONSUMET_BASE_URL:}
 
+  proxy:
+    # Outbound destinations the public stream/image proxies may fetch. These
+    # are the ONLY hosts allowed — there is no "resolves publicly, therefore
+    # allowed" fallback. When a provider CDN rotates to a new host family, add
+    # its suffix here instead of loosening the validator. Blank = built-in list.
+    allowed-stream-domains: ${PROXY_ALLOWED_STREAM_DOMAINS:}
+    allowed-stream-suffixes: ${PROXY_ALLOWED_STREAM_SUFFIXES:}
+    allowed-image-domains: ${PROXY_ALLOWED_IMAGE_DOMAINS:}
+    # Defence-in-depth: re-resolve allow-listed hosts and reject any that point
+    # at loopback/private ranges (DNS-rebinding guard).
+    verify-dns: ${PROXY_VERIFY_DNS:true}
+    # Hard cap on proxied image bodies (bytes) and per-request timeout.
+    max-image-bytes: ${PROXY_MAX_IMAGE_BYTES:10485760}
+    image-timeout-ms: ${PROXY_IMAGE_TIMEOUT_MS:10000}
+
   providers:
     priority: ${PROVIDER_PRIORITY:Consumet,AnimeSuge,Anineko,GoGoAnime}
     disabled: ${PROVIDER_DISABLED:}
