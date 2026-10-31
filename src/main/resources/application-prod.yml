@@ -9,16 +9,32 @@ spring:
       minimum-idle: 2
       idle-timeout: 30000
       max-lifetime: 600000
+      # Fail fast on a dead/unreachable DB instead of hanging the boot. The
+      # default 30s connectionTimeout + no JDBC connect timeout let a black-
+      # holed database burn Render's 15-minute port-scan window in silence;
+      # these bound it so a bad deploy fails visibly within seconds.
+      connection-timeout: 10000
+      initialization-fail-timeout: 5000
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      # update until a Flyway baseline (V1__schema.sql) lands; validate on a
-      # fresh managed DB fails boot because no tables exist yet.
-      ddl-auto: update
+      # Flyway owns the schema; Hibernate only validates the entity model
+      # against it. Any drift now fails the deploy (visible, recoverable --
+      # the previous release keeps serving) instead of silently evolving prod.
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
         format_sql: false
+  # Flyway is the single source of truth for the prod schema. The database is
+  # already provisioned (tables created historically by ddl-auto=update), so
+  # baseline-on-migrate records a baseline at V1 without re-running the
+  # baseline against existing tables. Future changes go in V2+ migrations.
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
+    locations: classpath:db/migration
 
 jwt:
   secret: ${JWT_SECRET}

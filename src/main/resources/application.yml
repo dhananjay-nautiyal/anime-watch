@@ -25,6 +25,12 @@ spring:
         type:
           preferred_uuid_jdbc_type: char
 
+  # Flyway is on the classpath but DISABLED by default so local dev and the
+  # H2-based test suite keep their existing behaviour. Only `prod` turns it on
+  # (see application-prod.yml), where it -- not ddl-auto -- owns the schema.
+  flyway:
+    enabled: false
+
   cache:
     type: jcache
     jcache:

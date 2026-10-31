@@ -168,7 +168,23 @@ export MAIL_HOST=smtp.gmail.com MAIL_PORT=587 MAIL_USERNAME=... MAIL_PASSWORD=..
 mvn spring-boot:run
 ```
 
-Full variable list in `.env.example`. `prod` uses `ddl-auto: validate`.
+Full variable list in `.env.example`.
+
+### Database schema management
+
+Production schema is owned by **Flyway**, not Hibernate. On boot the `prod`
+profile runs the migrations in `src/main/resources/db/migration/`
+(`V1__baseline_schema.sql` is the authoritative baseline generated from the
+JPA entities), then Hibernate runs with `ddl-auto: validate` — so any drift
+between the entities and the schema **fails the deploy** instead of silently
+altering production. The DB is already provisioned, so Flyway
+`baseline-on-migrate` records a baseline rather than re-running `V1`.
+
+To change the production schema, add a new `V2__*.sql` (then `V3__`, …)
+migration — never rely on `ddl-auto` to evolve it. Local `dev`/default keep
+`ddl-auto: update` with Flyway disabled for convenience; run
+`mvn flyway:migrate` (or boot the app) against a real PostgreSQL to apply
+migrations locally.
 
 ## Web frontend
 
