@@ -45,6 +45,14 @@
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Flyway owns schema migrations in production (see db/migration/).
+             Version is managed by the spring-boot-starter-parent POM (9.22.x).
+             PostgreSQL support is built into flyway-core at this version; the
+             separate flyway-database-postgresql module only exists in 10+. -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
