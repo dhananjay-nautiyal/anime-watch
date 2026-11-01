@@ -1,0 +1,55 @@
+name: mobile
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/mobile.yml'
+  pull_request:
+    paths:
+      - 'mobile/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/mobile.yml'
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: typecheck + bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          # mobile/ has no lockfile of its own: it is a workspace member of the
+          # root package, so npm ci resolves from the root lockfile.
+          cache-dependency-path: package-lock.json
+
+      # Installs the whole workspace tree (expo, react-native, typescript, ...).
+      - name: Install
+        run: npm ci
+
+      # Catches type errors and broken imports in mobile/src before merge.
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: mobile
+
+      # Metro/Hermes bundle smoke build: fails on module-resolution errors that
+      # a typecheck alone would not catch (native-only deps, bad re-exports).
+      - name: Bundle smoke build
+        run: npx expo export --platform android
+        working-directory: mobile
+        env:
+          EXPO_NO_TELEMETRY: '1'
+          CI: '1'

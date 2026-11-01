@@ -1,0 +1,61 @@
+name: bridge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'consumet-bridge/**'
+      - '.github/workflows/bridge.yml'
+  pull_request:
+    paths:
+      - 'consumet-bridge/**'
+      - '.github/workflows/bridge.yml'
+
+concurrency:
+  group: bridge-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: install + boot smoke
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: consumet-bridge
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: consumet-bridge/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # Syntax check before booting, so a parse error fails fast.
+      - name: Syntax check
+        run: node --check server.js
+
+      # Boot the server and hit /health. This exercises the real module graph
+      # (@consumet/extensions is only pulled in at require time), so a broken
+      # dependency or require fails here instead of on deploy.
+      - name: Boot smoke test
+        run: |
+          set -euo pipefail
+          PORT=3123 node server.js > "$RUNNER_TEMP/bridge.log" 2>&1 &
+          BRIDGE_PID=$!
+          trap 'kill "$BRIDGE_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 2 http://127.0.0.1:3123/health; then
+              echo ""
+              echo "healthy after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::bridge did not become healthy within 30s"
+          echo "--- bridge log ---"
+          cat "$RUNNER_TEMP/bridge.log"
+          exit 1

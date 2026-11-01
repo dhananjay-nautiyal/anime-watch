@@ -23,7 +23,8 @@
     "dev:mobile": "npm start -w animewatch-mobile",
     "build": "npm run build:backend && npm run build:web",
     "build:backend": "mvn clean package -DskipTests",
-    "build:web": "npm run build -w animewatch-web"
+    "build:web": "npm run build -w animewatch-web",
+    "test": "npm test --workspaces --if-present"
   },
   "devDependencies": {
     "concurrently": "^10.0.6"
