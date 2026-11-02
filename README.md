@@ -201,6 +201,25 @@ npm install          # repo root (workspaces)
 cd mobile && npx expo start     # scan QR with Expo Go
 ```
 
+## Tests & CI
+
+```bash
+npm test                       # web + shared packages (vitest, node:test)
+mvn verify                     # backend, against in-memory H2
+cd mobile && npm run typecheck # mobile TypeScript check
+```
+
+Every area has its own GitHub Actions workflow, triggered only by paths that
+affect it:
+
+| Workflow | Runs |
+| --- | --- |
+| `backend.yml` | `mvn verify` (Java 21) |
+| `frontend.yml` | `npm ci` → vitest (`frontend/src`) → `vite build` |
+| `mobile.yml` | `npm ci` → `tsc --noEmit` → `expo export` bundle smoke build |
+| `bridge.yml` | `npm ci` → `node --check server.js` → boot + `/health` |
+| `packages.yml` | `npm test --workspaces --if-present` |
+
 ## Backend Docker
 
 ```bash

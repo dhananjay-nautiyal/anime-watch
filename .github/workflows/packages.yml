@@ -1,0 +1,43 @@
+name: packages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/packages.yml'
+  pull_request:
+    paths:
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/packages.yml'
+
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: workspace unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # Runs every workspace that declares a `test` script — today that is
+      # packages/* (e.g. @anime/api) and the web client's vitest suite (which
+      # frontend.yml runs too, so a packages-only change still gets covered
+      # here). --if-present keeps this green as more packages adopt tests.
+      - name: Run workspace tests
+        run: npm test --workspaces --if-present
